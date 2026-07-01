@@ -19,7 +19,7 @@ simple while preserving the boundaries expected in a professional codebase.
 
 ## Milestone 0: Planning And Baseline
 
-**Status:** In progress
+**Status:** Complete
 
 **Objective:** Establish the product scope, architecture, quality strategy, and
 team workflow before restructuring the prototype.
@@ -40,7 +40,7 @@ team workflow before restructuring the prototype.
 
 ## Milestone 1: Domain Foundation
 
-**Status:** Planned
+**Status:** In progress
 
 **Objective:** Model task-management behaviour using OOP and TDD without
 depending on HTTP, databases, or frontend frameworks.
@@ -58,6 +58,21 @@ depending on HTTP, databases, or frontend frameworks.
 - Task statuses: Backlog, Ready, In Progress, Blocked, and Completed.
 - Domain rules for starting, blocking, completing, and reopening tasks.
 - Fast domain unit tests.
+
+**Progress delivered:**
+
+- Guarded `TaskItem` lifecycle with explicit state transitions.
+- Dependency management with duplicate and circular-reference protection.
+- Effective blocked-state detection for incomplete dependencies.
+- Explainable priority score using value, urgency, risk reduction, and effort.
+- 30 domain tests covering success, validation, and rule-failure paths.
+
+**Remaining:**
+
+- Project entity and project archive rules.
+- Due-date and effort value objects.
+- Domain events for important lifecycle changes.
+- API integration with the new domain model.
 
 **Definition of done:**
 

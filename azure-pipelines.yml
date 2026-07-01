@@ -2,6 +2,14 @@ trigger:
   branches:
     include:
       - main
+      - dev
+      - feature/*
+
+pr:
+  branches:
+    include:
+      - main
+      - dev
 
 parameters:
   - name: deployToAzure
@@ -33,14 +41,26 @@ stages:
             displayName: Restore packages
             inputs:
               command: restore
-              projects: TodoApp.csproj
+              projects: TodoApp.sln
 
           - task: DotNetCoreCLI@2
-            displayName: Build app
+            displayName: Build solution
             inputs:
               command: build
-              projects: TodoApp.csproj
+              projects: TodoApp.sln
               arguments: --configuration $(buildConfiguration) --no-restore
+
+          - task: DotNetCoreCLI@2
+            displayName: Run automated tests
+            inputs:
+              command: test
+              projects: tests/**/*.csproj
+              arguments: >-
+                --configuration $(buildConfiguration)
+                --no-build
+                --collect:"XPlat Code Coverage"
+                --logger trx
+              publishTestResults: true
 
           - task: DotNetCoreCLI@2
             displayName: Publish app
@@ -48,7 +68,10 @@ stages:
               command: publish
               publishWebProjects: false
               projects: TodoApp.csproj
-              arguments: --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)
+              arguments: >-
+                --configuration $(buildConfiguration)
+                --no-build
+                --output $(Build.ArtifactStagingDirectory)
               zipAfterPublish: true
 
           - publish: $(Build.ArtifactStagingDirectory)

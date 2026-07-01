@@ -16,6 +16,25 @@ Development follows incremental delivery, TDD for core behaviour, and a
 modular monolith architecture. Milestone 0 establishes the planning baseline;
 Milestone 1 introduces the first domain model and tests.
 
+## Current Development
+
+Milestone 1 is being developed on `feature/domain-foundation`. The domain layer
+currently includes:
+
+- A guarded task lifecycle from Backlog to Completed.
+- Blocking, unblocking, and reopening rules.
+- Task dependencies with circular-reference protection.
+- Automatic detection of work blocked by incomplete dependencies.
+- Explainable priority scoring using value, urgency, risk reduction, and effort.
+- 30 xUnit domain tests.
+
+Run the complete build and test suite with:
+
+```powershell
+dotnet build TodoApp.sln --configuration Release
+dotnet test TodoApp.sln --configuration Release --no-build
+```
+
 ## Current Prototype
 
 - `GET /todos` returns all todo items.
