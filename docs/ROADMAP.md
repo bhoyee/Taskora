@@ -17,6 +17,17 @@ simple while preserving the boundaries expected in a professional codebase.
 - Require automated tests and a successful pipeline before a milestone closes.
 - Record important architecture decisions in the repository.
 
+## Detailed Milestones
+
+Each detailed milestone contains its objective, user stories, technical tasks,
+acceptance criteria, required tests, definition of done, and expected commits.
+
+- [Milestone 1: Domain Foundation](milestones/M01-domain-foundation.md)
+- [Milestone 2: Application Use Cases](milestones/M02-application-use-cases.md)
+- [Milestone 3: Persistence](milestones/M03-persistence.md)
+- [Milestone 4: Production REST API](milestones/M04-rest-api.md)
+- [Milestone 5: Priority Intelligence](milestones/M05-priority-intelligence.md)
+
 ## Milestone 0: Planning And Baseline
 
 **Status:** Complete

@@ -11,10 +11,46 @@ users rank work using value, urgency, risk, effort, and task dependencies.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing strategy](docs/TESTING.md)
 - [Contribution workflow](docs/CONTRIBUTING.md)
+- [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
 modular monolith architecture. Milestone 0 establishes the planning baseline;
 Milestone 1 introduces the first domain model and tests.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Web["TodoApp.Web<br/>React + TypeScript"]
+    Api["TodoApp.Api<br/>HTTP, auth, composition"]
+    App["TodoApp.Application<br/>Commands, queries, ports"]
+    Domain["TodoApp.Domain<br/>Entities, value objects, rules"]
+    Infra["TodoApp.Infrastructure<br/>EF Core, repositories, integrations"]
+    Database[("SQLite / Azure SQL")]
+
+    Web -->|HTTPS/JSON| Api
+    Api --> App
+    Api -->|wires implementations| Infra
+    Infra --> App
+    App --> Domain
+    Infra --> Domain
+    Infra --> Database
+```
+
+The project uses a **modular monolith with domain-oriented boundaries**:
+
+- It keeps deployment and local development simple for one product.
+- Business rules remain independent of ASP.NET Core, EF Core, and React.
+- Application interfaces make infrastructure replaceable and testable.
+- Separate projects enforce dependency direction at compile time.
+- It demonstrates production architecture without the operational overhead of
+  premature microservices.
+- Modules can be extracted later if scale or team ownership provides a real
+  reason.
+
+The root `TodoApp.csproj` is the original API prototype. It will move to
+`src/TodoApp.Api` during Milestone 4. Projects under `src/` and `tests/` are
+introduced incrementally when their milestone begins.
 
 ## Current Development
 
