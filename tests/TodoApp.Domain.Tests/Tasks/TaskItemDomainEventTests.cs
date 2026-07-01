@@ -86,5 +86,8 @@ public sealed class TaskItemDomainEventTests
     }
 
     private static TaskItem CreateTask() =>
-        TaskItem.Create(Guid.NewGuid(), "Publish portfolio");
+        TaskItem.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Publish portfolio");
 }

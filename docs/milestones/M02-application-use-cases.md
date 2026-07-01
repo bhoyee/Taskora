@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+In progress
 
 ## Objective
 
@@ -76,3 +76,24 @@ understand progress and blockers.
 7. `feat: implement filtered paginated task queries`
 8. `test: enforce application dependency rules`
 9. `docs: complete application use case milestone`
+
+## Current Progress
+
+Delivered:
+
+- Application and test project boundaries.
+- Typed `Result<T>`, application errors, and pagination results.
+- Repository, unit-of-work, identifier, and clock interfaces.
+- CreateTask with project validation, scheduling, and effort.
+- StartTask and CompleteTask lifecycle commands.
+- AddTaskDependency with typed failure results.
+- GetTaskById details query.
+- Filtered, sorted, paginated task search contract.
+- 16 passing application tests.
+
+Remaining:
+
+- Edit, move-to-ready, block, unblock, reopen, and planning-factor commands.
+- Project commands and project-board summaries.
+- Application architecture tests.
+- Final milestone review and pull request after Milestone 1 merges.

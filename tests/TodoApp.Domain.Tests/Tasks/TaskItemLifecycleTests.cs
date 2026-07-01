@@ -6,11 +6,39 @@ namespace TodoApp.Domain.Tests.Tasks;
 public sealed class TaskItemLifecycleTests
 {
     private static readonly Guid TaskId = Guid.Parse("6fc11d29-d884-4dd6-ab06-4f205dcae65d");
+    private static readonly Guid ProjectId =
+        Guid.Parse("f3f9015e-ef48-48f3-a330-49a68332c3b8");
+
+    [Fact]
+    public void Create_WhenProjectIdentifierIsValid_RecordsProjectOwnership()
+    {
+        var task = TaskItem.Create(
+            TaskId,
+            ProjectId,
+            "Prepare release notes");
+
+        Assert.Equal(ProjectId, task.ProjectId);
+    }
+
+    [Fact]
+    public void Create_WhenProjectIdentifierIsEmpty_ThrowsDomainValidationException()
+    {
+        var exception = Assert.Throws<DomainValidationException>(
+            () => TaskItem.Create(
+                TaskId,
+                Guid.Empty,
+                "Prepare release notes"));
+
+        Assert.Equal("Project identifier is required.", exception.Message);
+    }
 
     [Fact]
     public void Create_WhenTitleIsValid_CreatesBacklogTask()
     {
-        var task = TaskItem.Create(TaskId, "Prepare release notes");
+        var task = TaskItem.Create(
+            TaskId,
+            ProjectId,
+            "Prepare release notes");
 
         Assert.Equal(TaskId, task.Id);
         Assert.Equal("Prepare release notes", task.Title);
@@ -25,7 +53,7 @@ public sealed class TaskItemLifecycleTests
     public void Create_WhenTitleIsBlank_ThrowsDomainValidationException(string title)
     {
         var exception = Assert.Throws<DomainValidationException>(
-            () => TaskItem.Create(TaskId, title));
+            () => TaskItem.Create(TaskId, ProjectId, title));
 
         Assert.Equal("Task title is required.", exception.Message);
     }
@@ -119,7 +147,7 @@ public sealed class TaskItemLifecycleTests
     }
 
     private static TaskItem CreateTask() =>
-        TaskItem.Create(TaskId, "Prepare release notes");
+        TaskItem.Create(TaskId, ProjectId, "Prepare release notes");
 
     private static TaskItem CreateReadyTask()
     {
