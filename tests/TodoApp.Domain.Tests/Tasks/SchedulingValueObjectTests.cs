@@ -80,7 +80,10 @@ public sealed class SchedulingValueObjectTests
     [Fact]
     public void Schedule_WhenDueDateIsProvided_UpdatesTaskDueDate()
     {
-        var task = TaskItem.Create(Guid.NewGuid(), "Publish portfolio");
+        var task = TaskItem.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Publish portfolio");
         var dueDate = DueDate.Create(new DateOnly(2026, 7, 15));
 
         task.Schedule(dueDate);
@@ -91,7 +94,10 @@ public sealed class SchedulingValueObjectTests
     [Fact]
     public void Estimate_WhenEffortIsProvided_UpdatesTaskEstimate()
     {
-        var task = TaskItem.Create(Guid.NewGuid(), "Publish portfolio");
+        var task = TaskItem.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Publish portfolio");
         var effort = EffortEstimate.Create(5);
 
         task.Estimate(effort);

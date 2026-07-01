@@ -10,7 +10,7 @@ public sealed class TaskItem
     private PlanningFactors? _planningFactors;
     private PriorityScore? _priority;
 
-    private TaskItem(Guid id, string title)
+    private TaskItem(Guid id, Guid projectId, string title)
     {
         if (id == Guid.Empty)
         {
@@ -23,11 +23,20 @@ public sealed class TaskItem
         }
 
         Id = id;
+        if (projectId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Project identifier is required.");
+        }
+
+        ProjectId = projectId;
         Title = title.Trim();
         Status = TaskItemStatus.Backlog;
     }
 
     public Guid Id { get; }
+
+    public Guid ProjectId { get; }
 
     public string Title { get; private set; }
 
@@ -49,6 +58,8 @@ public sealed class TaskItem
         _priority ??
         throw new DomainRuleException("Task planning factors have not been set.");
 
+    public bool HasPlanningFactors => _planningFactors is not null;
+
     public IReadOnlyCollection<Guid> DependencyIds =>
         _dependencies.Select(dependency => dependency.Id).ToArray();
 
@@ -61,7 +72,8 @@ public sealed class TaskItem
     public IReadOnlyCollection<IDomainEvent> DomainEvents =>
         _domainEvents.AsReadOnly();
 
-    public static TaskItem Create(Guid id, string title) => new(id, title);
+    public static TaskItem Create(Guid id, Guid projectId, string title) =>
+        new(id, projectId, title);
 
     public void MoveToReady()
     {

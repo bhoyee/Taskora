@@ -1,0 +1,12 @@
+using TodoApp.Domain.Tasks;
+
+namespace TodoApp.Application.Tasks.Queries;
+
+public sealed record SearchTasksQuery(
+    Guid? ProjectId = null,
+    TaskItemStatus? Status = null,
+    bool? IsBlocked = null,
+    string? Search = null,
+    TaskSortBy SortBy = TaskSortBy.PriorityDescending,
+    int PageNumber = 1,
+    int PageSize = 20);

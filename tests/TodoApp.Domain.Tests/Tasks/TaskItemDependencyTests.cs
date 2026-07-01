@@ -115,7 +115,7 @@ public sealed class TaskItemDependencyTests
     }
 
     private static TaskItem CreateTask(string title) =>
-        TaskItem.Create(Guid.NewGuid(), title);
+        TaskItem.Create(Guid.NewGuid(), Guid.NewGuid(), title);
 
     private static TaskItem CreateReadyTask(string title)
     {
