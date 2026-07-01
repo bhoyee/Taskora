@@ -17,9 +17,20 @@ simple while preserving the boundaries expected in a professional codebase.
 - Require automated tests and a successful pipeline before a milestone closes.
 - Record important architecture decisions in the repository.
 
+## Detailed Milestones
+
+Each detailed milestone contains its objective, user stories, technical tasks,
+acceptance criteria, required tests, definition of done, and expected commits.
+
+- [Milestone 1: Domain Foundation](milestones/M01-domain-foundation.md)
+- [Milestone 2: Application Use Cases](milestones/M02-application-use-cases.md)
+- [Milestone 3: Persistence](milestones/M03-persistence.md)
+- [Milestone 4: Production REST API](milestones/M04-rest-api.md)
+- [Milestone 5: Priority Intelligence](milestones/M05-priority-intelligence.md)
+
 ## Milestone 0: Planning And Baseline
 
-**Status:** In progress
+**Status:** Complete
 
 **Objective:** Establish the product scope, architecture, quality strategy, and
 team workflow before restructuring the prototype.
@@ -40,7 +51,7 @@ team workflow before restructuring the prototype.
 
 ## Milestone 1: Domain Foundation
 
-**Status:** Planned
+**Status:** In progress
 
 **Objective:** Model task-management behaviour using OOP and TDD without
 depending on HTTP, databases, or frontend frameworks.
@@ -58,6 +69,21 @@ depending on HTTP, databases, or frontend frameworks.
 - Task statuses: Backlog, Ready, In Progress, Blocked, and Completed.
 - Domain rules for starting, blocking, completing, and reopening tasks.
 - Fast domain unit tests.
+
+**Progress delivered:**
+
+- Guarded `TaskItem` lifecycle with explicit state transitions.
+- Dependency management with duplicate and circular-reference protection.
+- Effective blocked-state detection for incomplete dependencies.
+- Explainable priority score using value, urgency, risk reduction, and effort.
+- 30 domain tests covering success, validation, and rule-failure paths.
+
+**Remaining:**
+
+- Project entity and project archive rules.
+- Due-date and effort value objects.
+- Domain events for important lifecycle changes.
+- API integration with the new domain model.
 
 **Definition of done:**
 
