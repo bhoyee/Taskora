@@ -45,8 +45,9 @@ public sealed class PriorityScoreTests
     [InlineData(3, 6, 3, 3, "Urgency must be between 1 and 5.")]
     [InlineData(3, 3, 0, 3, "Risk reduction must be between 1 and 5.")]
     [InlineData(3, 3, 6, 3, "Risk reduction must be between 1 and 5.")]
-    [InlineData(3, 3, 3, 0, "Effort must be between 1 and 8.")]
-    [InlineData(3, 3, 3, 9, "Effort must be between 1 and 8.")]
+    [InlineData(3, 3, 3, 0, "Effort must be one of 1, 2, 3, 5, or 8.")]
+    [InlineData(3, 3, 3, 4, "Effort must be one of 1, 2, 3, 5, or 8.")]
+    [InlineData(3, 3, 3, 9, "Effort must be one of 1, 2, 3, 5, or 8.")]
     public void Create_WhenPlanningFactorIsOutsideRange_ThrowsDomainValidationException(
         int businessValue,
         int urgency,
