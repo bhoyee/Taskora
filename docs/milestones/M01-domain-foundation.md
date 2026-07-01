@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Complete
 
 ## Objective
 
@@ -99,11 +99,14 @@ Delivered:
 - Dependency management and cycle detection.
 - Effective blocked-state calculation.
 - Explainable priority scoring.
-- 30 passing domain tests.
-
-Remaining:
-
 - Project aggregate.
 - Due-date and effort value objects.
 - Domain events.
-- Final milestone review and pull request.
+- 60 passing domain tests.
+- Azure pipeline build, test, and coverage gates.
+
+Deferred to later milestones:
+
+- Application commands and queries.
+- EF Core persistence.
+- Production API integration.

@@ -1,10 +1,12 @@
 using TodoApp.Domain.Common;
+using TodoApp.Domain.Tasks.Events;
 
 namespace TodoApp.Domain.Tasks;
 
 public sealed class TaskItem
 {
     private readonly List<TaskItem> _dependencies = [];
+    private readonly List<IDomainEvent> _domainEvents = [];
     private PlanningFactors? _planningFactors;
     private PriorityScore? _priority;
 
@@ -35,6 +37,10 @@ public sealed class TaskItem
 
     public DateTimeOffset? CompletedAt { get; private set; }
 
+    public DueDate? DueDate { get; private set; }
+
+    public EffortEstimate? EffortEstimate { get; private set; }
+
     public PlanningFactors PlanningFactors =>
         _planningFactors ??
         throw new DomainRuleException("Task planning factors have not been set.");
@@ -52,6 +58,9 @@ public sealed class TaskItem
     public bool IsBlocked =>
         Status == TaskItemStatus.Blocked || HasIncompleteDependencies;
 
+    public IReadOnlyCollection<IDomainEvent> DomainEvents =>
+        _domainEvents.AsReadOnly();
+
     public static TaskItem Create(Guid id, string title) => new(id, title);
 
     public void MoveToReady()
@@ -60,7 +69,7 @@ public sealed class TaskItem
             TaskItemStatus.Backlog,
             "Only a backlog task can be moved to ready.");
 
-        Status = TaskItemStatus.Ready;
+        ChangeStatus(TaskItemStatus.Ready);
     }
 
     public void Start()
@@ -75,7 +84,7 @@ public sealed class TaskItem
                 "Task cannot start until all dependencies are completed.");
         }
 
-        Status = TaskItemStatus.InProgress;
+        ChangeStatus(TaskItemStatus.InProgress);
     }
 
     public void AddDependency(TaskItem dependency)
@@ -117,6 +126,16 @@ public sealed class TaskItem
         _priority = PriorityScore.Calculate(factors);
     }
 
+    public void Schedule(DueDate dueDate)
+    {
+        DueDate = dueDate;
+    }
+
+    public void Estimate(EffortEstimate effortEstimate)
+    {
+        EffortEstimate = effortEstimate;
+    }
+
     public void Block(string reason)
     {
         EnsureStatus(
@@ -129,7 +148,7 @@ public sealed class TaskItem
         }
 
         BlockedReason = reason.Trim();
-        Status = TaskItemStatus.Blocked;
+        ChangeStatus(TaskItemStatus.Blocked);
     }
 
     public void Unblock()
@@ -139,7 +158,7 @@ public sealed class TaskItem
             "Only a blocked task can be unblocked.");
 
         BlockedReason = null;
-        Status = TaskItemStatus.Ready;
+        ChangeStatus(TaskItemStatus.Ready);
     }
 
     public void Complete(DateTimeOffset completedAt)
@@ -149,7 +168,7 @@ public sealed class TaskItem
             "Only an in-progress task can be completed.");
 
         CompletedAt = completedAt;
-        Status = TaskItemStatus.Completed;
+        ChangeStatus(TaskItemStatus.Completed);
     }
 
     public void Reopen()
@@ -159,7 +178,12 @@ public sealed class TaskItem
             "Only a completed task can be reopened.");
 
         CompletedAt = null;
-        Status = TaskItemStatus.Ready;
+        ChangeStatus(TaskItemStatus.Ready);
+    }
+
+    public void ClearDomainEvents()
+    {
+        _domainEvents.Clear();
     }
 
     private void EnsureStatus(TaskItemStatus requiredStatus, string message)
@@ -183,5 +207,13 @@ public sealed class TaskItem
         }
 
         return _dependencies.Any(dependency => dependency.DependsOn(taskId, visited));
+    }
+
+    private void ChangeStatus(TaskItemStatus newStatus)
+    {
+        var previousStatus = Status;
+        Status = newStatus;
+        _domainEvents.Add(
+            new TaskStatusChangedDomainEvent(Id, previousStatus, newStatus));
     }
 }

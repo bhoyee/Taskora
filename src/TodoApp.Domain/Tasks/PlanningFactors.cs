@@ -8,12 +8,12 @@ public sealed record PlanningFactors
         int businessValue,
         int urgency,
         int riskReduction,
-        int effort)
+        EffortEstimate effortEstimate)
     {
         BusinessValue = businessValue;
         Urgency = urgency;
         RiskReduction = riskReduction;
-        Effort = effort;
+        EffortEstimate = effortEstimate;
     }
 
     public int BusinessValue { get; }
@@ -22,7 +22,9 @@ public sealed record PlanningFactors
 
     public int RiskReduction { get; }
 
-    public int Effort { get; }
+    public EffortEstimate EffortEstimate { get; }
+
+    public int Effort => EffortEstimate.Value;
 
     public static PlanningFactors Create(
         int businessValue,
@@ -45,17 +47,11 @@ public sealed record PlanningFactors
             minimum: 1,
             maximum: 5,
             "Risk reduction must be between 1 and 5.");
-        EnsureInRange(
-            effort,
-            minimum: 1,
-            maximum: 8,
-            "Effort must be between 1 and 8.");
-
         return new PlanningFactors(
             businessValue,
             urgency,
             riskReduction,
-            effort);
+            EffortEstimate.Create(effort));
     }
 
     private static void EnsureInRange(

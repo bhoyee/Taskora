@@ -14,8 +14,8 @@ users rank work using value, urgency, risk, effort, and task dependencies.
 - [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
-modular monolith architecture. Milestone 0 establishes the planning baseline;
-Milestone 1 introduces the first domain model and tests.
+modular monolith architecture. Milestones 0 and 1 establish the planning
+baseline and tested domain foundation.
 
 ## Architecture
 
@@ -54,15 +54,18 @@ introduced incrementally when their milestone begins.
 
 ## Current Development
 
-Milestone 1 is being developed on `feature/domain-foundation`. The domain layer
-currently includes:
+Milestone 1 is complete on `feature/domain-foundation`. The domain layer
+includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
 - Task dependencies with circular-reference protection.
 - Automatic detection of work blocked by incomplete dependencies.
 - Explainable priority scoring using value, urgency, risk reduction, and effort.
-- 30 xUnit domain tests.
+- Project creation, editing, target dates, and archive restrictions.
+- Due-date and Fibonacci effort-estimate value objects.
+- Domain events for task lifecycle changes.
+- 60 xUnit domain tests.
 
 Run the complete build and test suite with:
 

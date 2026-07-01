@@ -51,7 +51,7 @@ team workflow before restructuring the prototype.
 
 ## Milestone 1: Domain Foundation
 
-**Status:** In progress
+**Status:** Complete
 
 **Objective:** Model task-management behaviour using OOP and TDD without
 depending on HTTP, databases, or frontend frameworks.
@@ -76,14 +76,10 @@ depending on HTTP, databases, or frontend frameworks.
 - Dependency management with duplicate and circular-reference protection.
 - Effective blocked-state detection for incomplete dependencies.
 - Explainable priority score using value, urgency, risk reduction, and effort.
-- 30 domain tests covering success, validation, and rule-failure paths.
-
-**Remaining:**
-
-- Project entity and project archive rules.
-- Due-date and effort value objects.
-- Domain events for important lifecycle changes.
-- API integration with the new domain model.
+- Project aggregate with guarded edits and archive rules.
+- Due-date and Fibonacci effort-estimate value objects.
+- Domain events for successful task lifecycle changes.
+- 60 domain tests covering success, validation, and rule-failure paths.
 
 **Definition of done:**
 
