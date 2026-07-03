@@ -1,8 +1,8 @@
 # TodoApp
 
 A priority-intelligence task management application built with C# and .NET.
-The current code is a minimal API prototype; the planned product will help
-users rank work using value, urgency, risk, effort, and task dependencies.
+Its production REST API helps users manage projects and rank work using value,
+urgency, risk, effort, and task dependencies.
 
 ## Project Documentation
 
@@ -26,7 +26,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 1. Domain Foundation | Complete | Tested task lifecycle, projects, dependencies, scheduling, priority rules, and domain events |
 | 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
 | 3. Persistence | Complete | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
-| 4. Production REST API | Planned | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
+| 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Planned | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Planned | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
@@ -67,14 +67,13 @@ The project uses a **modular monolith with domain-oriented boundaries**:
 - Modules can be extracted later if scale or team ownership provides a real
   reason.
 
-The root `TodoApp.csproj` is the original API prototype. It will move to
-`src/TodoApp.Api` during Milestone 4. Projects under `src/` and `tests/` are
-introduced incrementally when their milestone begins.
+`TodoApp.Api` is the composition root. HTTP contracts stay separate from
+domain entities and invoke application use cases backed by Infrastructure.
 
 ## Current Development
 
-Milestones 1, 2, and 3 are complete on stacked feature branches. The current
-`feature/persistence` branch includes:
+Milestones 1 through 4 are complete on stacked feature branches. The current
+`feature/production-rest-api` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -91,7 +90,11 @@ Milestones 1, 2, and 3 are complete on stacked feature branches. The current
 - Architecture dependency tests.
 - EF Core mappings, repositories, migrations, concurrency, and seed data.
 - SQLite local persistence and Azure SQL provider configuration.
-- 62 domain, 34 application, and 16 Infrastructure integration tests.
+- Versioned project, board, task, lifecycle, planning, and dependency routes.
+- Consistent Problem Details for validation, not-found, conflict, malformed,
+  and unexpected failures.
+- OpenAPI discovery, correlation IDs, and separate live/ready health checks.
+- 62 domain, 34 application, 16 Infrastructure, and 12 API integration tests.
 
 Run the complete build and test suite with:
 
@@ -109,60 +112,46 @@ dotnet tool run dotnet-ef database update `
   --startup-project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj
 ```
 
-The original root API still uses its prototype in-memory endpoints. Milestone 4
-will move it into `src/TodoApp.Api` and compose the completed Application and
-Infrastructure layers.
-
-## Current Prototype
-
-- `GET /todos` returns all todo items.
-- `GET /todos/{id}` returns one todo item.
-- `POST /todos` creates a todo item.
-- `PUT /todos/{id}` updates a todo item.
-- `DELETE /todos/{id}` deletes a todo item.
-
-The app currently uses an in-memory list, so data resets every time the app restarts.
-
 ## Run Locally
 
 Install the .NET SDK, then run:
 
 ```bash
-dotnet restore
-dotnet run
+dotnet restore TodoApp.sln
+dotnet run --project src/TodoApp.Api/TodoApp.Api.csproj
 ```
 
-The project is configured to run on:
+The development API runs at:
 
 ```text
-http://localhost:5148
-https://localhost:7289
+http://localhost:5080
 ```
 
 You can test the API from `TodoApp.http` in VS Code with the REST Client extension.
 
 ## Example Requests
 
-Create a todo:
+Create a project:
 
 ```http
-POST http://localhost:5148/todos
+POST http://localhost:5080/api/v1/projects
 Content-Type: application/json
 
 {
-  "title": "Learn Azure DevOps pipelines"
+  "name": "Portfolio launch",
+  "description": "Deliver a production-ready portfolio"
 }
 ```
 
-Update a todo:
+Create a task:
 
 ```http
-PUT http://localhost:5148/todos/1
+POST http://localhost:5080/api/v1/projects/{projectId}/tasks
 Content-Type: application/json
 
 {
-  "title": "Create my first todo API",
-  "isCompleted": true
+  "title": "Review Azure pipeline",
+  "effort": 3
 }
 ```
 

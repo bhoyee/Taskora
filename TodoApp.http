@@ -1,34 +1,64 @@
-@TodoApp_HostAddress = http://localhost:5148
+@TodoApp_HostAddress = http://localhost:5080
+@projectId = 10000000-0000-0000-0000-000000000001
+@taskId = 20000000-0000-0000-0000-000000000002
 
-GET {{TodoApp_HostAddress}}/todos
+GET {{TodoApp_HostAddress}}/health/live
 Accept: application/json
 
 ###
 
-GET {{TodoApp_HostAddress}}/todos/1
+GET {{TodoApp_HostAddress}}/health/ready
 Accept: application/json
 
 ###
 
-POST {{TodoApp_HostAddress}}/todos
+GET {{TodoApp_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+###
+
+POST {{TodoApp_HostAddress}}/api/v1/projects
 Content-Type: application/json
+X-Correlation-ID: vscode-create-project
 
 {
-  "title": "Learn Azure DevOps pipelines"
+  "name": "Portfolio API",
+  "description": "Created from the VS Code HTTP client",
+  "targetDate": "2026-08-01"
 }
 
 ###
 
-PUT {{TodoApp_HostAddress}}/todos/1
+GET {{TodoApp_HostAddress}}/api/v1/projects/{{projectId}}
+Accept: application/json
+
+###
+
+GET {{TodoApp_HostAddress}}/api/v1/projects/{{projectId}}/board
+Accept: application/json
+
+###
+
+POST {{TodoApp_HostAddress}}/api/v1/projects/{{projectId}}/tasks
 Content-Type: application/json
 
 {
-  "title": "Create my first todo API",
-  "isCompleted": true
+  "title": "Exercise the production API",
+  "dueDate": "2026-07-15",
+  "effort": 3
 }
 
 ###
 
-DELETE {{TodoApp_HostAddress}}/todos/1
+GET {{TodoApp_HostAddress}}/api/v1/tasks?projectId={{projectId}}&pageNumber=1&pageSize=20
+Accept: application/json
 
 ###
+
+GET {{TodoApp_HostAddress}}/api/v1/tasks/{{taskId}}
+Accept: application/json
+
+###
+
+POST {{TodoApp_HostAddress}}/api/v1/tasks/{{taskId}}/ready
+X-Correlation-ID: vscode-task-workflow
