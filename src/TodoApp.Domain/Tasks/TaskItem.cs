@@ -138,6 +138,16 @@ public sealed class TaskItem
         _priority = PriorityScore.Calculate(factors);
     }
 
+    public void Rename(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new DomainValidationException("Task title is required.");
+        }
+
+        Title = title.Trim();
+    }
+
     public void Schedule(DueDate dueDate)
     {
         DueDate = dueDate;

@@ -89,7 +89,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 2: Application Use Cases
 
-**Status:** In progress
+**Status:** Complete
 
 **Objective:** Expose the domain through testable application operations.
 
@@ -108,14 +108,11 @@ depending on HTTP, databases, or frontend frameworks.
 - Repository, unit-of-work, identifier, and clock ports.
 - Create, start, complete, and add-dependency task commands.
 - Task detail and filtered paginated task queries.
-- 16 application tests and 62 domain tests.
-
-**Remaining:**
-
-- Edit, move, block, reopen, and planning-factor commands.
-- Project commands and project-board queries.
+- Edit, ready, block, unblock, reopen, scheduling, planning, and dependency
+  maintenance commands.
+- Project create, update, archive, details, and delivery-board use cases.
 - Architecture dependency tests.
-- Final application contract documentation.
+- 34 application tests and 62 domain tests.
 
 **Definition of done:**
 

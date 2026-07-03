@@ -110,6 +110,11 @@ public sealed class CreateTaskHandlerTests
     private sealed class StubProjectRepository(Project? project)
         : IProjectRepository
     {
+        public Task AddAsync(
+            Project projectToAdd,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
         public Task<Project?> GetByIdAsync(
             Guid projectId,
             CancellationToken cancellationToken) =>
