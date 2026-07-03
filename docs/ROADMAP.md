@@ -121,7 +121,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 3: Persistence
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Persist application data reliably with Entity Framework Core.
 
@@ -132,6 +132,17 @@ depending on HTTP, databases, or frontend frameworks.
 - Migrations and repeatable development seed data.
 - Repository implementations and persistence integration tests.
 - Production configuration suitable for Azure SQL.
+
+**Progress delivered:**
+
+- EF Core Infrastructure and integration-test projects.
+- Explicit project, task, dependency, planning, priority, and activity mappings.
+- SQLite migrations and idempotent development seed data.
+- Tracked command repositories and no-tracking read repositories.
+- Server-side filtering, sorting, pagination, and project-board aggregation.
+- Transaction rollback and optimistic-concurrency protection.
+- SQLite and Azure SQL provider selection through configuration.
+- 16 SQLite integration tests.
 
 **Definition of done:**
 

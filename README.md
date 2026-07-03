@@ -25,7 +25,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 0. Planning and Baseline | Complete | Requirements, architecture, testing strategy, contribution workflow, and initial CI |
 | 1. Domain Foundation | Complete | Tested task lifecycle, projects, dependencies, scheduling, priority rules, and domain events |
 | 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
-| 3. Persistence | Planned | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
+| 3. Persistence | Complete | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
 | 4. Production REST API | Planned | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Planned | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Planned | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
@@ -73,8 +73,8 @@ introduced incrementally when their milestone begins.
 
 ## Current Development
 
-Milestones 1 and 2 are complete on the stacked
-`feature/application-use-cases` branch. The current solution includes:
+Milestones 1, 2, and 3 are complete on stacked feature branches. The current
+`feature/persistence` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -89,7 +89,9 @@ Milestones 1 and 2 are complete on the stacked
 - Task editing, workflow, planning, scheduling, and dependency maintenance.
 - Project create, update, archive, details, and delivery-board use cases.
 - Architecture dependency tests.
-- 62 domain tests and 34 application tests.
+- EF Core mappings, repositories, migrations, concurrency, and seed data.
+- SQLite local persistence and Azure SQL provider configuration.
+- 62 domain, 34 application, and 16 Infrastructure integration tests.
 
 Run the complete build and test suite with:
 
@@ -97,6 +99,19 @@ Run the complete build and test suite with:
 dotnet build TodoApp.sln --configuration Release
 dotnet test TodoApp.sln --configuration Release --no-build
 ```
+
+Restore the repository-pinned EF tool and apply local migrations with:
+
+```powershell
+dotnet tool restore
+dotnet tool run dotnet-ef database update `
+  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
+  --startup-project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj
+```
+
+The original root API still uses its prototype in-memory endpoints. Milestone 4
+will move it into `src/TodoApp.Api` and compose the completed Application and
+Infrastructure layers.
 
 ## Current Prototype
 
