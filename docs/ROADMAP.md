@@ -152,7 +152,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 4: Production REST API
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Provide a documented and consistent HTTP interface.
 
@@ -163,6 +163,19 @@ depending on HTTP, databases, or frontend frameworks.
 - Problem Details error responses and request validation.
 - OpenAPI documentation, health checks, and structured logging.
 - API integration tests for core workflows.
+
+**Progress delivered:**
+
+- Focused endpoint modules under `/api/v1`.
+- Separate request contracts mapped to application commands and queries.
+- Typed HTTP mapping for success, validation, not-found, and conflict results.
+- Central exception handling with safe Problem Details responses.
+- OpenAPI route discovery and string enum contracts.
+- Correlation identifiers in response headers and structured log scopes.
+- Separate process liveness and database readiness endpoints.
+- In-process integration tests using migrated SQLite databases.
+- Updated Docker, Azure Pipelines, and VS Code HTTP client paths.
+- 12 API integration tests and 124 tests across the full solution.
 
 **Definition of done:**
 
