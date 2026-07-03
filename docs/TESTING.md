@@ -111,7 +111,7 @@ A pull request cannot be considered complete unless:
 - Test and coverage reports are published.
 - No secrets or environment-specific credentials are committed.
 
-The current suite contains 62 domain tests and 16 application tests. Azure
+The current suite contains 62 domain tests and 34 application tests. Azure
 DevOps runs tests with cross-platform coverage collection for feature branches,
 `dev`, and `main`.
 

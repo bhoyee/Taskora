@@ -24,7 +24,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | --- | --- | --- |
 | 0. Planning and Baseline | Complete | Requirements, architecture, testing strategy, contribution workflow, and initial CI |
 | 1. Domain Foundation | Complete | Tested task lifecycle, projects, dependencies, scheduling, priority rules, and domain events |
-| 2. Application Use Cases | In progress | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
+| 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
 | 3. Persistence | Planned | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
 | 4. Production REST API | Planned | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Planned | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
@@ -73,7 +73,7 @@ introduced incrementally when their milestone begins.
 
 ## Current Development
 
-Milestone 1 is complete and Milestone 2 is in progress on the stacked
+Milestones 1 and 2 are complete on the stacked
 `feature/application-use-cases` branch. The current solution includes:
 
 - A guarded task lifecycle from Backlog to Completed.
@@ -86,7 +86,10 @@ Milestone 1 is complete and Milestone 2 is in progress on the stacked
 - Domain events for task lifecycle changes.
 - Create, start, complete, and dependency application commands.
 - Task detail and filtered paginated search queries.
-- 62 domain tests and 16 application tests.
+- Task editing, workflow, planning, scheduling, and dependency maintenance.
+- Project create, update, archive, details, and delivery-board use cases.
+- Architecture dependency tests.
+- 62 domain tests and 34 application tests.
 
 Run the complete build and test suite with:
 

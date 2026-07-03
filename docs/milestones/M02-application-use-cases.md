@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Complete
 
 ## Objective
 
@@ -89,11 +89,15 @@ Delivered:
 - AddTaskDependency with typed failure results.
 - GetTaskById details query.
 - Filtered, sorted, paginated task search contract.
-- 16 passing application tests.
+- Edit, move-to-ready, block, unblock, reopen, planning-factor, scheduling,
+  effort, and dependency-removal commands.
+- Project create, update, archive, and details use cases.
+- Project delivery-board summary query.
+- Application and Domain dependency architecture tests.
+- 34 passing application tests.
 
-Remaining:
+Deferred to later milestones:
 
-- Edit, move-to-ready, block, unblock, reopen, and planning-factor commands.
-- Project commands and project-board summaries.
-- Application architecture tests.
-- Final milestone review and pull request after Milestone 1 merges.
+- EF Core repository implementations.
+- HTTP endpoint integration.
+- Identity and authorization.
