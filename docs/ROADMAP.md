@@ -215,7 +215,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 6: Web Experience
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Deliver an accessible, responsive interface for daily work.
 
@@ -226,6 +226,15 @@ depending on HTTP, databases, or frontend frameworks.
 - Task editor with priority inputs and dependency selection.
 - Search, filtering, sorting, loading, empty, and error states.
 - Component and end-to-end tests for critical journeys.
+
+**Progress delivered:**
+
+- React 19, TypeScript, and Vite application boundary.
+- Responsive portfolio health, priority list, and Kanban workspace.
+- Task creation, editing, planning, and lifecycle actions.
+- Loading, search, empty, error, desktop, and mobile states.
+- Vitest component tests and Playwright desktop/mobile journeys.
+- ASP.NET Core static hosting plus Docker and Azure Pipeline builds.
 
 **Definition of done:**
 

@@ -71,9 +71,9 @@ Examples:
 
 ### Frontend Tests
 
-- Component tests for forms, board interactions, and error states.
-- API contract tests for client mapping.
-- End-to-end tests for a small number of critical user journeys.
+- Vitest and Testing Library component tests for data, forms, and view modes.
+- Playwright journeys run against desktop Chromium and a mobile viewport.
+- Browser tests verify keyboard interaction and page-level overflow.
 
 ## Test Naming
 
