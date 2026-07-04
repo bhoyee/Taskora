@@ -100,6 +100,21 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             search.GetProperty("items")[0]
                 .GetProperty("title")
                 .GetString());
+        Assert.True(
+            search.GetProperty("items")[0]
+                .GetProperty("priorityExplanation")
+                .GetProperty("businessValueContribution")
+                .GetInt32() > 0);
+        Assert.Equal(
+            "Healthy",
+            search.GetProperty("items")[0]
+                .GetProperty("deadlineHealth")
+                .GetString());
+
+        var dashboard = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/v1/dashboard");
+        Assert.True(dashboard.GetProperty("projectCount").GetInt32() > 0);
+        Assert.True(dashboard.GetProperty("activeTaskCount").GetInt32() > 0);
     }
 
     private async Task<Guid> CreateProjectAsync()

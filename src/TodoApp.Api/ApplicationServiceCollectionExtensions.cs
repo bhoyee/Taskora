@@ -1,4 +1,5 @@
 using TodoApp.Application.Projects;
+using TodoApp.Application.Intelligence;
 using TodoApp.Application.Projects.Board;
 using TodoApp.Application.Tasks.CreateTask;
 using TodoApp.Application.Tasks.Activity;
@@ -14,6 +15,7 @@ internal static class ApplicationServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddScoped<CreateProjectHandler>();
+        services.AddScoped<GetPortfolioDashboardHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();
         services.AddScoped<GetProjectByIdHandler>();
