@@ -109,6 +109,50 @@ public sealed class RepositoryTests
     }
 
     [Fact]
+    public async Task Search_EqualScores_UsesDueDateThenCreationTime()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var project = Project.Create(Guid.NewGuid(), "Tie breakers");
+        var factors = PlanningFactors.Create(4, 4, 4, 3);
+        var laterCreated = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Later creation",
+            new DateTimeOffset(2026, 7, 2, 0, 0, 0, TimeSpan.Zero));
+        laterCreated.SetPlanningFactors(factors);
+        laterCreated.Schedule(DueDate.Create(new DateOnly(2026, 7, 10)));
+        var earlierCreated = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Earlier creation",
+            new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero));
+        earlierCreated.SetPlanningFactors(factors);
+        earlierCreated.Schedule(DueDate.Create(new DateOnly(2026, 7, 10)));
+
+        await using (var seed = database.CreateContext())
+        {
+            seed.AddRange(project, laterCreated, earlierCreated);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = database.CreateContext();
+        var result = await new TaskRepository(context).SearchAsync(
+            new TaskSearchCriteria(
+                project.Id,
+                null,
+                null,
+                null,
+                TaskSortBy.PriorityDescending,
+                1,
+                10),
+            CancellationToken.None);
+
+        Assert.Equal(
+            [earlierCreated.Id, laterCreated.Id],
+            result.Items.Select(task => task.Id));
+    }
+
+    [Fact]
     public async Task Transaction_WhenRolledBack_DoesNotPersistChanges()
     {
         await using var database = await TestDatabase.CreateAsync();

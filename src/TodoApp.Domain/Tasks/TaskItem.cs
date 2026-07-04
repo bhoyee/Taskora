@@ -10,7 +10,11 @@ public sealed class TaskItem
     private PlanningFactors? _planningFactors;
     private PriorityScore? _priority;
 
-    private TaskItem(Guid id, Guid projectId, string title)
+    private TaskItem(
+        Guid id,
+        Guid projectId,
+        string title,
+        DateTimeOffset createdAt)
     {
         if (id == Guid.Empty)
         {
@@ -31,6 +35,7 @@ public sealed class TaskItem
 
         ProjectId = projectId;
         Title = title.Trim();
+        CreatedAt = createdAt;
         Status = TaskItemStatus.Backlog;
     }
 
@@ -39,6 +44,8 @@ public sealed class TaskItem
     public Guid ProjectId { get; }
 
     public string Title { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
 
     public TaskItemStatus Status { get; private set; }
 
@@ -72,8 +79,12 @@ public sealed class TaskItem
     public IReadOnlyCollection<IDomainEvent> DomainEvents =>
         _domainEvents.AsReadOnly();
 
-    public static TaskItem Create(Guid id, Guid projectId, string title) =>
-        new(id, projectId, title);
+    public static TaskItem Create(
+        Guid id,
+        Guid projectId,
+        string title,
+        DateTimeOffset? createdAt = null) =>
+        new(id, projectId, title, createdAt ?? DateTimeOffset.UnixEpoch);
 
     public DeadlineHealth GetDeadlineHealth(DateOnly today)
     {

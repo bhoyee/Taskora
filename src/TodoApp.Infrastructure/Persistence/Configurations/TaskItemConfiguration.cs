@@ -16,6 +16,11 @@ internal sealed class TaskItemConfiguration
         builder.Property(task => task.Title)
             .HasMaxLength(240)
             .IsRequired();
+        builder.Property(task => task.CreatedAt)
+            .HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero))
+            .IsRequired();
         builder.Property(task => task.Status)
             .HasConversion<int>()
             .IsRequired();
@@ -84,6 +89,7 @@ internal sealed class TaskItemConfiguration
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(task => new { task.ProjectId, task.Status });
         builder.HasIndex(task => task.DueDate);
+        builder.HasIndex(task => task.CreatedAt);
 
         builder.HasMany<TaskItem>("_dependencies")
             .WithMany()

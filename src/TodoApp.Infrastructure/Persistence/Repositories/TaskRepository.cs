@@ -73,11 +73,20 @@ public sealed class TaskRepository(TodoAppDbContext context)
         query = criteria.SortBy switch
         {
             TaskSortBy.DueDateAscending => query
-                .OrderBy(task => task.DueDate),
+                .OrderBy(task => task.DueDate == null)
+                .ThenBy(task => task.DueDate)
+                .ThenBy(task => task.CreatedAt)
+                .ThenBy(task => task.Id),
             TaskSortBy.TitleAscending => query
-                .OrderBy(task => task.Title),
+                .OrderBy(task => task.Title)
+                .ThenBy(task => task.CreatedAt)
+                .ThenBy(task => task.Id),
             _ => query.OrderByDescending(task =>
-                EF.Property<PriorityScore>(task, "_priority").Value)
+                    EF.Property<PriorityScore>(task, "_priority").Value)
+                .ThenBy(task => task.DueDate == null)
+                .ThenBy(task => task.DueDate)
+                .ThenBy(task => task.CreatedAt)
+                .ThenBy(task => task.Id)
         };
 
         var items = await query
