@@ -3,7 +3,9 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Application.Tasks.Queries;
 
-public sealed class GetTaskByIdHandler(ITaskReadRepository tasks)
+public sealed class GetTaskByIdHandler(
+    ITaskReadRepository tasks,
+    IClock clock)
 {
     public async Task<Result<TaskDetailsDto>> HandleAsync(
         GetTaskByIdQuery query,
@@ -23,6 +25,8 @@ public sealed class GetTaskByIdHandler(ITaskReadRepository tasks)
         }
 
         return Result<TaskDetailsDto>.Success(
-            TaskDtoMapper.ToDetails(task));
+            TaskDtoMapper.ToDetails(
+                task,
+                DateOnly.FromDateTime(clock.UtcNow.UtcDateTime)));
     }
 }

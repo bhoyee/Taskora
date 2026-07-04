@@ -12,5 +12,8 @@ public sealed record TaskDetailsDto(
     DateOnly? DueDate,
     int? Effort,
     decimal? PriorityScore,
+    PriorityBand? PriorityBand,
+    PriorityExplanationDto? PriorityExplanation,
+    DeadlineHealth DeadlineHealth,
     IReadOnlyCollection<Guid> DependencyIds,
     DateTimeOffset? CompletedAt);
