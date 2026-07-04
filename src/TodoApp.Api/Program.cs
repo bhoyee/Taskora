@@ -47,8 +47,7 @@ if (app.Environment.IsDevelopment())
         CancellationToken.None);
 }
 
-app.MapGet("/", () => Results.Redirect("/openapi/v1.json"))
-    .ExcludeFromDescription();
+app.MapStaticAssets();
 app.MapHealthChecks(
     "/health/live",
     new HealthCheckOptions
@@ -64,6 +63,21 @@ app.MapHealthChecks(
 app.MapProjectEndpoints();
 app.MapTaskEndpoints();
 app.MapIntelligenceEndpoints();
+var publishedIndex = Path.Combine(
+    app.Environment.ContentRootPath,
+    "wwwroot",
+    "index.html");
+var developmentIndex = Path.GetFullPath(
+    Path.Combine(
+        app.Environment.ContentRootPath,
+        "..",
+        "TodoApp.Web",
+        "dist",
+        "index.html"));
+var webIndex = File.Exists(publishedIndex)
+    ? publishedIndex
+    : developmentIndex;
+app.MapFallback(() => Results.File(webIndex, "text/html"));
 
 app.Run();
 
