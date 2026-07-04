@@ -81,6 +81,16 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
         AssertSuccess(await PostAsync(taskId, "complete"));
         AssertSuccess(await PostAsync(taskId, "reopen"));
 
+        var activity = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/tasks/{taskId}/activity");
+        Assert.True(activity.GetArrayLength() >= 6);
+        Assert.Equal(
+            "system",
+            activity[0].GetProperty("actor").GetString());
+        Assert.Equal(
+            "StatusChanged",
+            activity[0].GetProperty("action").GetString());
+
         var search = await _client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/tasks?projectId={projectId}&search=Updated&pageNumber=1&pageSize=10");
 
@@ -90,6 +100,21 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             search.GetProperty("items")[0]
                 .GetProperty("title")
                 .GetString());
+        Assert.True(
+            search.GetProperty("items")[0]
+                .GetProperty("priorityExplanation")
+                .GetProperty("businessValueContribution")
+                .GetInt32() > 0);
+        Assert.Equal(
+            "Healthy",
+            search.GetProperty("items")[0]
+                .GetProperty("deadlineHealth")
+                .GetString());
+
+        var dashboard = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/v1/dashboard");
+        Assert.True(dashboard.GetProperty("projectCount").GetInt32() > 0);
+        Assert.True(dashboard.GetProperty("activeTaskCount").GetInt32() > 0);
     }
 
     private async Task<Guid> CreateProjectAsync()

@@ -60,5 +60,15 @@ Accept: application/json
 
 ###
 
+GET {{TodoApp_HostAddress}}/api/v1/tasks/{{taskId}}/activity
+Accept: application/json
+
+###
+
+GET {{TodoApp_HostAddress}}/api/v1/dashboard
+Accept: application/json
+
+###
+
 POST {{TodoApp_HostAddress}}/api/v1/tasks/{{taskId}}/ready
 X-Correlation-ID: vscode-task-workflow

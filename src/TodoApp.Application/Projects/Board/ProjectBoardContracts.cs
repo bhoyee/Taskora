@@ -11,13 +11,15 @@ public sealed record ProjectBoardSnapshot(
     int BlockedCount,
     int CompletedCount,
     int OverdueCount,
+    int AtRiskCount,
+    int CriticalCount,
     IReadOnlyList<TaskItem> HighPriorityBlockedTasks);
 
 public sealed record HighPriorityBlockedTaskDto(
     Guid Id,
     string Title,
     decimal PriorityScore,
-    IReadOnlyCollection<Guid> DependencyIds);
+    IReadOnlyCollection<Guid> IncompleteDependencyChainIds);
 
 public sealed record ProjectBoardDto(
     Guid ProjectId,
@@ -28,6 +30,8 @@ public sealed record ProjectBoardDto(
     int BlockedCount,
     int CompletedCount,
     int OverdueCount,
+    int AtRiskCount,
+    int CriticalCount,
     IReadOnlyList<HighPriorityBlockedTaskDto> HighPriorityBlockedTasks)
 {
     public int TotalTasks =>

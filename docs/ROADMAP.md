@@ -185,7 +185,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 5: Priority Intelligence
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Introduce the feature that differentiates the product.
 
@@ -196,6 +196,16 @@ depending on HTTP, databases, or frontend frameworks.
 - Deadline health indicators.
 - Activity history for important task changes.
 - Dashboard summary queries.
+
+**Progress delivered:**
+
+- Explainable score, band, effort, and weighted contribution contracts.
+- Deadline health with deterministic clock-based boundaries.
+- Stable score, due-date, creation-time, and identifier ordering.
+- Transitive incomplete dependency chains for high-priority blocked work.
+- Immutable actor-attributed task activity history.
+- Project risk totals and a cross-project portfolio dashboard.
+- Versioned API contracts and persistence/API integration coverage.
 
 **Definition of done:**
 

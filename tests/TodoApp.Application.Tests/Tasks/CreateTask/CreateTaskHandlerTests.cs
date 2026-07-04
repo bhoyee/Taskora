@@ -12,6 +12,8 @@ public sealed class CreateTaskHandlerTests
         Guid.Parse("03b24f74-fbd0-4cbd-bf83-7b9a172c151c");
     private static readonly Guid TaskId =
         Guid.Parse("7dd36a63-22f1-4b39-bc53-4c955f580ad6");
+    private static readonly DateTimeOffset Now =
+        new(2026, 7, 4, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Handle_WhenProjectExists_CreatesAndPersistsTask()
@@ -39,6 +41,7 @@ public sealed class CreateTaskHandlerTests
         Assert.Equal(5, result.Value.Effort);
         Assert.NotNull(tasks.AddedTask);
         Assert.Equal(ProjectId, tasks.AddedTask.ProjectId);
+        Assert.Equal(Now, tasks.AddedTask.CreatedAt);
         Assert.Equal(cancellation.Token, tasks.ReceivedCancellationToken);
         Assert.Equal(1, unitOfWork.SaveCount);
         Assert.Equal(cancellation.Token, unitOfWork.ReceivedCancellationToken);
@@ -105,7 +108,17 @@ public sealed class CreateTaskHandlerTests
         IProjectRepository projects,
         ITaskRepository tasks,
         IUnitOfWork unitOfWork) =>
-        new(projects, tasks, unitOfWork, new StubIdentifierGenerator(TaskId));
+        new(
+            projects,
+            tasks,
+            unitOfWork,
+            new StubIdentifierGenerator(TaskId),
+            new StubClock(Now));
+
+    private sealed class StubClock(DateTimeOffset utcNow) : IClock
+    {
+        public DateTimeOffset UtcNow => utcNow;
+    }
 
     private sealed class StubProjectRepository(Project? project)
         : IProjectRepository

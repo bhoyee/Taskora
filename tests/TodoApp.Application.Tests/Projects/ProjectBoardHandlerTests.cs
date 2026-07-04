@@ -27,6 +27,8 @@ public sealed class ProjectBoardHandlerTests
                 BlockedCount: 1,
                 CompletedCount: 8,
                 OverdueCount: 2,
+                AtRiskCount: 3,
+                CriticalCount: 4,
                 HighPriorityBlockedTasks: [blockedTask]));
         var handler = new GetProjectBoardHandler(
             new StubProjectRepository(project),
@@ -42,6 +44,8 @@ public sealed class ProjectBoardHandlerTests
         Assert.Equal(18, result.Value.TotalTasks);
         Assert.Equal(8, result.Value.CompletedCount);
         Assert.Equal(2, result.Value.OverdueCount);
+        Assert.Equal(3, result.Value.AtRiskCount);
+        Assert.Equal(4, result.Value.CriticalCount);
         Assert.Single(result.Value.HighPriorityBlockedTasks);
         Assert.Equal(
             blockedTask.Priority.Value,
@@ -53,7 +57,7 @@ public sealed class ProjectBoardHandlerTests
     public async Task GetBoard_WhenProjectDoesNotExist_ReturnsNotFound()
     {
         var reader = new StubProjectBoardReader(
-            new ProjectBoardSnapshot(0, 0, 0, 0, 0, 0, []));
+            new ProjectBoardSnapshot(0, 0, 0, 0, 0, 0, 0, 0, []));
         var handler = new GetProjectBoardHandler(
             new StubProjectRepository(project: null),
             reader);
