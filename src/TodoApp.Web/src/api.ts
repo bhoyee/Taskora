@@ -50,7 +50,7 @@ export const api = {
   dashboard: () => request<Dashboard>('/api/v1/dashboard'),
   tasks: (search = '') =>
     request<TaskPage>(
-      `/api/v1/tasks?projectId=${projectId}&search=${encodeURIComponent(search)}&pageSize=100`,
+      `/api/v1/tasks?projectId=${projectId}&search=${encodeURIComponent(search)}&pageNumber=1&pageSize=100`,
     ),
   createTask: (title: string, dueDate: string, effort: number) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {
