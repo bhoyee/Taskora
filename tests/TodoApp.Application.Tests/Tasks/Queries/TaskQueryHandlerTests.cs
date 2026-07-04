@@ -8,6 +8,8 @@ namespace TodoApp.Application.Tests.Tasks.Queries;
 public sealed class TaskQueryHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
+    private static readonly DateTimeOffset Now =
+        new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Search_WhenCriteriaAreValid_ReturnsMappedPage()
@@ -19,7 +21,7 @@ public sealed class TaskQueryHandlerTests
         var repository = new RecordingTaskReadRepository(
             [first, second],
             totalCount: 7);
-        var handler = new SearchTasksHandler(repository);
+        var handler = new SearchTasksHandler(repository, new StubClock(Now));
         var query = new SearchTasksQuery(
             ProjectId,
             TaskItemStatus.InProgress,
@@ -42,6 +44,12 @@ public sealed class TaskQueryHandlerTests
             {
                 Assert.Equal(first.Id, item.Id);
                 Assert.Equal(first.Priority.Value, item.PriorityScore);
+                Assert.Equal(PriorityBand.Critical, item.PriorityBand);
+                Assert.NotNull(item.PriorityExplanation);
+                Assert.Equal(
+                    first.Priority.BusinessValueContribution,
+                    item.PriorityExplanation.BusinessValueContribution);
+                Assert.Equal(DeadlineHealth.Healthy, item.DeadlineHealth);
             },
             item =>
             {
@@ -62,7 +70,7 @@ public sealed class TaskQueryHandlerTests
         int pageSize)
     {
         var repository = new RecordingTaskReadRepository([], totalCount: 0);
-        var handler = new SearchTasksHandler(repository);
+        var handler = new SearchTasksHandler(repository, new StubClock(Now));
         var query = new SearchTasksQuery(
             PageNumber: pageNumber,
             PageSize: pageSize);
@@ -81,10 +89,11 @@ public sealed class TaskQueryHandlerTests
     {
         var task = CreateTask("Publish portfolio", TaskItemStatus.InProgress);
         task.Schedule(DueDate.Create(new DateOnly(2026, 7, 31)));
+        task.SetPlanningFactors(PlanningFactors.Create(5, 4, 3, 5));
         var repository = new RecordingTaskReadRepository(
             [task],
             totalCount: 1);
-        var handler = new GetTaskByIdHandler(repository);
+        var handler = new GetTaskByIdHandler(repository, new StubClock(Now));
 
         var result = await handler.HandleAsync(
             new GetTaskByIdQuery(task.Id),
@@ -94,13 +103,19 @@ public sealed class TaskQueryHandlerTests
         Assert.Equal(task.Id, result.Value.Id);
         Assert.Equal(ProjectId, result.Value.ProjectId);
         Assert.Equal(new DateOnly(2026, 7, 31), result.Value.DueDate);
+        Assert.Equal(DeadlineHealth.Healthy, result.Value.DeadlineHealth);
+        Assert.Equal(task.Priority.Band, result.Value.PriorityBand);
+        Assert.Equal(
+            task.Priority.UrgencyContribution,
+            result.Value.PriorityExplanation?.UrgencyContribution);
     }
 
     [Fact]
     public async Task GetById_WhenTaskDoesNotExist_ReturnsNotFound()
     {
         var handler = new GetTaskByIdHandler(
-            new RecordingTaskReadRepository([], totalCount: 0));
+            new RecordingTaskReadRepository([], totalCount: 0),
+            new StubClock(Now));
 
         var result = await handler.HandleAsync(
             new GetTaskByIdQuery(Guid.NewGuid()),
@@ -109,6 +124,11 @@ public sealed class TaskQueryHandlerTests
         Assert.False(result.IsSuccess);
         Assert.Equal(ErrorType.NotFound, result.Error.Type);
         Assert.Equal("task.not_found", result.Error.Code);
+    }
+
+    private sealed class StubClock(DateTimeOffset utcNow) : IClock
+    {
+        public DateTimeOffset UtcNow => utcNow;
     }
 
     private static TaskItem CreateTask(string title, TaskItemStatus status)

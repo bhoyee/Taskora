@@ -9,4 +9,7 @@ public sealed record TaskListItemDto(
     TaskItemStatus Status,
     bool IsBlocked,
     DateOnly? DueDate,
-    decimal? PriorityScore);
+    decimal? PriorityScore,
+    PriorityBand? PriorityBand,
+    PriorityExplanationDto? PriorityExplanation,
+    DeadlineHealth DeadlineHealth);
