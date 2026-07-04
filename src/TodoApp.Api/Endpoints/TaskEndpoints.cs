@@ -1,6 +1,7 @@
 using TodoApp.Api.Contracts;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.CreateTask;
+using TodoApp.Application.Tasks.Activity;
 using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
 using TodoApp.Application.Tasks.Queries;
@@ -31,6 +32,9 @@ internal static class TaskEndpoints
         group.MapGet("/{taskId:guid}", GetTaskAsync)
             .WithName("GetTask")
             .Produces<TaskDetailsDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapGet("/{taskId:guid}/activity", GetActivityAsync)
+            .WithName("GetTaskActivity")
             .ProducesProblem(StatusCodes.Status404NotFound);
         group.MapPut("/{taskId:guid}", UpdateTaskAsync)
             .WithName("UpdateTask");
@@ -85,6 +89,14 @@ internal static class TaskEndpoints
         CancellationToken cancellationToken) =>
         ApiResult.From(await handler.HandleAsync(
             new GetTaskByIdQuery(taskId),
+            cancellationToken));
+
+    private static async Task<IResult> GetActivityAsync(
+        Guid taskId,
+        GetTaskActivityHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new GetTaskActivityQuery(taskId),
             cancellationToken));
 
     private static async Task<IResult> SearchTasksAsync(

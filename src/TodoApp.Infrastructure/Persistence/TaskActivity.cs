@@ -8,12 +8,14 @@ public sealed class TaskActivity
 
     private TaskActivity(
         Guid taskId,
+        string actor,
         string activityType,
         string previousValue,
         string currentValue,
         DateTimeOffset occurredAt)
     {
         TaskId = taskId;
+        Actor = actor;
         ActivityType = activityType;
         PreviousValue = previousValue;
         CurrentValue = currentValue;
@@ -23,6 +25,8 @@ public sealed class TaskActivity
     public long Sequence { get; private set; }
 
     public Guid TaskId { get; private set; }
+
+    public string Actor { get; private set; } = string.Empty;
 
     public string ActivityType { get; private set; } = string.Empty;
 
@@ -39,6 +43,7 @@ public sealed class TaskActivity
         DateTimeOffset occurredAt) =>
         new(
             taskId,
+            "system",
             "StatusChanged",
             previousValue,
             currentValue,

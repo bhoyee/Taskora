@@ -1,6 +1,7 @@
 using TodoApp.Application.Projects;
 using TodoApp.Application.Projects.Board;
 using TodoApp.Application.Tasks.CreateTask;
+using TodoApp.Application.Tasks.Activity;
 using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
 using TodoApp.Application.Tasks.Queries;
@@ -19,6 +20,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<GetProjectBoardHandler>();
 
         services.AddScoped<CreateTaskHandler>();
+        services.AddScoped<GetTaskActivityHandler>();
         services.AddScoped<GetTaskByIdHandler>();
         services.AddScoped<SearchTasksHandler>();
         services.AddScoped<MoveTaskToReadyHandler>();

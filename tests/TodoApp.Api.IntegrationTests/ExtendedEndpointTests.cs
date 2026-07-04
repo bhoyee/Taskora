@@ -81,6 +81,16 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
         AssertSuccess(await PostAsync(taskId, "complete"));
         AssertSuccess(await PostAsync(taskId, "reopen"));
 
+        var activity = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/tasks/{taskId}/activity");
+        Assert.True(activity.GetArrayLength() >= 6);
+        Assert.Equal(
+            "system",
+            activity[0].GetProperty("actor").GetString());
+        Assert.Equal(
+            "StatusChanged",
+            activity[0].GetProperty("action").GetString());
+
         var search = await _client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/tasks?projectId={projectId}&search=Updated&pageNumber=1&pageSize=10");
 

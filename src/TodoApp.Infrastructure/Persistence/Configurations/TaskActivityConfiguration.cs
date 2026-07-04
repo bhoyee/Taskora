@@ -16,6 +16,9 @@ internal sealed class TaskActivityConfiguration
         builder.Property(activity => activity.ActivityType)
             .HasMaxLength(80)
             .IsRequired();
+        builder.Property(activity => activity.Actor)
+            .HasMaxLength(200)
+            .IsRequired();
         builder.Property(activity => activity.PreviousValue)
             .HasMaxLength(200);
         builder.Property(activity => activity.CurrentValue)
