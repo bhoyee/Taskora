@@ -75,6 +75,27 @@ public sealed class TaskItem
     public static TaskItem Create(Guid id, Guid projectId, string title) =>
         new(id, projectId, title);
 
+    public DeadlineHealth GetDeadlineHealth(DateOnly today)
+    {
+        if (Status == TaskItemStatus.Completed)
+        {
+            return DeadlineHealth.Completed;
+        }
+
+        if (DueDate is null)
+        {
+            return DeadlineHealth.Healthy;
+        }
+
+        var daysRemaining = DueDate.Value.DayNumber - today.DayNumber;
+        return daysRemaining switch
+        {
+            < 0 => DeadlineHealth.Overdue,
+            <= 3 => DeadlineHealth.AtRisk,
+            _ => DeadlineHealth.Healthy
+        };
+    }
+
     public void MoveToReady()
     {
         EnsureStatus(
