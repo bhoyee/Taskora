@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Complete
 
 ## Objective
 
@@ -69,6 +69,24 @@ visible across projects.
 - Dashboard calculations are covered by automated tests.
 - Product and API documentation describe the scoring model.
 - A pull request to `dev` passes review.
+
+## Scoring Model
+
+Priority is calculated as:
+
+```text
+((business value * 3) + (urgency * 2) + (risk reduction * 2)) / effort
+```
+
+Inputs use a 1-5 scale and effort uses the supported Fibonacci estimates.
+Scores are rounded to two decimal places. Bands are Low below 3, Medium from
+3, High from 6, and Critical from 10.
+
+Equal scores sort by due date, creation time, then identifier. This keeps
+recommendations stable while favouring work due sooner and created earlier.
+
+Deadline health is Completed for finished work, Overdue after the due date, At
+Risk from the due date through three days before it, and Healthy otherwise.
 
 ## Expected Commits
 
