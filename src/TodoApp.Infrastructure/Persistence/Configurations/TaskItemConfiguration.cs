@@ -115,6 +115,7 @@ internal sealed class TaskItemConfiguration
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Ignore(task => task.DependencyIds);
+        builder.Ignore(task => task.IncompleteDependencyChainIds);
         builder.Ignore(task => task.HasIncompleteDependencies);
         builder.Ignore(task => task.IsBlocked);
         builder.Ignore(task => task.DomainEvents);

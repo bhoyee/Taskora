@@ -70,6 +70,16 @@ public sealed class TaskItem
     public IReadOnlyCollection<Guid> DependencyIds =>
         _dependencies.Select(dependency => dependency.Id).ToArray();
 
+    public IReadOnlyCollection<Guid> IncompleteDependencyChainIds
+    {
+        get
+        {
+            var result = new HashSet<Guid>();
+            CollectIncompleteDependencies(result);
+            return result.ToArray();
+        }
+    }
+
     public bool HasIncompleteDependencies =>
         _dependencies.Any(dependency => dependency.Status != TaskItemStatus.Completed);
 
@@ -261,6 +271,18 @@ public sealed class TaskItem
         }
 
         return _dependencies.Any(dependency => dependency.DependsOn(taskId, visited));
+    }
+
+    private void CollectIncompleteDependencies(HashSet<Guid> result)
+    {
+        foreach (var dependency in _dependencies.Where(
+                     item => item.Status != TaskItemStatus.Completed))
+        {
+            if (result.Add(dependency.Id))
+            {
+                dependency.CollectIncompleteDependencies(result);
+            }
+        }
     }
 
     private void ChangeStatus(TaskItemStatus newStatus)
