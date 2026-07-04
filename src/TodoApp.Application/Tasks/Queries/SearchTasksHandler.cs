@@ -3,7 +3,9 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Application.Tasks.Queries;
 
-public sealed class SearchTasksHandler(ITaskReadRepository tasks)
+public sealed class SearchTasksHandler(
+    ITaskReadRepository tasks,
+    IClock clock)
 {
     public async Task<Result<PagedResult<TaskListItemDto>>> HandleAsync(
         SearchTasksQuery query,
@@ -32,8 +34,9 @@ public sealed class SearchTasksHandler(ITaskReadRepository tasks)
         var searchResult = await tasks.SearchAsync(
             criteria,
             cancellationToken);
+        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
         var items = searchResult.Items
-            .Select(TaskDtoMapper.ToListItem)
+            .Select(task => TaskDtoMapper.ToListItem(task, today))
             .ToArray();
 
         return Result<PagedResult<TaskListItemDto>>.Success(

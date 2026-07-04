@@ -33,7 +33,7 @@ public sealed class GetProjectBoardHandler(
                     task.Id,
                     task.Title,
                     task.Priority.Value,
-                    task.DependencyIds))
+                    task.IncompleteDependencyChainIds))
             .ToArray();
 
         return Result<ProjectBoardDto>.Success(
@@ -46,6 +46,8 @@ public sealed class GetProjectBoardHandler(
                 snapshot.BlockedCount,
                 snapshot.CompletedCount,
                 snapshot.OverdueCount,
+                snapshot.AtRiskCount,
+                snapshot.CriticalCount,
                 blockedTasks));
     }
 }

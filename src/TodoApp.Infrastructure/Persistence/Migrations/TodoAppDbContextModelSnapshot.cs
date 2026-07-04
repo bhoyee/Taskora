@@ -81,6 +81,9 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("TEXT");
 
@@ -100,6 +103,8 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("DueDate");
 
                     b.HasIndex("ProjectId", "Status");
@@ -116,6 +121,11 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.Property<string>("ActivityType")
                         .IsRequired()
                         .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CurrentValue")

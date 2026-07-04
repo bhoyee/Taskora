@@ -63,6 +63,7 @@ app.MapHealthChecks(
     });
 app.MapProjectEndpoints();
 app.MapTaskEndpoints();
+app.MapIntelligenceEndpoints();
 
 app.Run();
 

@@ -27,7 +27,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
 | 3. Persistence | Complete | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
 | 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
-| 5. Priority Intelligence | Planned | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
+| 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Planned | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
 | 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
@@ -72,8 +72,8 @@ domain entities and invoke application use cases backed by Infrastructure.
 
 ## Current Development
 
-Milestones 1 through 4 are complete on stacked feature branches. The current
-`feature/production-rest-api` branch includes:
+Milestones 1 through 5 are complete on feature branches. The current
+`feature/priority-intelligence` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -94,7 +94,10 @@ Milestones 1 through 4 are complete on stacked feature branches. The current
 - Consistent Problem Details for validation, not-found, conflict, malformed,
   and unexpected failures.
 - OpenAPI discovery, correlation IDs, and separate live/ready health checks.
-- 62 domain, 34 application, 16 Infrastructure, and 12 API integration tests.
+- Explainable priority recommendations and deadline health.
+- Stable priority tie-breakers and incomplete dependency-chain guidance.
+- Immutable activity history and project/portfolio intelligence dashboards.
+- 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
 
 Run the complete build and test suite with:
 

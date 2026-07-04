@@ -9,7 +9,8 @@ public sealed class CreateTaskHandler(
     IProjectRepository projects,
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
-    IIdentifierGenerator identifiers)
+    IIdentifierGenerator identifiers,
+    IClock clock)
 {
     public async Task<Result<TaskDto>> HandleAsync(
         CreateTaskCommand command,
@@ -35,7 +36,8 @@ public sealed class CreateTaskHandler(
             var task = TaskItem.Create(
                 identifiers.NewId(),
                 project.Id,
-                command.Title);
+                command.Title,
+                clock.UtcNow);
 
             if (command.DueDate.HasValue)
             {

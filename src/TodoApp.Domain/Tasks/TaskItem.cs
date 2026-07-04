@@ -10,7 +10,11 @@ public sealed class TaskItem
     private PlanningFactors? _planningFactors;
     private PriorityScore? _priority;
 
-    private TaskItem(Guid id, Guid projectId, string title)
+    private TaskItem(
+        Guid id,
+        Guid projectId,
+        string title,
+        DateTimeOffset createdAt)
     {
         if (id == Guid.Empty)
         {
@@ -31,6 +35,7 @@ public sealed class TaskItem
 
         ProjectId = projectId;
         Title = title.Trim();
+        CreatedAt = createdAt;
         Status = TaskItemStatus.Backlog;
     }
 
@@ -39,6 +44,8 @@ public sealed class TaskItem
     public Guid ProjectId { get; }
 
     public string Title { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
 
     public TaskItemStatus Status { get; private set; }
 
@@ -63,6 +70,16 @@ public sealed class TaskItem
     public IReadOnlyCollection<Guid> DependencyIds =>
         _dependencies.Select(dependency => dependency.Id).ToArray();
 
+    public IReadOnlyCollection<Guid> IncompleteDependencyChainIds
+    {
+        get
+        {
+            var result = new HashSet<Guid>();
+            CollectIncompleteDependencies(result);
+            return result.ToArray();
+        }
+    }
+
     public bool HasIncompleteDependencies =>
         _dependencies.Any(dependency => dependency.Status != TaskItemStatus.Completed);
 
@@ -72,8 +89,12 @@ public sealed class TaskItem
     public IReadOnlyCollection<IDomainEvent> DomainEvents =>
         _domainEvents.AsReadOnly();
 
-    public static TaskItem Create(Guid id, Guid projectId, string title) =>
-        new(id, projectId, title);
+    public static TaskItem Create(
+        Guid id,
+        Guid projectId,
+        string title,
+        DateTimeOffset? createdAt = null) =>
+        new(id, projectId, title, createdAt ?? DateTimeOffset.UnixEpoch);
 
     public DeadlineHealth GetDeadlineHealth(DateOnly today)
     {
@@ -250,6 +271,18 @@ public sealed class TaskItem
         }
 
         return _dependencies.Any(dependency => dependency.DependsOn(taskId, visited));
+    }
+
+    private void CollectIncompleteDependencies(HashSet<Guid> result)
+    {
+        foreach (var dependency in _dependencies.Where(
+                     item => item.Status != TaskItemStatus.Completed))
+        {
+            if (result.Add(dependency.Id))
+            {
+                dependency.CollectIncompleteDependencies(result);
+            }
+        }
     }
 
     private void ChangeStatus(TaskItemStatus newStatus)

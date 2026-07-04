@@ -50,6 +50,28 @@ public sealed class ProjectBoardReadRepository(
                 today,
                 (int)TaskItemStatus.Completed)
             .SingleAsync(cancellationToken);
+        var atRiskUntil = today.AddDays(3);
+        var atRiskCount = await context.Database
+            .SqlQueryRaw<int>(
+                """
+                SELECT COUNT(*) AS Value
+                FROM Tasks
+                WHERE ProjectId = {0}
+                  AND DueDate >= {1}
+                  AND DueDate <= {2}
+                  AND Status <> {3}
+                """,
+                projectId,
+                today,
+                atRiskUntil,
+                (int)TaskItemStatus.Completed)
+            .SingleAsync(cancellationToken);
+        var criticalCount = await projectTasks.CountAsync(
+            task =>
+                EF.Property<PriorityScore>(task, "_priority").Band ==
+                    PriorityBand.Critical &&
+                task.Status != TaskItemStatus.Completed,
+            cancellationToken);
 
         var highPriorityBlockedTasks = await projectTasks
             .Where(task =>
@@ -73,6 +95,8 @@ public sealed class ProjectBoardReadRepository(
             counts?.Blocked ?? 0,
             counts?.Completed ?? 0,
             overdueCount,
+            atRiskCount,
+            criticalCount,
             highPriorityBlockedTasks);
     }
 }
