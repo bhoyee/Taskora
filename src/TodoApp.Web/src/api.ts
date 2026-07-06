@@ -67,6 +67,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!response.ok) throw new Error('The workspace could not be loaded.')
+
+  const contentType = response.headers.get('content-type')
+  if (!contentType?.includes('application/json')) {
+    throw new Error('The API returned an unexpected response. Check that the API server is running.')
+  }
+
   return response.json() as Promise<T>
 }
 

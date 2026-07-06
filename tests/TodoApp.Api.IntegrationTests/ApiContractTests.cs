@@ -100,6 +100,17 @@ public sealed class ApiContractTests(ApiFactory factory)
             response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Fact]
+    public async Task Unknown_api_route_returns_problem_details_instead_of_html()
+    {
+        var response = await _client.GetAsync("/api/v1/not-a-route");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(
+            "application/problem+json",
+            response.Content.Headers.ContentType?.MediaType);
+    }
+
     private async Task<Guid> CreateProjectAsync()
     {
         var response = await _client.PostAsJsonAsync(

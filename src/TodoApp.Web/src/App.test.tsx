@@ -55,7 +55,10 @@ function mockApi() {
           : url.includes('/dashboard')
             ? dashboard
             : taskPage
-      return new Response(JSON.stringify(value), { status: 200 })
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
 }
 
@@ -101,5 +104,20 @@ describe('delivery workspace', () => {
     expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument()
     expect(screen.getByLabelText('Business value')).toHaveValue(5)
     expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument()
+  })
+
+  it('explains when an API request is routed to the frontend', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<!doctype html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    )
+
+    render(<App />)
+
+    expect(await screen.findByText(
+      'The API returned an unexpected response. Check that the API server is running.',
+    )).toBeInTheDocument()
   })
 })

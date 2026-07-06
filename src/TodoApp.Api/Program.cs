@@ -70,6 +70,9 @@ app.MapProjectEndpoints();
 app.MapTaskEndpoints();
 app.MapIntelligenceEndpoints();
 app.MapWorkspaceEndpoints();
+app.Map("/api/{**path}", () => Results.Problem(
+    statusCode: StatusCodes.Status404NotFound,
+    title: "API endpoint not found."));
 var publishedIndex = Path.Combine(
     app.Environment.ContentRootPath,
     "wwwroot",
