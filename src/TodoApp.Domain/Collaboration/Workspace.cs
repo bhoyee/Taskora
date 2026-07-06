@@ -6,6 +6,10 @@ public sealed class Workspace
 {
     private readonly List<WorkspaceMembership> _memberships = [];
 
+    private Workspace()
+    {
+    }
+
     private Workspace(Guid id, string name, Guid ownerId)
     {
         if (id == Guid.Empty)
@@ -29,7 +33,7 @@ public sealed class Workspace
 
     public Guid Id { get; }
 
-    public string Name { get; private set; }
+    public string Name { get; private set; } = string.Empty;
 
     public Guid OwnerId { get; private set; }
 

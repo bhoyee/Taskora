@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Application.Abstractions;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 using TodoApp.Domain.Tasks.Events;
@@ -15,6 +16,13 @@ public sealed class TodoAppDbContext(
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
 
     public DbSet<TaskActivity> TaskActivities => Set<TaskActivity>();
+
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+
+    public DbSet<Workspace> Workspaces => Set<Workspace>();
+
+    public DbSet<WorkspaceMembership> WorkspaceMemberships =>
+        Set<WorkspaceMembership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +41,7 @@ public sealed class TodoAppDbContext(
     {
         SetConcurrencyTokens<Project>();
         SetConcurrencyTokens<TaskItem>();
+        SetConcurrencyTokens<Workspace>();
 
         var tasksWithEvents = ChangeTracker
             .Entries<TaskItem>()
