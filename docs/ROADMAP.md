@@ -276,7 +276,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 8: Delivery And Operations
 
-**Status:** In progress
+**Status:** Complete
 
 **Objective:** Make every release repeatable and observable.
 
@@ -297,12 +297,18 @@ depending on HTTP, databases, or frontend frameworks.
 - Cost-conscious Azure hosting notes for App Service, Azure SQL, and optional
   Docker usage.
 - Clickable Activity, Settings, Profile, password, and logout UI paths.
+- Task pagination and a useful activity fallback when no activity history is
+  available.
+- Azure setup checklist covering App Service, optional Azure SQL, service
+  connection, pipeline variables, smoke tests, and cost guardrails.
+- Deployment and operations architecture diagram.
 
 **Definition of done:**
 
 - A clean checkout builds and tests in CI.
 - Deployment requires no manual file changes.
 - Production health can be checked after deployment.
+- Release, rollback, smoke-test, and Azure setup instructions are documented.
 
 ## Initial Commit Sequence
 

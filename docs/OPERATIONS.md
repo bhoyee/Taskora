@@ -16,6 +16,34 @@ DevOps, while keeping local development and portfolio review simple.
 6. Manually run the pipeline with `deployToAzure` set to `true` for deployment.
 7. Run the smoke test against the deployed App Service URL.
 
+## Deployment Architecture
+
+```mermaid
+flowchart LR
+    Dev["Developer workstation"]
+    GitHub["GitHub repository"]
+    AzureRepos["Azure DevOps repo mirror"]
+    Pipeline["Azure Pipelines<br/>restore, test, coverage, build"]
+    Artifacts["Release artifacts<br/>ZIP + optional Docker tar"]
+    AppService["Azure App Service<br/>F1 Free for portfolio demo"]
+    Sqlite[("SQLite<br/>local/demo")]
+    AzureSql[("Azure SQL<br/>optional free offer")]
+    Smoke["Smoke test<br/>/health/live + /health/ready"]
+    Alerts["Cost alerts<br/>Azure budget"]
+
+    Dev --> GitHub
+    Dev --> AzureRepos
+    GitHub --> Pipeline
+    AzureRepos --> Pipeline
+    Pipeline --> Artifacts
+    Artifacts -->|manual deploy gate| AppService
+    AppService --> Sqlite
+    AppService -. optional .-> AzureSql
+    AppService --> Smoke
+    Alerts -. guardrail .-> AppService
+    Alerts -. guardrail .-> AzureSql
+```
+
 ## Local Verification
 
 ```powershell
@@ -31,6 +59,9 @@ Pop-Location
 
 docker build -t todoapp:local .
 ```
+
+Docker can be skipped on machines where it is not installed. CI still contains
+the Docker build step so container readiness can be validated later.
 
 ## Environment Configuration
 
@@ -62,6 +93,9 @@ For portfolio demonstrations, prefer the lowest-cost setup first:
 Docker is not required to run Azure App Service from the published ZIP package.
 The Docker build remains in CI as a production-readiness validation and can be
 used later if the app moves to container hosting.
+
+See the [Azure setup checklist](AZURE_SETUP.md) for the App Service, optional
+Azure SQL, service connection, variables, smoke test, and budget-alert steps.
 
 ## Azure Pipeline Variables
 

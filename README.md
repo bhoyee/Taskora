@@ -12,6 +12,7 @@ urgency, risk, effort, and task dependencies.
 - [Testing strategy](docs/TESTING.md)
 - [Contribution workflow](docs/CONTRIBUTING.md)
 - [Operations runbook](docs/OPERATIONS.md)
+- [Azure setup checklist](docs/AZURE_SETUP.md)
 - [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
@@ -31,7 +32,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
-| 8. Delivery and Operations | In progress | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+| 8. Delivery and Operations | Complete | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
 of done, and an expected commit sequence in the
@@ -71,10 +72,33 @@ The project uses a **modular monolith with domain-oriented boundaries**:
 `TodoApp.Api` is the composition root. HTTP contracts stay separate from
 domain entities and invoke application use cases backed by Infrastructure.
 
+## Delivery Architecture
+
+```mermaid
+flowchart LR
+    GitHub["GitHub"]
+    AzureDevOps["Azure DevOps"]
+    Pipeline["Azure Pipelines<br/>test, coverage, build, package"]
+    Artifact["Deployable ZIP<br/>optional Docker artifact"]
+    AppService["Azure App Service<br/>F1 Free for portfolio demo"]
+    Database[("SQLite local/demo<br/>or Azure SQL optional")]
+    Smoke["Smoke tests<br/>live + ready health"]
+    Budget["Azure budget alerts"]
+
+    GitHub --> Pipeline
+    AzureDevOps --> Pipeline
+    Pipeline --> Artifact
+    Artifact -->|manual deploy gate| AppService
+    AppService --> Database
+    AppService --> Smoke
+    Budget -. guardrail .-> AppService
+    Budget -. guardrail .-> Database
+```
+
 ## Current Development
 
-Milestones 1 through 7 are complete on feature branches. The current
-`feature/identity-collaboration` branch includes:
+Milestones 1 through 8 are complete on feature branches. The current
+`feature/delivery-operations` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -103,6 +127,10 @@ Milestones 1 through 7 are complete on feature branches. The current
 - JWT authentication with development/test identity isolation.
 - Workspace roles, guarded membership, and task assignment.
 - Server-side security tests for unauthorized and forbidden access.
+- Interactive board drag and drop, task pagination, activity fallback, settings,
+  profile, password, and logout screens.
+- Azure Pipeline coverage publishing, app packaging, optional Docker artifact,
+  deployment smoke-test hook, operations runbook, and Azure setup checklist.
 - 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
 
 Run the complete build and test suite with:
@@ -232,3 +260,5 @@ rollback steps.
 For a low-cost portfolio deployment, start with App Service F1 Free, keep
 deployment manual, set Azure budget alerts, and use SQLite locally until Azure
 SQL is needed. Docker is optional for App Service ZIP deployment.
+Follow the [Azure setup checklist](docs/AZURE_SETUP.md) when you are ready to
+deploy.
