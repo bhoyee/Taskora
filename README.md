@@ -29,7 +29,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
-| 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
+| 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
 | 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
@@ -72,8 +72,8 @@ domain entities and invoke application use cases backed by Infrastructure.
 
 ## Current Development
 
-Milestones 1 through 6 are complete on feature branches. The current
-`feature/web-experience` branch includes:
+Milestones 1 through 7 are complete on feature branches. The current
+`feature/identity-collaboration` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -99,6 +99,9 @@ Milestones 1 through 6 are complete on feature branches. The current
 - Immutable activity history and project/portfolio intelligence dashboards.
 - Responsive React list and Kanban views with task editing and planning.
 - Component and desktop/mobile browser tests.
+- JWT authentication with development/test identity isolation.
+- Workspace roles, guarded membership, and task assignment.
+- Server-side security tests for unauthorized and forbidden access.
 - 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
 
 Run the complete build and test suite with:
