@@ -65,8 +65,8 @@ test('user can inspect prioritized work and open the editor', async ({ page }) =
 test('board is keyboard accessible without horizontal page overflow', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Board' }).click()
-  const card = page.getByRole('button', { name: 'Edit Ship portfolio' })
-  await card.focus()
+  const editButton = page.getByTitle('Edit task')
+  await editButton.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog', { name: 'Edit task' })).toBeVisible()
 
@@ -75,4 +75,33 @@ test('board is keyboard accessible without horizontal page overflow', async ({ p
     client: body.clientWidth,
   }))
   expect(width.scroll).toBe(width.client)
+})
+
+test('task can be dragged to a valid workflow column', async ({ page }) => {
+  let status = 'Ready'
+  await page.unroute('**/api/v1/tasks?**')
+  await page.route('**/api/v1/tasks?**', (route) =>
+    route.fulfill({
+      json: {
+        ...tasks,
+        items: tasks.items.map((task) => ({ ...task, status })),
+      },
+    }))
+  await page.route('**/api/v1/tasks/task-1/start', async (route) => {
+    status = 'InProgress'
+    await route.fulfill({ json: { status } })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Board' }).click()
+  const request = page.waitForRequest('**/api/v1/tasks/task-1/start')
+  await page.locator('.board-task').dragTo(
+    page.getByRole('region', { name: 'In progress tasks' }),
+  )
+  await request
+
+  await expect(
+    page.getByRole('region', { name: 'In progress tasks' })
+      .getByText('Ship portfolio'),
+  ).toBeVisible()
 })
