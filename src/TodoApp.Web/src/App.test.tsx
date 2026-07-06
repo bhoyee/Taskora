@@ -32,6 +32,12 @@ const taskPage = {
     },
   }],
 }
+const secondTask = {
+  ...taskPage.items[0],
+  id: 'task-2',
+  title: 'Review deployment runbook',
+  status: 'Ready',
+}
 const workspaces = [{
   id: 'workspace-1',
   name: 'Portfolio team',
@@ -66,6 +72,30 @@ function mockApi() {
           : url.includes('/dashboard')
             ? dashboard
             : taskPage
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+}
+
+function mockPagedApi() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input) => {
+      const url = String(input)
+      const pageTwo = url.includes('pageNumber=2')
+      const value = url.includes('/activity')
+        ? []
+        : url.includes('/workspaces/workspace-1/members')
+        ? members
+        : url.endsWith('/workspaces')
+          ? workspaces
+          : url.includes('/dashboard')
+            ? dashboard
+            : {
+                totalCount: 11,
+                items: pageTwo ? [secondTask] : taskPage.items,
+              }
       return new Response(JSON.stringify(value), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -140,6 +170,26 @@ describe('delivery workspace', () => {
     await user.type(screen.getByLabelText('Display name'), 'Jadesola Portfolio')
     await user.click(screen.getByRole('button', { name: /save profile/i }))
     expect(screen.getByText('Profile updated.')).toBeInTheDocument()
+  })
+
+  it('shows activity fallback, paginates tasks, and logs out from the menu', async () => {
+    mockPagedApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: /activity/i }))
+    expect(screen.getByText('No recorded activity yet')).toBeInTheDocument()
+    expect(screen.getByText('Current task snapshot')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /workspace/i }))
+    expect(screen.getByText('Showing 1-10 of 11')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    expect(await screen.findByText('Review deployment runbook')).toBeInTheDocument()
+    expect(screen.getByText('Showing 11-11 of 11')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^logout$/i }))
+    expect(screen.getByText('You have been logged out of the browser session.')).toBeInTheDocument()
   })
 
   it('explains when an API request is routed to the frontend', async () => {

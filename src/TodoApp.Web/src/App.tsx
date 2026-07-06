@@ -80,12 +80,15 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
 
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [taskTotal, setTaskTotal] = useState(0)
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
   const [view, setView] = useState<View>('workspace')
   const [search, setSearch] = useState('')
+  const [pageNumber, setPageNumber] = useState(1)
+  const pageSize = 10
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -100,19 +103,21 @@ export default function App() {
 
   const load = async () => {
     try {
+      setLoading(true)
       setError('')
       const available = await api.workspaces()
       const selected = available[0]
       if (!selected) throw new Error('No workspace membership was found.')
       const [summary, page, workspaceMembers] = await Promise.all([
-        api.dashboard(), api.tasks(), api.members(selected.id),
+        api.dashboard(), api.tasks(search, pageNumber, pageSize), api.members(selected.id),
       ])
       setWorkspace(selected)
       setMembers(workspaceMembers)
       setDashboard(summary)
       setTasks(page.items)
+      setTaskTotal(page.totalCount)
       const activityItems = await Promise.all(
-        page.items.slice(0, 8).map((task) => api.activity(task.id).catch(() => [])),
+        page.items.slice(0, 10).map((task) => api.activity(task.id).catch(() => [])),
       )
       setActivity(activityItems.flat().sort((left, right) =>
         Date.parse(right.occurredAt) - Date.parse(left.occurredAt)))
@@ -123,10 +128,16 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, [pageNumber, search])
   useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
-  const visible = useMemo(() => tasks.filter((task) =>
-    task.title.toLowerCase().includes(search.toLowerCase())), [tasks, search])
+  const visible = useMemo(() => tasks, [tasks])
+  const totalPages = Math.max(1, Math.ceil(taskTotal / pageSize))
+  const logout = () => {
+    localStorage.removeItem('todoapp_access_token')
+    setNotice('You have been logged out of the browser session.')
+    setView('workspace')
+    setNavOpen(false)
+  }
   const openView = (next: View) => {
     setView(next)
     setNavOpen(false)
@@ -155,6 +166,7 @@ export default function App() {
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
         </nav>
+        <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
           <div><strong>{profile.displayName}</strong><small>{profile.title}</small></div>
@@ -181,7 +193,7 @@ export default function App() {
 
           <section className="work-area">
             <div className="toolbar">
-              <div className="search"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" /></div>
+              <div className="search"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1) }} placeholder="Search tasks" aria-label="Search tasks" /></div>
               <div className="segmented" aria-label="View">
                 <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
                 <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
@@ -192,6 +204,13 @@ export default function App() {
               mode === 'list'
                 ? <TaskList tasks={visible} onEdit={setSelectedTask} />
                 : <Board tasks={visible} onEdit={setSelectedTask} onMove={moveTask} />}
+            {!loading && <Pagination
+              pageNumber={pageNumber}
+              pageSize={pageSize}
+              totalCount={taskTotal}
+              totalPages={totalPages}
+              onPageChange={setPageNumber}
+            />}
           </section>
         </>}
         {view === 'activity' && <ActivityPage activity={activity} tasks={tasks} loading={loading} />}
@@ -204,11 +223,7 @@ export default function App() {
           setProfile(next)
           localStorage.setItem('todoapp_profile', JSON.stringify(next))
           setNotice('Profile updated.')
-        }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={() => {
-          localStorage.removeItem('todoapp_access_token')
-          setNotice('You have been logged out of the browser session.')
-          setView('workspace')
-        }} />}
+        }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={logout} />}
       </main>
       {dialogOpen && <TaskDialog onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && <TaskEditor task={selectedTask} members={members} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
@@ -250,7 +265,20 @@ function ActivityPage({
   const taskTitles = new Map(tasks.map((task) => [task.id, task.title]))
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
   if (!activity.length) {
-    return <section className="panel-page"><div className="empty"><Activity /><h2>No activity yet</h2><p>Task changes will appear here after work starts moving.</p></div></section>
+    return <section className="panel-page activity-page">
+      <div className="empty compact"><Activity /><h2>No recorded activity yet</h2><p>Move tasks across the board or edit work items to build the timeline.</p></div>
+      {!!tasks.length && <div className="activity-snapshot" aria-label="Current task snapshot">
+        <h2>Current task snapshot</h2>
+        {tasks.map((task) => <article className="activity-item" key={task.id}>
+          <span className="activity-icon"><CircleGauge /></span>
+          <div>
+            <strong>{task.title}</strong>
+            <p>{statusLabels[task.status]} - {task.deadlineHealth} - priority {task.priorityScore?.toFixed(1) ?? 'unscored'}</p>
+            <small>{task.dueDate ? `Due ${task.dueDate}` : 'No due date'}</small>
+          </div>
+        </article>)}
+      </div>}
+    </section>
   }
 
   return <section className="panel-page activity-page" aria-label="Activity timeline">
@@ -263,6 +291,36 @@ function ActivityPage({
       </div>
     </article>)}
   </section>
+}
+
+function Pagination({
+  pageNumber,
+  pageSize,
+  totalCount,
+  totalPages,
+  onPageChange,
+}: {
+  pageNumber: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalCount <= pageSize) {
+    return <footer className="pagination"><span>{totalCount} task{totalCount === 1 ? '' : 's'}</span></footer>
+  }
+
+  const start = (pageNumber - 1) * pageSize + 1
+  const end = Math.min(pageNumber * pageSize, totalCount)
+
+  return <footer className="pagination" aria-label="Task pagination">
+    <span>Showing {start}-{end} of {totalCount}</span>
+    <div>
+      <button className="secondary" disabled={pageNumber === 1} onClick={() => onPageChange(pageNumber - 1)}>Previous</button>
+      <strong>Page {pageNumber} of {totalPages}</strong>
+      <button className="secondary" disabled={pageNumber === totalPages} onClick={() => onPageChange(pageNumber + 1)}>Next</button>
+    </div>
+  </footer>
 }
 
 function SettingsPage({
