@@ -228,3 +228,7 @@ smokeTestBaseUrl: https://YOUR-AZURE-WEB-APP-NAME.azurewebsites.net
 When you manually run the pipeline, set `Deploy to Azure App Service` to `true`.
 See the [operations runbook](docs/OPERATIONS.md) for release, smoke-test, and
 rollback steps.
+
+For a low-cost portfolio deployment, start with App Service F1 Free, keep
+deployment manual, set Azure budget alerts, and use SQLite locally until Azure
+SQL is needed. Docker is optional for App Service ZIP deployment.

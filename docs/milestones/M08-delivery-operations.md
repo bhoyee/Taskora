@@ -26,6 +26,9 @@ deployment.
 - Add an operator runbook for configuration, release, rollback, and smoke tests.
 - Add a reusable smoke-test script for live and readiness endpoints.
 - Document environment variables and secret boundaries.
+- Document the low-cost Azure path and when Docker/Azure SQL are optional.
+- Keep operational navigation usable for activity, profile, settings, and logout
+  workflows.
 
 ## Acceptance Criteria
 
@@ -35,6 +38,10 @@ deployment.
 - CI validates that the Dockerfile can build from a clean checkout.
 - Deployment remains manually gated until Azure App Service details are set.
 - Smoke tests can be run locally or by the pipeline against a deployed base URL.
+- The app documents a portfolio-friendly Azure deployment path that avoids paid
+  resources until they are required.
+- Activity, settings, profile, password, and logout screens are reachable from
+  the application menu.
 
 ## Required Tests
 
@@ -42,6 +49,7 @@ deployment.
 - Existing frontend component tests.
 - Docker build validation in CI.
 - Smoke test against `/health/live` and `/health/ready`.
+- Component and browser tests for operational navigation pages.
 
 ## Definition Of Done
 

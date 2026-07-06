@@ -294,6 +294,9 @@ depending on HTTP, databases, or frontend frameworks.
 - Docker image build validation and image artifact packaging.
 - Deployment smoke-test hook for live and readiness probes.
 - Operations runbook covering release, configuration, rollback, and smoke tests.
+- Cost-conscious Azure hosting notes for App Service, Azure SQL, and optional
+  Docker usage.
+- Clickable Activity, Settings, Profile, password, and logout UI paths.
 
 **Definition of done:**
 
