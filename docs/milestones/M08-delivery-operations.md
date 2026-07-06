@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress
+Complete
 
 ## Objective
 
@@ -29,6 +29,9 @@ deployment.
 - Document the low-cost Azure path and when Docker/Azure SQL are optional.
 - Keep operational navigation usable for activity, profile, settings, and logout
   workflows.
+- Add an Azure setup checklist for App Service, optional Azure SQL, service
+  connection, pipeline variables, smoke tests, and cost guardrails.
+- Add a deployment and operations architecture diagram.
 
 ## Acceptance Criteria
 
@@ -42,6 +45,8 @@ deployment.
   resources until they are required.
 - Activity, settings, profile, password, and logout screens are reachable from
   the application menu.
+- The deployment architecture and Azure setup path are documented in the
+  repository.
 
 ## Required Tests
 
@@ -50,6 +55,8 @@ deployment.
 - Docker build validation in CI.
 - Smoke test against `/health/live` and `/health/ready`.
 - Component and browser tests for operational navigation pages.
+- Documentation review for the runbook, Azure setup checklist, and milestone
+  completion notes.
 
 ## Definition Of Done
 
@@ -58,6 +65,8 @@ deployment.
 - CI produces both application and Docker artifacts.
 - Production health can be checked after deployment.
 - The milestone branch is pushed and reviewed through a pull request.
+- Docker validation is documented as CI/production-environment work because it
+  was intentionally skipped on the local machine.
 
 ## Expected Commits
 
