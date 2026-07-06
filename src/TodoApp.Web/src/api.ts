@@ -51,6 +51,16 @@ export interface WorkspaceMember {
   role: 'Owner' | 'Manager' | 'Member'
 }
 
+export interface TaskActivity {
+  sequence: number
+  taskId: string
+  actor: string
+  activityType: string
+  previousValue: string | null
+  currentValue: string | null
+  occurredAt: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   const identityHeaders: Record<string, string> = accessToken
@@ -118,4 +128,6 @@ export const api = {
     }),
   unassign: (id: string) =>
     request(`/api/v1/tasks/${id}/assignment`, { method: 'DELETE' }),
+  activity: (id: string) =>
+    request<TaskActivity[]>(`/api/v1/tasks/${id}/activity`),
 }

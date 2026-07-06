@@ -48,6 +48,18 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ json: dashboard }))
   await page.route('**/api/v1/tasks?**', (route) =>
     route.fulfill({ json: tasks }))
+  await page.route('**/api/v1/tasks/*/activity', (route) =>
+    route.fulfill({
+      json: [{
+        sequence: 1,
+        taskId: 'task-1',
+        actor: 'Jadesola Aliu',
+        activityType: 'StatusChanged',
+        previousValue: 'Backlog',
+        currentValue: 'Ready',
+        occurredAt: '2026-07-06T10:00:00Z',
+      }],
+    }))
 })
 
 test('user can inspect prioritized work and open the editor', async ({ page }) => {
@@ -104,4 +116,33 @@ test('task can be dragged to a valid workflow column', async ({ page }) => {
     page.getByRole('region', { name: 'In progress tasks' })
       .getByText('Ship portfolio'),
   ).toBeVisible()
+})
+
+test('activity settings and profile navigation are usable', async ({ page }) => {
+  await page.goto('/')
+
+  if (page.viewportSize()?.width && page.viewportSize()!.width < 900) {
+    await page.getByRole('button', { name: 'Toggle navigation' }).click()
+  }
+  await page.getByRole('button', { name: 'Activity' }).click()
+  await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible()
+  await expect(page.getByText(/status changed/i)).toBeVisible()
+
+  if (page.viewportSize()?.width && page.viewportSize()!.width < 900) {
+    await page.getByRole('button', { name: 'Toggle navigation' }).click()
+  }
+  await page.getByRole('button', { name: 'Settings' }).click()
+  await expect(page.getByRole('heading', { name: 'Workspace settings' })).toBeVisible()
+  await page.getByLabel('Default view').selectOption('board')
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  await expect(page.getByText('Settings saved.')).toBeVisible()
+
+  if (page.viewportSize()?.width && page.viewportSize()!.width < 900) {
+    await page.getByRole('button', { name: 'Toggle navigation' }).click()
+  }
+  await page.getByRole('button', { name: 'Profile' }).click()
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible()
+  await page.getByLabel('Display name').fill('Jadesola Portfolio')
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await expect(page.getByText('Profile updated.')).toBeVisible()
 })

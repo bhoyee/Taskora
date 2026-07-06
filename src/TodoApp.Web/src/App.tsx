@@ -7,12 +7,12 @@ import {
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, GripVertical, LayoutList, Menu, Pencil, Plus, Search,
-  Settings2, X,
+  Clock3, Columns3, GripVertical, LayoutList, LogOut, Menu, Pencil, Plus,
+  Save, Search, Settings2, ShieldCheck, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  Dashboard, TaskItem, TaskStatus, Workspace, WorkspaceMember,
+  Dashboard, TaskActivity, TaskItem, TaskStatus, Workspace, WorkspaceMember,
 } from './api'
 import './styles.css'
 
@@ -24,6 +24,41 @@ const statusLabels: Record<TaskStatus, string> = {
 const emptyDashboard: Dashboard = {
   projectCount: 0, activeTaskCount: 0, blockedTaskCount: 0,
   overdueTaskCount: 0, criticalTaskCount: 0,
+}
+
+type View = 'workspace' | 'activity' | 'settings' | 'profile'
+
+interface UserProfile {
+  displayName: string
+  email: string
+  title: string
+}
+
+interface UserSettings {
+  defaultView: 'list' | 'board'
+  compactMode: boolean
+  emailDigest: boolean
+}
+
+const defaultProfile: UserProfile = {
+  displayName: 'Jadesola Aliu',
+  email: 'jadesola@example.com',
+  title: 'Portfolio owner',
+}
+
+const defaultSettings: UserSettings = {
+  defaultView: 'list',
+  compactMode: false,
+  emailDigest: true,
+}
+
+function readLocal<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key)
+    return value ? { ...fallback, ...JSON.parse(value) } : fallback
+  } catch {
+    return fallback
+  }
 }
 
 const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
@@ -49,12 +84,19 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
+  const [view, setView] = useState<View>('workspace')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [navOpen, setNavOpen] = useState(false)
+  const [activity, setActivity] = useState<TaskActivity[]>([])
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    readLocal('todoapp_profile', defaultProfile))
+  const [settings, setSettings] = useState<UserSettings>(() =>
+    readLocal('todoapp_settings', defaultSettings))
+  const [notice, setNotice] = useState('')
 
   const load = async () => {
     try {
@@ -69,6 +111,11 @@ export default function App() {
       setMembers(workspaceMembers)
       setDashboard(summary)
       setTasks(page.items)
+      const activityItems = await Promise.all(
+        page.items.slice(0, 8).map((task) => api.activity(task.id).catch(() => [])),
+      )
+      setActivity(activityItems.flat().sort((left, right) =>
+        Date.parse(right.occurredAt) - Date.parse(left.occurredAt)))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
@@ -77,8 +124,13 @@ export default function App() {
   }
 
   useEffect(() => { void load() }, [])
+  useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
   const visible = useMemo(() => tasks.filter((task) =>
     task.title.toLowerCase().includes(search.toLowerCase())), [tasks, search])
+  const openView = (next: View) => {
+    setView(next)
+    setNavOpen(false)
+  }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
     if (!transition) return
@@ -98,42 +150,65 @@ export default function App() {
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
         <nav aria-label="Primary navigation">
-          <a className="active" href="#workspace"><CircleGauge size={18} /> Workspace</a>
-          <a href="#activity"><Activity size={18} /> Activity</a>
-          <a href="#settings"><Settings2 size={18} /> Settings</a>
+          <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
+          <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
+          <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
+          <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
         </nav>
-        <div className="sidebar-foot"><span className="avatar">JA</span><div><strong>Jadesola</strong><small>Portfolio owner</small></div></div>
+        <button className="sidebar-foot" onClick={() => openView('profile')}>
+          <span className="avatar">{initials(profile.displayName)}</span>
+          <div><strong>{profile.displayName}</strong><small>{profile.title}</small></div>
+        </button>
       </aside>
 
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>Delivery workspace</h1></div>
-          <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>
+          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          {view === 'workspace' && <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>}
         </header>
 
-        <section className="metrics" aria-label="Portfolio health">
-          <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} />
-          <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" />
-          <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
-          <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
-        </section>
+        {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
+        {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button></div>}
 
-        <section className="work-area">
-          <div className="toolbar">
-            <div className="search"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" /></div>
-            <div className="segmented" aria-label="View">
-              <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
-              <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+        {view === 'workspace' && <>
+          <section className="metrics" aria-label="Portfolio health">
+            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
+            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
+          </section>
+
+          <section className="work-area">
+            <div className="toolbar">
+              <div className="search"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" /></div>
+              <div className="segmented" aria-label="View">
+                <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
+                <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+              </div>
             </div>
-          </div>
 
-          {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button></div>}
-          {loading ? <div className="loading">Loading workspace...</div> :
-            mode === 'list'
-              ? <TaskList tasks={visible} onEdit={setSelectedTask} />
-              : <Board tasks={visible} onEdit={setSelectedTask} onMove={moveTask} />}
-        </section>
+            {loading ? <div className="loading">Loading workspace...</div> :
+              mode === 'list'
+                ? <TaskList tasks={visible} onEdit={setSelectedTask} />
+                : <Board tasks={visible} onEdit={setSelectedTask} onMove={moveTask} />}
+          </section>
+        </>}
+        {view === 'activity' && <ActivityPage activity={activity} tasks={tasks} loading={loading} />}
+        {view === 'settings' && <SettingsPage settings={settings} onSave={(next) => {
+          setSettings(next)
+          localStorage.setItem('todoapp_settings', JSON.stringify(next))
+          setNotice('Settings saved.')
+        }} />}
+        {view === 'profile' && <ProfilePage profile={profile} onSave={(next) => {
+          setProfile(next)
+          localStorage.setItem('todoapp_profile', JSON.stringify(next))
+          setNotice('Profile updated.')
+        }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={() => {
+          localStorage.removeItem('todoapp_access_token')
+          setNotice('You have been logged out of the browser session.')
+          setView('workspace')
+        }} />}
       </main>
       {dialogOpen && <TaskDialog onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && <TaskEditor task={selectedTask} members={members} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
@@ -141,8 +216,134 @@ export default function App() {
   )
 }
 
+function viewTitle(view: View) {
+  return {
+    workspace: 'Delivery workspace',
+    activity: 'Activity timeline',
+    settings: 'Workspace settings',
+    profile: 'Profile',
+  }[view]
+}
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U'
+}
+
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
   return <div className={`metric ${tone}`}><span className="metric-icon">{icon}</span><div><strong>{value}</strong><span>{label}</span></div></div>
+}
+
+function ActivityPage({
+  activity,
+  tasks,
+  loading,
+}: {
+  activity: TaskActivity[]
+  tasks: TaskItem[]
+  loading: boolean
+}) {
+  const taskTitles = new Map(tasks.map((task) => [task.id, task.title]))
+  if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
+  if (!activity.length) {
+    return <section className="panel-page"><div className="empty"><Activity /><h2>No activity yet</h2><p>Task changes will appear here after work starts moving.</p></div></section>
+  }
+
+  return <section className="panel-page activity-page" aria-label="Activity timeline">
+    {activity.slice(0, 20).map((item) => <article className="activity-item" key={item.sequence}>
+      <span className="activity-icon"><Activity /></span>
+      <div>
+        <strong>{taskTitles.get(item.taskId) ?? 'Task activity'}</strong>
+        <p>{item.actor} changed {item.activityType.replace(/([A-Z])/g, ' $1').toLowerCase()} from {item.previousValue ?? 'none'} to {item.currentValue ?? 'none'}.</p>
+        <small>{new Date(item.occurredAt).toLocaleString()}</small>
+      </div>
+    </article>)}
+  </section>
+}
+
+function SettingsPage({
+  settings,
+  onSave,
+}: {
+  settings: UserSettings
+  onSave: (settings: UserSettings) => void
+}) {
+  const [draft, setDraft] = useState(settings)
+  useEffect(() => setDraft(settings), [settings])
+
+  return <section className="panel-page settings-page">
+    <form className="settings-form" onSubmit={(event) => {
+      event.preventDefault()
+      onSave(draft)
+    }}>
+      <div className="settings-section">
+        <div>
+          <h2>Workspace preferences</h2>
+          <p>Choose the default view and notification behaviour for this browser session.</p>
+        </div>
+        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">List</option><option value="board">Board</option></select><ChevronDown /></label>
+      </div>
+      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
+      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
+      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
+    </form>
+  </section>
+}
+
+function ProfilePage({
+  profile,
+  onSave,
+  onPasswordChanged,
+  onLogout,
+}: {
+  profile: UserProfile
+  onSave: (profile: UserProfile) => void
+  onPasswordChanged: () => void
+  onLogout: () => void
+}) {
+  const [draft, setDraft] = useState(profile)
+  const [password, setPassword] = useState({ current: '', next: '', confirm: '' })
+  const [passwordError, setPasswordError] = useState('')
+  useEffect(() => setDraft(profile), [profile])
+
+  return <section className="profile-grid">
+    <form className="panel-page profile-card" onSubmit={(event) => {
+      event.preventDefault()
+      onSave(draft)
+    }}>
+      <div className="profile-heading"><span className="avatar large">{initials(draft.displayName)}</span><div><h2>Personal details</h2><p>Update the identity shown in the workspace menu.</p></div></div>
+      <label>Display name<input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} required maxLength={120} /></label>
+      <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} required maxLength={180} /></label>
+      <label>Title<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required maxLength={120} /></label>
+      <footer><button className="primary"><Save size={16} /> Save profile</button></footer>
+    </form>
+
+    <form className="panel-page profile-card" onSubmit={(event) => {
+      event.preventDefault()
+      setPasswordError('')
+      if (password.next.length < 8) {
+        setPasswordError('Use at least 8 characters.')
+        return
+      }
+      if (password.next !== password.confirm) {
+        setPasswordError('New password and confirmation must match.')
+        return
+      }
+      setPassword({ current: '', next: '', confirm: '' })
+      onPasswordChanged()
+    }}>
+      <div className="profile-heading"><span className="metric-icon"><ShieldCheck /></span><div><h2>Password</h2><p>Record the change intent until production identity is connected.</p></div></div>
+      <label>Current password<input type="password" value={password.current} onChange={(event) => setPassword({ ...password, current: event.target.value })} autoComplete="current-password" /></label>
+      <label>New password<input type="password" value={password.next} onChange={(event) => setPassword({ ...password, next: event.target.value })} autoComplete="new-password" /></label>
+      <label>Confirm password<input type="password" value={password.confirm} onChange={(event) => setPassword({ ...password, confirm: event.target.value })} autoComplete="new-password" /></label>
+      {passwordError && <p className="field-error">{passwordError}</p>}
+      <footer><button className="secondary" type="button" onClick={onLogout}><LogOut size={16} /> Logout</button><button className="primary">Change password</button></footer>
+    </form>
+  </section>
 }
 
 function TaskList({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskItem) => void }) {

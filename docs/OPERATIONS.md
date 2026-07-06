@@ -46,6 +46,23 @@ docker build -t todoapp:local .
 Secrets must be stored in Azure DevOps variable groups, Azure App Service
 configuration, or Azure Key Vault. They must not be committed to the repository.
 
+## Cost-Conscious Azure Hosting
+
+For portfolio demonstrations, prefer the lowest-cost setup first:
+
+- Use the App Service F1 Free tier for development and portfolio review only.
+- Keep deployment manually gated in Azure Pipelines.
+- Leave Always On disabled on free/shared hosting tiers.
+- Configure Azure Cost Management budgets and alerts before deploying.
+- Use SQLite locally until Azure SQL is genuinely needed.
+- If testing Azure SQL, use the free Azure SQL Database offer where available
+  and keep usage within the monthly allowance.
+- Delete or stop paid resources when the portfolio review period ends.
+
+Docker is not required to run Azure App Service from the published ZIP package.
+The Docker build remains in CI as a production-readiness validation and can be
+used later if the app moves to container hosting.
+
 ## Azure Pipeline Variables
 
 | Variable | Description |

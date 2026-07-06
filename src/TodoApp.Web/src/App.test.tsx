@@ -43,12 +43,23 @@ const members = [{
   email: 'jadesola@example.com',
   role: 'Owner',
 }]
+const activity = [{
+  sequence: 1,
+  taskId: 'task-1',
+  actor: 'Jadesola Aliu',
+  activityType: 'StatusChanged',
+  previousValue: 'Ready',
+  currentValue: 'InProgress',
+  occurredAt: '2026-07-06T10:00:00Z',
+}]
 
 function mockApi() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
       const url = String(input)
-      const value = url.includes('/workspaces/workspace-1/members')
+      const value = url.includes('/activity')
+        ? activity
+        : url.includes('/workspaces/workspace-1/members')
         ? members
         : url.endsWith('/workspaces')
           ? workspaces
@@ -64,6 +75,7 @@ function mockApi() {
 
 afterEach(() => {
   cleanup()
+  localStorage.clear()
   vi.restoreAllMocks()
 })
 
@@ -104,6 +116,30 @@ describe('delivery workspace', () => {
     expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument()
     expect(screen.getByLabelText('Business value')).toHaveValue(5)
     expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument()
+  })
+
+  it('opens activity, settings, and profile pages from the sidebar', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: /activity/i }))
+    expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
+    expect(screen.getByText(/changed status changed/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /settings/i }))
+    expect(screen.getByRole('heading', { name: 'Workspace settings' })).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Default view'), 'board')
+    await user.click(screen.getByRole('button', { name: /save settings/i }))
+    expect(screen.getByText('Settings saved.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /profile/i }))
+    expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+    await user.clear(screen.getByLabelText('Display name'))
+    await user.type(screen.getByLabelText('Display name'), 'Jadesola Portfolio')
+    await user.click(screen.getByRole('button', { name: /save profile/i }))
+    expect(screen.getByText('Profile updated.')).toBeInTheDocument()
   })
 
   it('explains when an API request is routed to the frontend', async () => {
