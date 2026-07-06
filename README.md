@@ -28,7 +28,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 3. Persistence | Complete | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
 | 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
-| 6. Web Experience | Planned | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
+| 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
 | 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
 
@@ -72,8 +72,8 @@ domain entities and invoke application use cases backed by Infrastructure.
 
 ## Current Development
 
-Milestones 1 through 5 are complete on feature branches. The current
-`feature/priority-intelligence` branch includes:
+Milestones 1 through 6 are complete on feature branches. The current
+`feature/web-experience` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -97,6 +97,8 @@ Milestones 1 through 5 are complete on feature branches. The current
 - Explainable priority recommendations and deadline health.
 - Stable priority tie-breakers and incomplete dependency-chain guidance.
 - Immutable activity history and project/portfolio intelligence dashboards.
+- Responsive React list and Kanban views with task editing and planning.
+- Component and desktop/mobile browser tests.
 - 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
 
 Run the complete build and test suite with:

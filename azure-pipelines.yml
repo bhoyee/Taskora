@@ -37,6 +37,23 @@ stages:
               packageType: sdk
               version: 10.0.x
 
+          - task: NodeTool@0
+            displayName: Install Node.js
+            inputs:
+              versionSpec: 24.x
+
+          - script: npm ci
+            displayName: Restore frontend packages
+            workingDirectory: src/TodoApp.Web
+
+          - script: npm run test
+            displayName: Run frontend component tests
+            workingDirectory: src/TodoApp.Web
+
+          - script: npm run build
+            displayName: Build frontend
+            workingDirectory: src/TodoApp.Web
+
           - task: DotNetCoreCLI@2
             displayName: Restore packages
             inputs:

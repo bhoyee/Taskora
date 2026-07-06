@@ -66,4 +66,19 @@ describe('delivery workspace', () => {
     await waitFor(() =>
       expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument())
   })
+
+  it('opens an existing task for planning and workflow changes', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(taskPage), { status: 200 }))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: 'Edit Ship portfolio' }))
+
+    expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Business value')).toHaveValue(5)
+    expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument()
+  })
 })

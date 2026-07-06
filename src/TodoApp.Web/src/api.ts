@@ -57,4 +57,25 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
     }),
+  updateTask: (id: string, title: string, dueDate: string, effort: number) =>
+    request(`/api/v1/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
+    }),
+  updatePlanning: (
+    id: string,
+    businessValue: number,
+    urgency: number,
+    riskReduction: number,
+    effort: number,
+  ) =>
+    request(`/api/v1/tasks/${id}/planning`, {
+      method: 'PUT',
+      body: JSON.stringify({ businessValue, urgency, riskReduction, effort }),
+    }),
+  transition: (id: string, action: string, body?: object) =>
+    request(`/api/v1/tasks/${id}/${action}`, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 }
