@@ -68,6 +68,8 @@ Examples:
 - Validation failures use Problem Details.
 - Authentication and authorization policies are enforced.
 - A complete create-to-complete workflow succeeds.
+- Unauthenticated requests, inaccessible workspaces, and forbidden role
+  operations return the expected security status.
 
 ### Frontend Tests
 

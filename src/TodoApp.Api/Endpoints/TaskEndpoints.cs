@@ -2,6 +2,7 @@ using TodoApp.Api.Contracts;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.CreateTask;
 using TodoApp.Application.Tasks.Activity;
+using TodoApp.Application.Tasks.Assignment;
 using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
 using TodoApp.Application.Tasks.Queries;
@@ -18,6 +19,7 @@ internal static class TaskEndpoints
                 "/api/v1/projects/{projectId:guid}/tasks",
                 CreateTaskAsync)
             .WithTags("Tasks")
+            .RequireAuthorization()
             .WithName("CreateTask")
             .Produces<TaskDto>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -25,7 +27,8 @@ internal static class TaskEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         var group = endpoints.MapGroup("/api/v1/tasks")
-            .WithTags("Tasks");
+            .WithTags("Tasks")
+            .RequireAuthorization();
 
         group.MapGet("/", SearchTasksAsync)
             .WithName("SearchTasks");
@@ -58,6 +61,12 @@ internal static class TaskEndpoints
                 "/{taskId:guid}/dependencies/{dependencyId:guid}",
                 RemoveDependencyAsync)
             .WithName("RemoveTaskDependency");
+        group.MapPut("/{taskId:guid}/assignment", AssignTaskAsync)
+            .WithName("AssignTask")
+            .RequireAuthorization();
+        group.MapDelete("/{taskId:guid}/assignment", UnassignTaskAsync)
+            .WithName("UnassignTask")
+            .RequireAuthorization();
 
         return endpoints;
     }
@@ -220,6 +229,23 @@ internal static class TaskEndpoints
             handler.HandleAsync(
                 new RemoveTaskDependencyCommand(taskId, dependencyId),
                 cancellationToken));
+
+    private static async Task<IResult> AssignTaskAsync(
+        Guid taskId,
+        AssignTaskRequest request,
+        AssignTaskHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new AssignTaskCommand(taskId, request.UserId),
+            cancellationToken));
+
+    private static async Task<IResult> UnassignTaskAsync(
+        Guid taskId,
+        UnassignTaskHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new UnassignTaskCommand(taskId),
+            cancellationToken));
 
     private static async Task<IResult> HandleStatusAsync(
         Task<Result<TaskItemStatus>> operation) =>

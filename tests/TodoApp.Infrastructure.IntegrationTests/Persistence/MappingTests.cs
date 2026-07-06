@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 using TodoApp.Infrastructure.Persistence;
@@ -8,6 +9,47 @@ namespace TodoApp.Infrastructure.IntegrationTests.Persistence;
 
 public sealed class MappingTests
 {
+    [Fact]
+    public async Task Workspace_RoundTrip_PreservesOwnerAndMembershipRoles()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var owner = UserProfile.Create(
+            Guid.NewGuid(),
+            "Workspace Owner",
+            "owner@example.com");
+        var manager = UserProfile.Create(
+            Guid.NewGuid(),
+            "Project Manager",
+            "manager@example.com");
+        var workspace = Workspace.Create(
+            Guid.NewGuid(),
+            "Portfolio team",
+            owner.Id);
+        workspace.AddMember(
+            owner.Id,
+            manager.Id,
+            WorkspaceRole.Manager);
+
+        await using (var writeContext = database.CreateContext())
+        {
+            writeContext.AddRange(owner, manager, workspace);
+            await writeContext.SaveChangesAsync();
+        }
+
+        await using var readContext = database.CreateContext();
+        var reloaded = await readContext.Workspaces
+            .Include("_memberships")
+            .SingleAsync();
+
+        Assert.Equal(owner.Id, reloaded.OwnerId);
+        Assert.Equal(2, reloaded.Memberships.Count);
+        Assert.Contains(
+            reloaded.Memberships,
+            membership =>
+                membership.UserId == manager.Id &&
+                membership.Role == WorkspaceRole.Manager);
+    }
+
     [Fact]
     public async Task Project_RoundTrip_PreservesDetailsAndArchiveState()
     {

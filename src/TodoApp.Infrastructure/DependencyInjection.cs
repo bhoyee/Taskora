@@ -51,6 +51,8 @@ public static class DependencyInjection
             TaskActivityReadRepository>();
         services.AddScoped<IPortfolioDashboardReadRepository,
             PortfolioDashboardReadRepository>();
+        services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUnitOfWork>(
             provider => provider.GetRequiredService<TodoAppDbContext>());
         services.AddSingleton<IClock, SystemClock>();

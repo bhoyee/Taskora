@@ -5,7 +5,11 @@ namespace TodoApp.Domain.Projects;
 
 public sealed class Project
 {
-    private Project(Guid id, string name, string? description)
+    private Project(
+        Guid id,
+        string name,
+        string? description,
+        Guid workspaceId)
     {
         if (id == Guid.Empty)
         {
@@ -14,6 +18,7 @@ public sealed class Project
         }
 
         Id = id;
+        WorkspaceId = workspaceId;
         Name = NormalizeName(name);
         Description = NormalizeDescription(description);
     }
@@ -21,6 +26,8 @@ public sealed class Project
     public Guid Id { get; }
 
     public string Name { get; private set; }
+
+    public Guid WorkspaceId { get; private set; }
 
     public string? Description { get; private set; }
 
@@ -33,8 +40,9 @@ public sealed class Project
     public static Project Create(
         Guid id,
         string name,
-        string? description = null) =>
-        new(id, name, description);
+        string? description = null,
+        Guid? workspaceId = null) =>
+        new(id, name, description, workspaceId ?? Guid.Empty);
 
     public void Rename(string name)
     {

@@ -11,6 +11,7 @@ const tasks = {
   totalCount: 1,
   items: [{
     id: 'task-1',
+    assignedUserId: null,
     title: 'Ship portfolio',
     status: 'Ready',
     isBlocked: false,
@@ -30,6 +31,19 @@ const tasks = {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/workspaces', (route) =>
+    route.fulfill({
+      json: [{ id: 'workspace-1', name: 'Portfolio team', role: 'Owner' }],
+    }))
+  await page.route('**/api/v1/workspaces/workspace-1/members', (route) =>
+    route.fulfill({
+      json: [{
+        userId: 'user-1',
+        displayName: 'Jadesola Aliu',
+        email: 'jadesola@example.com',
+        role: 'Owner',
+      }],
+    }))
   await page.route('**/api/v1/dashboard', (route) =>
     route.fulfill({ json: dashboard }))
   await page.route('**/api/v1/tasks?**', (route) =>

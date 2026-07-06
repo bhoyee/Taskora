@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TodoApp.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using TodoApp.Infrastructure.Persistence;
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TodoAppDbContext))]
-    partial class TodoAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260706045314_AddIdentityCollaboration")]
+    partial class AddIdentityCollaboration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -124,14 +127,9 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("TargetDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
-
-                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Projects", (string)null);
                 });
@@ -140,9 +138,6 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("AssignedUserId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("BlockedReason")
@@ -177,8 +172,6 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AssignedUserId");
 
                     b.HasIndex("CreatedAt");
 

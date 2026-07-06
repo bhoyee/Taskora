@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using TodoApp.Api;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Endpoints;
+using TodoApp.Api.Security;
 using TodoApp.Infrastructure;
 using TodoApp.Infrastructure.Persistence;
 using TodoApp.Infrastructure.Persistence.Seeding;
@@ -27,12 +28,17 @@ builder.Services.AddHealthChecks()
         tags: ["ready"]);
 builder.Services.AddApplicationUseCases();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddTodoSecurity(
+    builder.Environment,
+    builder.Configuration);
 
 var app = builder.Build();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -63,6 +69,7 @@ app.MapHealthChecks(
 app.MapProjectEndpoints();
 app.MapTaskEndpoints();
 app.MapIntelligenceEndpoints();
+app.MapWorkspaceEndpoints();
 var publishedIndex = Path.Combine(
     app.Environment.ContentRootPath,
     "wwwroot",

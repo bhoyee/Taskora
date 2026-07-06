@@ -244,7 +244,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 7: Identity And Collaboration
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Secure data and support team ownership.
 
@@ -254,6 +254,17 @@ depending on HTTP, databases, or frontend frameworks.
 - Workspaces with Owner, Manager, and Member roles.
 - Task assignment and project membership.
 - Policy-based authorization and security tests.
+
+**Progress delivered:**
+
+- User profiles and workspace membership aggregate.
+- Owner, Manager, and Member role invariants.
+- EF Core mappings, migrations, and deterministic development identities.
+- Production JWT bearer and isolated development authentication.
+- Secured workspace membership and task assignment APIs.
+- Authenticated project, task, dashboard, and collaboration routes.
+- Identity-aware workspace and assignee controls in React.
+- Domain, persistence, API security, component, and browser tests.
 
 **Definition of done:**
 

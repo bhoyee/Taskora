@@ -16,6 +16,8 @@ internal static class ApiResult
             ErrorType.Validation => StatusCodes.Status400BadRequest,
             ErrorType.NotFound => StatusCodes.Status404NotFound,
             ErrorType.Conflict => StatusCodes.Status409Conflict,
+            ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+            ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
             _ => StatusCodes.Status500InternalServerError
         };
 
@@ -35,6 +37,8 @@ internal static class ApiResult
             ErrorType.Validation => "Request validation failed",
             ErrorType.NotFound => "Resource not found",
             ErrorType.Conflict => "Business rule conflict",
+            ErrorType.Forbidden => "Access denied",
+            ErrorType.Unauthorized => "Authentication required",
             _ => "Unexpected application error"
         };
 }

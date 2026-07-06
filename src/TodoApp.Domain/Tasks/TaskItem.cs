@@ -53,6 +53,8 @@ public sealed class TaskItem
 
     public DateTimeOffset? CompletedAt { get; private set; }
 
+    public Guid? AssignedUserId { get; private set; }
+
     public DueDate? DueDate { get; private set; }
 
     public EffortEstimate? EffortEstimate { get; private set; }
@@ -199,6 +201,19 @@ public sealed class TaskItem
     {
         EffortEstimate = effortEstimate;
     }
+
+    public void Assign(Guid userId)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Assigned user identifier is required.");
+        }
+
+        AssignedUserId = userId;
+    }
+
+    public void Unassign() => AssignedUserId = null;
 
     public void Block(string reason)
     {
