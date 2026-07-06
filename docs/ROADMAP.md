@@ -27,6 +27,9 @@ acceptance criteria, required tests, definition of done, and expected commits.
 - [Milestone 3: Persistence](milestones/M03-persistence.md)
 - [Milestone 4: Production REST API](milestones/M04-rest-api.md)
 - [Milestone 5: Priority Intelligence](milestones/M05-priority-intelligence.md)
+- [Milestone 6: Web Experience](milestones/M06-web-experience.md)
+- [Milestone 7: Identity And Collaboration](milestones/M07-identity-collaboration.md)
+- [Milestone 8: Delivery And Operations](milestones/M08-delivery-operations.md)
 
 ## Milestone 0: Planning And Baseline
 
@@ -273,7 +276,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 8: Delivery And Operations
 
-**Status:** Planned
+**Status:** In progress
 
 **Objective:** Make every release repeatable and observable.
 
@@ -284,6 +287,13 @@ depending on HTTP, databases, or frontend frameworks.
 - Environment-specific configuration and secret management.
 - Azure App Service deployment and smoke test.
 - Operational runbook and portfolio architecture diagram.
+
+**Progress delivered:**
+
+- Pipeline coverage publishing for backend tests.
+- Docker image build validation and image artifact packaging.
+- Deployment smoke-test hook for live and readiness probes.
+- Operations runbook covering release, configuration, rollback, and smoke tests.
 
 **Definition of done:**
 

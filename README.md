@@ -11,6 +11,7 @@ urgency, risk, effort, and task dependencies.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing strategy](docs/TESTING.md)
 - [Contribution workflow](docs/CONTRIBUTING.md)
+- [Operations runbook](docs/OPERATIONS.md)
 - [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
@@ -30,7 +31,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
-| 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+| 8. Delivery and Operations | In progress | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
 of done, and an expected commit sequence in the
@@ -180,13 +181,20 @@ Replace `YOUR-USERNAME` with your GitHub username.
 
 ## Azure DevOps CI Pipeline
 
-This repository includes `azure-pipelines.yml`. It does the following when code is pushed to `main`:
+This repository includes `azure-pipelines.yml`. It does the following when code is pushed to `main`, `dev`, or a feature branch:
 
 - Installs the .NET SDK.
+- Installs Node.js.
+- Restores frontend packages.
+- Runs frontend component tests.
+- Builds the React frontend.
 - Restores NuGet packages.
-- Builds the app.
+- Builds the .NET solution.
+- Runs backend tests and publishes coverage.
 - Publishes the app as a build artifact named `drop`.
+- Builds and publishes a Docker image artifact.
 - Optionally deploys the artifact to Azure App Service.
+- Optionally runs a deployment smoke test.
 
 To connect it in Azure DevOps:
 
@@ -214,6 +222,9 @@ Then update these variables in `azure-pipelines.yml`:
 ```yaml
 azureServiceConnection: YOUR-AZURE-SERVICE-CONNECTION
 webAppName: YOUR-AZURE-WEB-APP-NAME
+smokeTestBaseUrl: https://YOUR-AZURE-WEB-APP-NAME.azurewebsites.net
 ```
 
 When you manually run the pipeline, set `Deploy to Azure App Service` to `true`.
+See the [operations runbook](docs/OPERATIONS.md) for release, smoke-test, and
+rollback steps.
