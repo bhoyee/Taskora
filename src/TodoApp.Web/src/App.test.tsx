@@ -14,6 +14,7 @@ const taskPage = {
   totalCount: 1,
   items: [{
     id: 'task-1',
+    assignedUserId: null,
     title: 'Ship portfolio',
     status: 'InProgress',
     isBlocked: false,
@@ -31,6 +32,32 @@ const taskPage = {
     },
   }],
 }
+const workspaces = [{
+  id: 'workspace-1',
+  name: 'Portfolio team',
+  role: 'Owner',
+}]
+const members = [{
+  userId: 'user-1',
+  displayName: 'Jadesola Aliu',
+  email: 'jadesola@example.com',
+  role: 'Owner',
+}]
+
+function mockApi() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input) => {
+      const url = String(input)
+      const value = url.includes('/workspaces/workspace-1/members')
+        ? members
+        : url.endsWith('/workspaces')
+          ? workspaces
+          : url.includes('/dashboard')
+            ? dashboard
+            : taskPage
+      return new Response(JSON.stringify(value), { status: 200 })
+    })
+}
 
 afterEach(() => {
   cleanup()
@@ -39,9 +66,7 @@ afterEach(() => {
 
 describe('delivery workspace', () => {
   it('shows portfolio health and explainable task priority', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(taskPage), { status: 200 }))
+    mockApi()
 
     render(<App />)
 
@@ -52,9 +77,7 @@ describe('delivery workspace', () => {
   })
 
   it('switches to the board and opens task creation', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(taskPage), { status: 200 }))
+    mockApi()
     const user = userEvent.setup()
     render(<App />)
     await screen.findByText('Ship portfolio')
@@ -68,9 +91,7 @@ describe('delivery workspace', () => {
   })
 
   it('opens an existing task for planning and workflow changes', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(dashboard), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(taskPage), { status: 200 }))
+    mockApi()
     const user = userEvent.setup()
     render(<App />)
     await screen.findByText('Ship portfolio')

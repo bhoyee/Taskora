@@ -14,6 +14,7 @@ export interface PriorityExplanation {
 
 export interface TaskItem {
   id: string
+  assignedUserId: string | null
   title: string
   status: TaskStatus
   isBlocked: boolean
@@ -37,16 +38,42 @@ export interface Dashboard {
   criticalTaskCount: number
 }
 
+export interface Workspace {
+  id: string
+  name: string
+  role: 'Owner' | 'Manager' | 'Member'
+}
+
+export interface WorkspaceMember {
+  userId: string
+  displayName: string
+  email: string
+  role: 'Owner' | 'Manager' | 'Member'
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = localStorage.getItem('todoapp_access_token')
+  const identityHeaders: Record<string, string> = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : import.meta.env.DEV
+      ? { 'X-User-Id': '30000000-0000-0000-0000-000000000001' }
+      : {}
   const response = await fetch(path, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...identityHeaders,
+      ...init?.headers,
+    },
   })
   if (!response.ok) throw new Error('The workspace could not be loaded.')
   return response.json() as Promise<T>
 }
 
 export const api = {
+  workspaces: () => request<Workspace[]>('/api/v1/workspaces'),
+  members: (workspaceId: string) =>
+    request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
   dashboard: () => request<Dashboard>('/api/v1/dashboard'),
   tasks: (search = '') =>
     request<TaskPage>(
@@ -78,4 +105,11 @@ export const api = {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     }),
+  assign: (id: string, userId: string) =>
+    request(`/api/v1/tasks/${id}/assignment`, {
+      method: 'PUT',
+      body: JSON.stringify({ userId }),
+    }),
+  unassign: (id: string) =>
+    request(`/api/v1/tasks/${id}/assignment`, { method: 'DELETE' }),
 }

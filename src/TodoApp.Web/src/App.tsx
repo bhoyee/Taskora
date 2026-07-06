@@ -5,7 +5,9 @@ import {
   Clock3, Columns3, LayoutList, Menu, Pencil, Plus, Search, Settings2, X,
 } from 'lucide-react'
 import { api } from './api'
-import type { Dashboard, TaskItem, TaskStatus } from './api'
+import type {
+  Dashboard, TaskItem, TaskStatus, Workspace, WorkspaceMember,
+} from './api'
 import './styles.css'
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -21,6 +23,8 @@ const emptyDashboard: Dashboard = {
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [dashboard, setDashboard] = useState(emptyDashboard)
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,7 +36,14 @@ export default function App() {
   const load = async () => {
     try {
       setError('')
-      const [summary, page] = await Promise.all([api.dashboard(), api.tasks()])
+      const available = await api.workspaces()
+      const selected = available[0]
+      if (!selected) throw new Error('No workspace membership was found.')
+      const [summary, page, workspaceMembers] = await Promise.all([
+        api.dashboard(), api.tasks(), api.members(selected.id),
+      ])
+      setWorkspace(selected)
+      setMembers(workspaceMembers)
       setDashboard(summary)
       setTasks(page.items)
     } catch (reason) {
@@ -61,7 +72,7 @@ export default function App() {
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div><p className="eyebrow">Portfolio launch</p><h1>Delivery workspace</h1></div>
+          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>Delivery workspace</h1></div>
           <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>
         </header>
 
@@ -89,7 +100,7 @@ export default function App() {
         </section>
       </main>
       {dialogOpen && <TaskDialog onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && <TaskEditor task={selectedTask} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {selectedTask && <TaskEditor task={selectedTask} members={members} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
@@ -126,7 +137,7 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
-function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ task, members, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const explanation = task.priorityExplanation
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -141,6 +152,9 @@ function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () =>
       Number(data.get('riskReduction')),
       effort,
     )
+    const assignee = String(data.get('assignedUserId') ?? '')
+    if (assignee) await api.assign(task.id, assignee)
+    else if (task.assignedUserId) await api.unassign(task.id)
     onSaved()
   }
   const transition = async (action: string) => {
@@ -152,6 +166,7 @@ function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () =>
     <form onSubmit={(event) => void submit(event)}>
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{[1, 2, 3, 5, 8, 13].map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Priority inputs</legend><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} /></label>
