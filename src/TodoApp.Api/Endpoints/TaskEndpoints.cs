@@ -19,6 +19,7 @@ internal static class TaskEndpoints
                 "/api/v1/projects/{projectId:guid}/tasks",
                 CreateTaskAsync)
             .WithTags("Tasks")
+            .RequireAuthorization()
             .WithName("CreateTask")
             .Produces<TaskDto>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -26,7 +27,8 @@ internal static class TaskEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         var group = endpoints.MapGroup("/api/v1/tasks")
-            .WithTags("Tasks");
+            .WithTags("Tasks")
+            .RequireAuthorization();
 
         group.MapGet("/", SearchTasksAsync)
             .WithName("SearchTasks");

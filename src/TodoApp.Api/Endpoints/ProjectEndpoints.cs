@@ -10,7 +10,8 @@ internal static class ProjectEndpoints
         this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/projects")
-            .WithTags("Projects");
+            .WithTags("Projects")
+            .RequireAuthorization();
 
         group.MapPost("/", CreateProjectAsync)
             .WithName("CreateProject")

@@ -23,10 +23,34 @@ public sealed class SecurityContractTests(ApiFactory factory)
     [Fact]
     public async Task Workspaces_WhenUnauthenticated_ReturnsUnauthorized()
     {
-        var response = await factory.CreateClient()
-            .GetAsync("/api/v1/workspaces");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Remove("X-User-Id");
+        var response = await client.GetAsync("/api/v1/workspaces");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Tasks_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Remove("X-User-Id");
+
+        var response = await client.GetAsync(
+            "/api/v1/tasks?pageNumber=1&pageSize=20");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Members_WhenWorkspaceIsOutsideMembership_ReturnsNotFound()
+    {
+        using var client = CreateClient(MemberId);
+
+        var response = await client.GetAsync(
+            $"/api/v1/workspaces/{Guid.NewGuid()}/members");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -106,6 +130,7 @@ public sealed class SecurityContractTests(ApiFactory factory)
     private HttpClient CreateClient(Guid userId)
     {
         var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Remove("X-User-Id");
         client.DefaultRequestHeaders.Add("X-User-Id", userId.ToString());
         return client;
     }

@@ -16,6 +16,7 @@ internal static class IntelligenceEndpoints
                         new GetPortfolioDashboardQuery(),
                         cancellationToken)))
             .WithTags("Intelligence")
+            .RequireAuthorization()
             .WithName("GetPortfolioDashboard");
 
         return endpoints;
