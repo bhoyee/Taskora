@@ -27,6 +27,19 @@ public sealed class OperationalContractTests(ApiFactory factory)
                 .TryGetProperty("/api/v1/tasks/{taskId}", out _));
     }
 
+    [Fact]
+    public async Task Root_serves_the_web_application()
+    {
+        var response = await _client.GetAsync("/");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            "text/html",
+            response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("<div id=\"root\"></div>", html);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
