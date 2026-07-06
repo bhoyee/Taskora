@@ -8,6 +8,7 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.AssignedUserId,
             task.Title,
             task.Status,
             task.IsBlocked,
@@ -21,6 +22,7 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.AssignedUserId,
             task.Title,
             task.Status,
             task.IsBlocked,

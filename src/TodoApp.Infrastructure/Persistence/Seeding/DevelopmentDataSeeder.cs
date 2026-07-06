@@ -61,7 +61,8 @@ public static class DevelopmentDataSeeder
         var project = Project.Create(
             ProjectId,
             "Portfolio launch",
-            "Demonstration project for local development.");
+            "Demonstration project for local development.",
+            WorkspaceId);
         project.SetTargetDate(
             DueDate.Create(DateOnly.FromDateTime(
                 DateTime.UtcNow.AddDays(30))));

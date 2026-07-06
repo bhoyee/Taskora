@@ -15,6 +15,7 @@ internal sealed class ProjectConfiguration
         builder.Property(project => project.Name)
             .HasMaxLength(160)
             .IsRequired();
+        builder.Property(project => project.WorkspaceId).IsRequired();
         builder.Property(project => project.Description)
             .HasMaxLength(2000);
         builder.Property(project => project.TargetDate)
@@ -30,5 +31,6 @@ internal sealed class ProjectConfiguration
             .IsConcurrencyToken();
         builder.Ignore(project => project.IsArchived);
         builder.HasIndex(project => project.Name);
+        builder.HasIndex(project => project.WorkspaceId);
     }
 }

@@ -103,6 +103,9 @@ public sealed class Workspace
     public bool HasMember(Guid userId) =>
         _memberships.Any(member => member.UserId == userId);
 
+    public WorkspaceRole GetRole(Guid userId) =>
+        GetMembership(userId).Role;
+
     private WorkspaceMembership GetMembership(Guid userId) =>
         _memberships.SingleOrDefault(member => member.UserId == userId) ??
         throw new DomainRuleException(

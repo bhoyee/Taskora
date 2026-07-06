@@ -27,6 +27,7 @@ internal sealed class TaskItemConfiguration
         builder.Property(task => task.BlockedReason)
             .HasMaxLength(1000);
         builder.Property(task => task.CompletedAt);
+        builder.Property(task => task.AssignedUserId);
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
         builder.Property(task => task.DueDate)
@@ -90,6 +91,7 @@ internal sealed class TaskItemConfiguration
         builder.HasIndex(task => new { task.ProjectId, task.Status });
         builder.HasIndex(task => task.DueDate);
         builder.HasIndex(task => task.CreatedAt);
+        builder.HasIndex(task => task.AssignedUserId);
 
         builder.HasMany<TaskItem>("_dependencies")
             .WithMany()
