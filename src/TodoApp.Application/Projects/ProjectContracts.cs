@@ -1,5 +1,7 @@
 namespace TodoApp.Application.Projects;
 
+using TodoApp.Application.Tasks.Metadata;
+
 public sealed record CreateProjectCommand(
     string Name,
     string? Description = null,
@@ -21,4 +23,5 @@ public sealed record ProjectDto(
     string? Description,
     DateOnly? TargetDate,
     bool IsArchived,
-    DateTimeOffset? ArchivedAt);
+    DateTimeOffset? ArchivedAt,
+    IReadOnlyCollection<ProjectCategoryDto> Categories);

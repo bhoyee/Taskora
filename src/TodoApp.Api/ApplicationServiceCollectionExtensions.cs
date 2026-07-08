@@ -1,4 +1,5 @@
 using TodoApp.Application.Projects;
+using TodoApp.Application.Accounts;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Intelligence;
 using TodoApp.Application.Projects.Board;
@@ -7,6 +8,7 @@ using TodoApp.Application.Tasks.Activity;
 using TodoApp.Application.Tasks.Assignment;
 using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
+using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Application.Tasks.Queries;
 
 namespace TodoApp.Api;
@@ -17,6 +19,8 @@ internal static class ApplicationServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddScoped<CreateProjectHandler>();
+        services.AddScoped<RegisterAccountHandler>();
+        services.AddScoped<LoginHandler>();
         services.AddScoped<GetMyWorkspacesHandler>();
         services.AddScoped<GetWorkspaceMembersHandler>();
         services.AddScoped<AddWorkspaceMemberHandler>();
@@ -44,6 +48,11 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<UpdatePlanningFactorsHandler>();
         services.AddScoped<AddTaskDependencyHandler>();
         services.AddScoped<RemoveTaskDependencyHandler>();
+        services.AddScoped<CreateCategoryHandler>();
+        services.AddScoped<UpdateTaskCategoryHandler>();
+        services.AddScoped<AddTaskTagHandler>();
+        services.AddScoped<RemoveTaskTagHandler>();
+        services.AddScoped<AddTaskNoteHandler>();
 
         return services;
     }

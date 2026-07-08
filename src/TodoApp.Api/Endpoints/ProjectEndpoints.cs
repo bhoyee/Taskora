@@ -1,6 +1,7 @@
 using TodoApp.Api.Contracts;
 using TodoApp.Application.Projects;
 using TodoApp.Application.Projects.Board;
+using TodoApp.Application.Tasks.Metadata;
 
 namespace TodoApp.Api.Endpoints;
 
@@ -35,6 +36,11 @@ internal static class ProjectEndpoints
         group.MapGet("/{projectId:guid}/board", GetBoardAsync)
             .WithName("GetProjectBoard")
             .Produces<ProjectBoardDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPost("/{projectId:guid}/categories", CreateCategoryAsync)
+            .WithName("CreateProjectCategory")
+            .Produces<ProjectCategoryDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         return endpoints;
@@ -95,4 +101,15 @@ internal static class ProjectEndpoints
         ApiResult.From(await handler.HandleAsync(
             new GetProjectBoardQuery(projectId),
             cancellationToken));
+
+    private static async Task<IResult> CreateCategoryAsync(
+        Guid projectId,
+        CreateCategoryRequest request,
+        CreateCategoryHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new CreateCategoryCommand(projectId, request.Name),
+            cancellationToken));
 }
+
+public sealed record CreateCategoryRequest(string Name);

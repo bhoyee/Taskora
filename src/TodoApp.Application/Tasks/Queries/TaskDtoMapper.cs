@@ -1,4 +1,5 @@
 using TodoApp.Domain.Tasks;
+using TodoApp.Application.Tasks.Metadata;
 
 namespace TodoApp.Application.Tasks.Queries;
 
@@ -10,6 +11,8 @@ internal static class TaskDtoMapper
             task.ProjectId,
             task.AssignedUserId,
             task.Title,
+            task.CategoryId,
+            task.Tags.Select(tag => tag.Name).ToArray(),
             task.Status,
             task.IsBlocked,
             task.DueDate?.Value,
@@ -24,6 +27,17 @@ internal static class TaskDtoMapper
             task.ProjectId,
             task.AssignedUserId,
             task.Title,
+            task.CategoryId,
+            task.Tags.Select(tag => tag.Name).ToArray(),
+            task.Notes
+                .OrderByDescending(note => note.CreatedAt)
+                .Select(note => new TaskNoteDto(
+                    note.Id,
+                    note.TaskId,
+                    note.AuthorId,
+                    note.Body,
+                    note.CreatedAt))
+                .ToArray(),
             task.Status,
             task.IsBlocked,
             task.BlockedReason,

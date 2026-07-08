@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Domain.Common;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
@@ -52,7 +53,14 @@ public sealed class CreateProjectHandler(
             project.Description,
             project.TargetDate?.Value,
             project.IsArchived,
-            project.ArchivedAt);
+            project.ArchivedAt,
+            project.Categories
+                .OrderBy(category => category.Name)
+                .Select(category => new ProjectCategoryDto(
+                    category.Id,
+                    category.ProjectId,
+                    category.Name))
+                .ToArray());
 }
 
 public sealed class UpdateProjectHandler(

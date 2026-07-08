@@ -32,5 +32,13 @@ internal sealed class ProjectConfiguration
         builder.Ignore(project => project.IsArchived);
         builder.HasIndex(project => project.Name);
         builder.HasIndex(project => project.WorkspaceId);
+
+        builder.HasMany<ProjectCategory>("_categories")
+            .WithOne()
+            .HasForeignKey(category => category.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation("_categories")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Ignore(project => project.Categories);
     }
 }

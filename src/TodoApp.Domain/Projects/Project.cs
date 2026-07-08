@@ -5,6 +5,8 @@ namespace TodoApp.Domain.Projects;
 
 public sealed class Project
 {
+    private readonly List<ProjectCategory> _categories = [];
+
     private Project(
         Guid id,
         string name,
@@ -37,6 +39,9 @@ public sealed class Project
 
     public DueDate? TargetDate { get; private set; }
 
+    public IReadOnlyCollection<ProjectCategory> Categories =>
+        _categories.AsReadOnly();
+
     public static Project Create(
         Guid id,
         string name,
@@ -67,6 +72,36 @@ public sealed class Project
         EnsureActive();
         TargetDate = targetDate;
     }
+
+    public ProjectCategory AddCategory(Guid id, string name)
+    {
+        EnsureActive();
+        var category = new ProjectCategory(id, Id, name);
+        if (_categories.Any(existing =>
+                existing.Name.Equals(
+                    category.Name,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DomainRuleException(
+                "The project category already exists.");
+        }
+
+        _categories.Add(category);
+        return category;
+    }
+
+    public void RenameCategory(Guid categoryId, string name)
+    {
+        EnsureActive();
+        GetCategory(categoryId).Rename(name);
+    }
+
+    public bool HasCategory(Guid categoryId) =>
+        _categories.Any(category => category.Id == categoryId);
+
+    private ProjectCategory GetCategory(Guid categoryId) =>
+        _categories.SingleOrDefault(category => category.Id == categoryId) ??
+        throw new DomainRuleException("The project category was not found.");
 
     public void EnsureCanAcceptTasks()
     {

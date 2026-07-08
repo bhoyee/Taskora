@@ -30,6 +30,7 @@ acceptance criteria, required tests, definition of done, and expected commits.
 - [Milestone 6: Web Experience](milestones/M06-web-experience.md)
 - [Milestone 7: Identity And Collaboration](milestones/M07-identity-collaboration.md)
 - [Milestone 8: Delivery And Operations](milestones/M08-delivery-operations.md)
+- [Milestone 9: Task Metadata And Account Access](milestones/M09-task-metadata-account-access.md)
 
 ## Milestone 0: Planning And Baseline
 
@@ -309,6 +310,41 @@ depending on HTTP, databases, or frontend frameworks.
 - Deployment requires no manual file changes.
 - Production health can be checked after deployment.
 - Release, rollback, smoke-test, and Azure setup instructions are documented.
+
+## Milestone 9: Task Metadata And Account Access
+
+**Status:** Complete
+
+**Objective:** Complete the portfolio feature checklist by adding task
+categories, tags, notes, and self-service account access.
+
+**Deliverables:**
+
+- Project-owned task categories.
+- Task tags and actor-attributed notes.
+- Account registration and login.
+- Metadata API endpoints and filtering.
+- React UI for login/register and task metadata editing.
+
+**Progress delivered:**
+
+- Domain model and EF Core mappings for categories, tags, notes, and account
+  credentials.
+- Application handlers for category creation, task categorisation, tag
+  management, note creation, registration, and login.
+- Versioned API endpoints with integration tests for account and metadata
+  workflows.
+- Task search filtering by category and tag.
+- Project details now expose categories for the frontend.
+- React login/register screen plus task editor/create-dialog controls for
+  categories, new category creation, tags, and notes.
+
+**Definition of done:**
+
+- Account users can register, log in, and use the returned bearer token.
+- Task metadata survives database round-trips.
+- Metadata is visible and editable in the frontend.
+- Backend and frontend tests pass.
 
 ## Initial Commit Sequence
 

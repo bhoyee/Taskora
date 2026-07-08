@@ -70,6 +70,7 @@ app.MapProjectEndpoints();
 app.MapTaskEndpoints();
 app.MapIntelligenceEndpoints();
 app.MapWorkspaceEndpoints();
+app.MapAccountEndpoints();
 app.Map("/api/{**path}", () => Results.Problem(
     statusCode: StatusCodes.Status404NotFound,
     title: "API endpoint not found."));

@@ -20,6 +20,8 @@ public sealed class TaskRepository(TodoAppDbContext context)
         CancellationToken cancellationToken) =>
         context.Tasks
             .Include("_dependencies")
+            .Include("_tags")
+            .Include("_notes")
             .SingleOrDefaultAsync(
                 task => task.Id == taskId,
                 cancellationToken);
@@ -62,6 +64,19 @@ public sealed class TaskRepository(TodoAppDbContext context)
                             dependency.Status != TaskItemStatus.Completed));
         }
 
+        if (criteria.CategoryId.HasValue)
+        {
+            query = query.Where(
+                task => task.CategoryId == criteria.CategoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.Tag))
+        {
+            query = query.Where(task =>
+                EF.Property<ICollection<TaskTag>>(task, "_tags")
+                    .Any(tag => tag.Name == criteria.Tag));
+        }
+
         if (!string.IsNullOrWhiteSpace(criteria.Search))
         {
             var search = criteria.Search.Trim();
@@ -91,6 +106,8 @@ public sealed class TaskRepository(TodoAppDbContext context)
 
         var items = await query
             .Include("_dependencies")
+            .Include("_tags")
+            .Include("_notes")
             .Skip((criteria.PageNumber - 1) * criteria.PageSize)
             .Take(criteria.PageSize)
             .ToArrayAsync(cancellationToken);

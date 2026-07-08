@@ -6,6 +6,8 @@ public sealed record TaskSearchCriteria(
     Guid? ProjectId,
     TaskItemStatus? Status,
     bool? IsBlocked,
+    Guid? CategoryId,
+    string? Tag,
     string? Search,
     TaskSortBy SortBy,
     int PageNumber,
