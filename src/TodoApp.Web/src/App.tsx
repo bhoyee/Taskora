@@ -28,6 +28,13 @@ const emptyDashboard: Dashboard = {
 
 type View = 'workspace' | 'activity' | 'settings' | 'profile'
 
+const views: View[] = ['workspace', 'activity', 'settings', 'profile']
+
+function viewFromHash(hash: string): View {
+  const value = hash.replace('#', '').toLowerCase()
+  return views.includes(value as View) ? value as View : 'workspace'
+}
+
 interface UserProfile {
   displayName: string
   email: string
@@ -85,7 +92,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
-  const [view, setView] = useState<View>('workspace')
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
   const pageSize = 10
@@ -129,17 +136,24 @@ export default function App() {
   }
 
   useEffect(() => { void load() }, [pageNumber, search])
+  useEffect(() => {
+    const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
+    window.addEventListener('hashchange', syncViewFromHash)
+    syncViewFromHash()
+    return () => window.removeEventListener('hashchange', syncViewFromHash)
+  }, [])
   useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
   const visible = useMemo(() => tasks, [tasks])
   const totalPages = Math.max(1, Math.ceil(taskTotal / pageSize))
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     setNotice('You have been logged out of the browser session.')
-    setView('workspace')
+    window.location.hash = 'workspace'
     setNavOpen(false)
   }
   const openView = (next: View) => {
     setView(next)
+    window.location.hash = next
     setNavOpen(false)
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
