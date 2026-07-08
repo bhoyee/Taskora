@@ -25,6 +25,8 @@ public sealed class TodoAppDbContext(
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
 
+    public DbSet<UserCredential> UserCredentials => Set<UserCredential>();
+
     public DbSet<Workspace> Workspaces => Set<Workspace>();
 
     public DbSet<WorkspaceMembership> WorkspaceMemberships =>

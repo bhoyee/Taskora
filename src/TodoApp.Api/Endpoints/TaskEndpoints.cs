@@ -5,6 +5,7 @@ using TodoApp.Application.Tasks.Activity;
 using TodoApp.Application.Tasks.Assignment;
 using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
+using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Application.Tasks.Queries;
 using TodoApp.Domain.Tasks;
 
@@ -67,6 +68,14 @@ internal static class TaskEndpoints
         group.MapDelete("/{taskId:guid}/assignment", UnassignTaskAsync)
             .WithName("UnassignTask")
             .RequireAuthorization();
+        group.MapPut("/{taskId:guid}/category", UpdateCategoryAsync)
+            .WithName("UpdateTaskCategory");
+        group.MapPost("/{taskId:guid}/tags", AddTagAsync)
+            .WithName("AddTaskTag");
+        group.MapDelete("/{taskId:guid}/tags/{tag}", RemoveTagAsync)
+            .WithName("RemoveTaskTag");
+        group.MapPost("/{taskId:guid}/notes", AddNoteAsync)
+            .WithName("AddTaskNote");
 
         return endpoints;
     }
@@ -251,7 +260,49 @@ internal static class TaskEndpoints
             new UnassignTaskCommand(taskId),
             cancellationToken));
 
+    private static async Task<IResult> UpdateCategoryAsync(
+        Guid taskId,
+        UpdateTaskCategoryRequest request,
+        UpdateTaskCategoryHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new UpdateTaskCategoryCommand(taskId, request.CategoryId),
+            cancellationToken));
+
+    private static async Task<IResult> AddTagAsync(
+        Guid taskId,
+        AddTaskTagRequest request,
+        AddTaskTagHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new AddTaskTagCommand(taskId, request.Name ?? request.Tag ?? string.Empty),
+            cancellationToken));
+
+    private static async Task<IResult> RemoveTagAsync(
+        Guid taskId,
+        string tag,
+        RemoveTaskTagHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new RemoveTaskTagCommand(taskId, tag),
+            cancellationToken));
+
+    private static async Task<IResult> AddNoteAsync(
+        Guid taskId,
+        AddTaskNoteRequest request,
+        AddTaskNoteHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new AddTaskNoteCommand(taskId, request.Body),
+            cancellationToken));
+
     private static async Task<IResult> HandleStatusAsync(
         Task<Result<TaskItemStatus>> operation) =>
         ApiResult.From(await operation);
 }
+
+public sealed record UpdateTaskCategoryRequest(Guid? CategoryId);
+
+public sealed record AddTaskTagRequest(string? Name = null, string? Tag = null);
+
+public sealed record AddTaskNoteRequest(string Body);

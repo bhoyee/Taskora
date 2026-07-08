@@ -11,6 +11,8 @@ internal sealed class ProjectCategoryConfiguration
     {
         builder.ToTable("ProjectCategories");
         builder.HasKey(category => category.Id);
+        builder.Property(category => category.Id)
+            .ValueGeneratedNever();
         builder.Property(category => category.ProjectId).IsRequired();
         builder.Property(category => category.Name)
             .HasMaxLength(80)

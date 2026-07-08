@@ -48,3 +48,47 @@ public sealed class UserProfileRepository(TodoAppDbContext context)
             .Where(user => userIds.Contains(user.Id))
             .ToArrayAsync(cancellationToken);
 }
+
+public sealed class AccountRepository(TodoAppDbContext context)
+    : IAccountRepository
+{
+    public Task<bool> EmailExistsAsync(
+        string email,
+        CancellationToken cancellationToken) =>
+        context.UserProfiles.AnyAsync(
+            user => user.Email == email,
+            cancellationToken);
+
+    public async Task<AccountRecord?> GetByEmailAsync(
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var user = await context.UserProfiles.SingleOrDefaultAsync(
+            user => user.Email == email,
+            cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var credential = await context.UserCredentials.FindAsync(
+            [user.Id],
+            cancellationToken);
+        return credential is null
+            ? null
+            : new AccountRecord(user, credential.PasswordHash);
+    }
+
+    public async Task AddAsync(
+        UserProfile user,
+        Workspace workspace,
+        string passwordHash,
+        CancellationToken cancellationToken)
+    {
+        await context.UserProfiles.AddAsync(user, cancellationToken);
+        await context.Workspaces.AddAsync(workspace, cancellationToken);
+        await context.UserCredentials.AddAsync(
+            new UserCredential(user.Id, passwordHash),
+            cancellationToken);
+    }
+}

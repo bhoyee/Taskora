@@ -23,3 +23,22 @@ public interface IUserProfileRepository
         IReadOnlyCollection<Guid> userIds,
         CancellationToken cancellationToken);
 }
+
+public sealed record AccountRecord(UserProfile User, string PasswordHash);
+
+public interface IAccountRepository
+{
+    Task<bool> EmailExistsAsync(
+        string email,
+        CancellationToken cancellationToken);
+
+    Task<AccountRecord?> GetByEmailAsync(
+        string email,
+        CancellationToken cancellationToken);
+
+    Task AddAsync(
+        UserProfile user,
+        Workspace workspace,
+        string passwordHash,
+        CancellationToken cancellationToken);
+}

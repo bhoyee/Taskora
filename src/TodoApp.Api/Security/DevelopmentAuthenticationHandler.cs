@@ -19,8 +19,19 @@ internal sealed class DevelopmentAuthenticationHandler(
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue(UserHeader, out var value) ||
-            !Guid.TryParse(value, out var userId))
+        Guid userId;
+        if (Request.Headers.TryGetValue(UserHeader, out var value) &&
+            Guid.TryParse(value, out userId))
+        {
+        }
+        else if (Request.Headers.Authorization.ToString()
+                     .StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
+                 Guid.TryParse(
+                     Request.Headers.Authorization.ToString()["Bearer ".Length..],
+                     out userId))
+        {
+        }
+        else
         {
             return Task.FromResult(
                 AuthenticateResult.NoResult());
