@@ -6,6 +6,8 @@ public sealed record SearchTasksQuery(
     Guid? ProjectId = null,
     TaskItemStatus? Status = null,
     bool? IsBlocked = null,
+    Guid? CategoryId = null,
+    string? Tag = null,
     string? Search = null,
     TaskSortBy SortBy = TaskSortBy.PriorityDescending,
     int PageNumber = 1,

@@ -17,7 +17,9 @@ public sealed class ProjectRepository(TodoAppDbContext context)
     public Task<Project?> GetByIdAsync(
         Guid projectId,
         CancellationToken cancellationToken) =>
-        context.Projects.SingleOrDefaultAsync(
+        context.Projects
+            .Include("_categories")
+            .SingleOrDefaultAsync(
             project => project.Id == projectId,
             cancellationToken);
 }

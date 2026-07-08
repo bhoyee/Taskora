@@ -15,6 +15,12 @@ public sealed class TodoAppDbContext(
 
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
 
+    public DbSet<ProjectCategory> ProjectCategories => Set<ProjectCategory>();
+
+    public DbSet<TaskTag> TaskTags => Set<TaskTag>();
+
+    public DbSet<TaskNote> TaskNotes => Set<TaskNote>();
+
     public DbSet<TaskActivity> TaskActivities => Set<TaskActivity>();
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();

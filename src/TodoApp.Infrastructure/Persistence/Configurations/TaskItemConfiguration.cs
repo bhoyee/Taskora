@@ -28,6 +28,7 @@ internal sealed class TaskItemConfiguration
             .HasMaxLength(1000);
         builder.Property(task => task.CompletedAt);
         builder.Property(task => task.AssignedUserId);
+        builder.Property(task => task.CategoryId);
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
         builder.Property(task => task.DueDate)
@@ -92,6 +93,7 @@ internal sealed class TaskItemConfiguration
         builder.HasIndex(task => task.DueDate);
         builder.HasIndex(task => task.CreatedAt);
         builder.HasIndex(task => task.AssignedUserId);
+        builder.HasIndex(task => task.CategoryId);
 
         builder.HasMany<TaskItem>("_dependencies")
             .WithMany()
@@ -116,6 +118,20 @@ internal sealed class TaskItemConfiguration
         builder.Navigation("_dependencies")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        builder.HasMany<TaskTag>("_tags")
+            .WithOne()
+            .HasForeignKey(tag => tag.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation("_tags")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany<TaskNote>("_notes")
+            .WithOne()
+            .HasForeignKey(note => note.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation("_notes")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(task => task.DependencyIds);
         builder.Ignore(task => task.IncompleteDependencyChainIds);
         builder.Ignore(task => task.HasIncompleteDependencies);
@@ -124,5 +140,7 @@ internal sealed class TaskItemConfiguration
         builder.Ignore(task => task.PlanningFactors);
         builder.Ignore(task => task.Priority);
         builder.Ignore(task => task.HasPlanningFactors);
+        builder.Ignore(task => task.Tags);
+        builder.Ignore(task => task.Notes);
     }
 }

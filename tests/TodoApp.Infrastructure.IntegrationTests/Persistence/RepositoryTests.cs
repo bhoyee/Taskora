@@ -97,6 +97,8 @@ public sealed class RepositoryTests
                 project.Id,
                 TaskItemStatus.Ready,
                 IsBlocked: false,
+                CategoryId: null,
+                Tag: null,
                 Search: "release",
                 TaskSortBy.PriorityDescending,
                 PageNumber: 1,
@@ -139,6 +141,8 @@ public sealed class RepositoryTests
         var result = await new TaskRepository(context).SearchAsync(
             new TaskSearchCriteria(
                 project.Id,
+                null,
+                null,
                 null,
                 null,
                 null,

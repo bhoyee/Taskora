@@ -25,6 +25,10 @@ public sealed class SearchTasksHandler(
             query.ProjectId,
             query.Status,
             query.IsBlocked,
+            query.CategoryId,
+            string.IsNullOrWhiteSpace(query.Tag)
+                ? null
+                : query.Tag.Trim().TrimStart('#').ToLowerInvariant(),
             string.IsNullOrWhiteSpace(query.Search)
                 ? null
                 : query.Search.Trim(),

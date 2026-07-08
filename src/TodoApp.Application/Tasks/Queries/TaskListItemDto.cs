@@ -7,6 +7,8 @@ public sealed record TaskListItemDto(
     Guid ProjectId,
     Guid? AssignedUserId,
     string Title,
+    Guid? CategoryId,
+    IReadOnlyCollection<string> Tags,
     TaskItemStatus Status,
     bool IsBlocked,
     DateOnly? DueDate,

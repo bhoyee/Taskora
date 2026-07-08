@@ -1,3 +1,4 @@
+using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Queries;
@@ -7,6 +8,9 @@ public sealed record TaskDetailsDto(
     Guid ProjectId,
     Guid? AssignedUserId,
     string Title,
+    Guid? CategoryId,
+    IReadOnlyCollection<string> Tags,
+    IReadOnlyCollection<TaskNoteDto> Notes,
     TaskItemStatus Status,
     bool IsBlocked,
     string? BlockedReason,
