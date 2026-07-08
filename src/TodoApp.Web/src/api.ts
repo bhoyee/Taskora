@@ -125,7 +125,10 @@ export const api = {
   workspaces: () => request<Workspace[]>('/api/v1/workspaces'),
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
-  dashboard: () => request<Dashboard>('/api/v1/dashboard'),
+  dashboard: (projectId?: string) =>
+    request<Dashboard>(
+      `/api/v1/dashboard${projectId ? `?projectId=${projectId}` : ''}`,
+    ),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
   createWorkspaceProject: (workspaceId: string, name: string) =>
