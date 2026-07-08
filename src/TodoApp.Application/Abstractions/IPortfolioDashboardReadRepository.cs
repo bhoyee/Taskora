@@ -3,6 +3,7 @@ namespace TodoApp.Application.Abstractions;
 public interface IPortfolioDashboardReadRepository
 {
     Task<PortfolioDashboardSnapshot> GetAsync(
+        Guid? projectId,
         CancellationToken cancellationToken);
 }
 

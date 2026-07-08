@@ -1,4 +1,4 @@
-export const projectId = '10000000-0000-0000-0000-000000000001'
+export const developmentProjectId = '10000000-0000-0000-0000-000000000001'
 
 export type TaskStatus = 'Backlog' | 'Ready' | 'InProgress' | 'Blocked' | 'Completed'
 export type DeadlineHealth = 'Healthy' | 'AtRisk' | 'Overdue' | 'Completed'
@@ -125,13 +125,27 @@ export const api = {
   workspaces: () => request<Workspace[]>('/api/v1/workspaces'),
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
-  dashboard: () => request<Dashboard>('/api/v1/dashboard'),
-  project: () => request<ProjectDetails>(`/api/v1/projects/${projectId}`),
-  tasks: (search = '', pageNumber = 1, pageSize = 10) =>
+  dashboard: (projectId?: string) =>
+    request<Dashboard>(
+      `/api/v1/dashboard${projectId ? `?projectId=${projectId}` : ''}`,
+    ),
+  projects: (workspaceId: string) =>
+    request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
+  createWorkspaceProject: (workspaceId: string, name: string) =>
+    request<ProjectDetails>(`/api/v1/workspaces/${workspaceId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description: 'Starter project created for this workspace.',
+      }),
+    }),
+  project: (projectId = developmentProjectId) =>
+    request<ProjectDetails>(`/api/v1/projects/${projectId}`),
+  tasks: (projectId = developmentProjectId, search = '', pageNumber = 1, pageSize = 10) =>
     request<TaskPage>(
       `/api/v1/tasks?projectId=${projectId}&search=${encodeURIComponent(search)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
     ),
-  createTask: (title: string, dueDate: string, effort: number) =>
+  createTask: (projectId: string, title: string, dueDate: string, effort: number) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
@@ -165,7 +179,7 @@ export const api = {
     }),
   unassign: (id: string) =>
     request(`/api/v1/tasks/${id}/assignment`, { method: 'DELETE' }),
-  createCategory: (name: string) =>
+  createCategory: (projectId: string, name: string) =>
     request<ProjectCategory>(`/api/v1/projects/${projectId}/categories`, {
       method: 'POST',
       body: JSON.stringify({ name }),

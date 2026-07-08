@@ -83,6 +83,12 @@ public sealed class ProjectBoardHandlerTests
             Guid projectId,
             CancellationToken cancellationToken) =>
             Task.FromResult(project?.Id == projectId ? project : null);
+
+        public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Project>>(
+                project is null ? [] : [project]);
     }
 
     private sealed class StubProjectBoardReader(ProjectBoardSnapshot snapshot)

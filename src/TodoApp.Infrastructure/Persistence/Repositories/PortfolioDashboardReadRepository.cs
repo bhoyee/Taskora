@@ -10,14 +10,24 @@ public sealed class PortfolioDashboardReadRepository(
     : IPortfolioDashboardReadRepository
 {
     public async Task<PortfolioDashboardSnapshot> GetAsync(
+        Guid? projectId,
         CancellationToken cancellationToken)
     {
         var active = context.Tasks
             .AsNoTracking()
             .Where(task => task.Status != TaskItemStatus.Completed);
-        var projectCount = await context.Projects
-            .AsNoTracking()
-            .CountAsync(
+        if (projectId.HasValue)
+        {
+            active = active.Where(task => task.ProjectId == projectId.Value);
+        }
+
+        var projects = context.Projects.AsNoTracking();
+        if (projectId.HasValue)
+        {
+            projects = projects.Where(project => project.Id == projectId.Value);
+        }
+
+        var projectCount = await projects.CountAsync(
                 project => project.ArchivedAt == null,
                 cancellationToken);
         var activeCount = await active.CountAsync(cancellationToken);
@@ -33,17 +43,18 @@ public sealed class PortfolioDashboardReadRepository(
                     PriorityBand.Critical,
             cancellationToken);
         var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
-        var overdueCount = await context.Database.SqlQueryRaw<int>(
-                """
-                SELECT COUNT(*) AS Value
-                FROM Tasks
-                WHERE DueDate IS NOT NULL
-                  AND DueDate < {0}
-                  AND Status <> {1}
-                """,
-                today,
-                (int)TaskItemStatus.Completed)
-            .SingleAsync(cancellationToken);
+        var dueTasks = context.Tasks.AsNoTracking()
+            .Where(task => task.DueDate != null);
+        if (projectId.HasValue)
+        {
+            dueTasks = dueTasks.Where(task => task.ProjectId == projectId.Value);
+        }
+
+        var dueTaskValues = await dueTasks
+            .Select(task => new { task.DueDate, task.Status })
+            .ToArrayAsync(cancellationToken);
+        var overdueCount = dueTaskValues.Count(task =>
+            task.DueDate!.IsOverdue(today, task.Status));
 
         return new PortfolioDashboardSnapshot(
             projectCount,

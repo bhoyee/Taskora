@@ -2,7 +2,7 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Application.Intelligence;
 
-public sealed record GetPortfolioDashboardQuery;
+public sealed record GetPortfolioDashboardQuery(Guid? ProjectId = null);
 
 public sealed class GetPortfolioDashboardHandler(
     IPortfolioDashboardReadRepository dashboard)
@@ -10,5 +10,5 @@ public sealed class GetPortfolioDashboardHandler(
     public Task<PortfolioDashboardSnapshot> HandleAsync(
         GetPortfolioDashboardQuery query,
         CancellationToken cancellationToken) =>
-        dashboard.GetAsync(cancellationToken);
+        dashboard.GetAsync(query.ProjectId, cancellationToken);
 }

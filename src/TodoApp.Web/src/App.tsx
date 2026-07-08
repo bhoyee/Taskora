@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  AccountSession, Dashboard, ProjectCategory, TaskActivity, TaskItem,
+  AccountSession, Dashboard, ProjectCategory, ProjectDetails, TaskActivity, TaskItem,
   TaskStatus, Workspace, WorkspaceMember,
 } from './api'
 import './styles.css'
@@ -94,6 +94,7 @@ export default function App() {
   const [taskTotal, setTaskTotal] = useState(0)
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [project, setProject] = useState<ProjectDetails | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
@@ -124,12 +125,16 @@ export default function App() {
       const available = await api.workspaces()
       const selected = available[0]
       if (!selected) throw new Error('No workspace membership was found.')
-      const [summary, project, page, workspaceMembers] = await Promise.all([
-        api.dashboard(), api.project(), api.tasks(search, pageNumber, pageSize), api.members(selected.id),
+      const projects = await api.projects(selected.id)
+      const selectedProject = projects[0] ??
+        await api.createWorkspaceProject(selected.id, 'My task project')
+      const [summary, page, workspaceMembers] = await Promise.all([
+        api.dashboard(selectedProject.id), api.tasks(selectedProject.id, search, pageNumber, pageSize), api.members(selected.id),
       ])
       setWorkspace(selected)
+      setProject(selectedProject)
       setMembers(workspaceMembers)
-      setCategories(project.categories)
+      setCategories(selectedProject.categories)
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
@@ -283,8 +288,8 @@ export default function App() {
           setNotice('Profile updated.')
         }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={logout} />}
       </main>
-      {dialogOpen && <TaskDialog categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && <TaskEditor task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
@@ -702,7 +707,7 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
-function TaskEditor({ task, members, categories, onCategoryCreated, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -732,7 +737,7 @@ function TaskEditor({ task, members, categories, onCategoryCreated, onClose, onS
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
     setSaving(true)
-    const category = await api.createCategory(categoryDraft.trim())
+    const category = await api.createCategory(projectId, categoryDraft.trim())
     onCategoryCreated(category)
     setCategoryDraft('')
     setSaving(false)
@@ -770,13 +775,13 @@ function TaskEditor({ task, members, categories, onCategoryCreated, onClose, onS
   </dialog></div>
 }
 
-function TaskDialog({ categories, onCategoryCreated, onClose, onCreated }: { categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
     const data = new FormData(event.currentTarget)
-    const task = await api.createTask(String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+    const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
     const categoryId = String(data.get('categoryId') ?? '')
     const tag = String(data.get('tag') ?? '').trim()
     const note = String(data.get('note') ?? '').trim()
@@ -788,7 +793,7 @@ function TaskDialog({ categories, onCategoryCreated, onClose, onCreated }: { cat
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
     setSaving(true)
-    const category = await api.createCategory(categoryDraft.trim())
+    const category = await api.createCategory(projectId, categoryDraft.trim())
     onCategoryCreated(category)
     setCategoryDraft('')
     setSaving(false)

@@ -17,6 +17,14 @@ public sealed record ArchiveProjectCommand(Guid ProjectId);
 
 public sealed record GetProjectByIdQuery(Guid ProjectId);
 
+public sealed record ListWorkspaceProjectsQuery(Guid WorkspaceId);
+
+public sealed record CreateWorkspaceProjectCommand(
+    Guid WorkspaceId,
+    string Name,
+    string? Description = null,
+    DateOnly? TargetDate = null);
+
 public sealed record ProjectDto(
     Guid Id,
     string Name,
