@@ -54,7 +54,7 @@ test.beforeEach(async ({ page }) => {
         sequence: 1,
         taskId: 'task-1',
         actor: 'Jadesola Aliu',
-        activityType: 'StatusChanged',
+        action: 'StatusChanged',
         previousValue: 'Backlog',
         currentValue: 'Ready',
         occurredAt: '2026-07-06T10:00:00Z',
@@ -145,4 +145,11 @@ test('activity settings and profile navigation are usable', async ({ page }) => 
   await page.getByLabel('Display name').fill('Jadesola Portfolio')
   await page.getByRole('button', { name: 'Save profile' }).click()
   await expect(page.getByText('Profile updated.')).toBeVisible()
+})
+
+test('direct activity hash renders the activity view', async ({ page }) => {
+  await page.goto('/#activity')
+
+  await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible()
+  await expect(page.getByText(/status changed/i)).toBeVisible()
 })

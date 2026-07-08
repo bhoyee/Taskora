@@ -53,7 +53,7 @@ const activity = [{
   sequence: 1,
   taskId: 'task-1',
   actor: 'Jadesola Aliu',
-  activityType: 'StatusChanged',
+  action: 'StatusChanged',
   previousValue: 'Ready',
   currentValue: 'InProgress',
   occurredAt: '2026-07-06T10:00:00Z',
@@ -106,6 +106,7 @@ function mockPagedApi() {
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  window.history.replaceState(null, '', '/')
   vi.restoreAllMocks()
 })
 
@@ -190,6 +191,17 @@ describe('delivery workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /^logout$/i }))
     expect(screen.getByText('You have been logged out of the browser session.')).toBeInTheDocument()
+  })
+
+  it('opens the activity page from a direct hash URL', async () => {
+    mockPagedApi()
+    window.history.replaceState(null, '', '/#activity')
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
+    expect(await screen.findByText('No recorded activity yet')).toBeInTheDocument()
+    expect(screen.getByText('Current task snapshot')).toBeInTheDocument()
   })
 
   it('explains when an API request is routed to the frontend', async () => {
