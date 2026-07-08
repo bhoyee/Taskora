@@ -300,11 +300,18 @@ function ActivityPage({
       <span className="activity-icon"><Activity /></span>
       <div>
         <strong>{taskTitles.get(item.taskId) ?? 'Task activity'}</strong>
-        <p>{item.actor} changed {item.activityType.replace(/([A-Z])/g, ' $1').toLowerCase()} from {item.previousValue ?? 'none'} to {item.currentValue ?? 'none'}.</p>
+        <p>{item.actor} changed {activityLabel(item)} from {item.previousValue ?? 'none'} to {item.currentValue ?? 'none'}.</p>
         <small>{new Date(item.occurredAt).toLocaleString()}</small>
       </div>
     </article>)}
   </section>
+}
+
+function activityLabel(item: TaskActivity) {
+  return (item.action ?? item.activityType ?? 'Activity')
+    .replace(/([A-Z])/g, ' $1')
+    .trim()
+    .toLowerCase()
 }
 
 function Pagination({

@@ -54,7 +54,7 @@ test.beforeEach(async ({ page }) => {
         sequence: 1,
         taskId: 'task-1',
         actor: 'Jadesola Aliu',
-        activityType: 'StatusChanged',
+        action: 'StatusChanged',
         previousValue: 'Backlog',
         currentValue: 'Ready',
         occurredAt: '2026-07-06T10:00:00Z',

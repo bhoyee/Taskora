@@ -53,7 +53,7 @@ const activity = [{
   sequence: 1,
   taskId: 'task-1',
   actor: 'Jadesola Aliu',
-  activityType: 'StatusChanged',
+  action: 'StatusChanged',
   previousValue: 'Ready',
   currentValue: 'InProgress',
   occurredAt: '2026-07-06T10:00:00Z',

@@ -55,7 +55,8 @@ export interface TaskActivity {
   sequence: number
   taskId: string
   actor: string
-  activityType: string
+  action?: string
+  activityType?: string
   previousValue: string | null
   currentValue: string | null
   occurredAt: string
