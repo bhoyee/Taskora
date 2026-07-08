@@ -15,10 +15,19 @@ const taskPage = {
   items: [{
     id: 'task-1',
     assignedUserId: null,
+    categoryId: 'category-1',
     title: 'Ship portfolio',
     status: 'InProgress',
     isBlocked: false,
     dueDate: '2026-07-10',
+    tags: ['portfolio'],
+    notes: [{
+      id: 'note-1',
+      taskId: 'task-1',
+      authorId: 'user-1',
+      body: 'Confirm launch checklist.',
+      createdAt: '2026-07-06T09:00:00Z',
+    }],
     priorityScore: 12.5,
     priorityBand: 'Critical',
     deadlineHealth: 'AtRisk',
@@ -43,6 +52,19 @@ const workspaces = [{
   name: 'Portfolio team',
   role: 'Owner',
 }]
+const projectDetails = {
+  id: '10000000-0000-0000-0000-000000000001',
+  name: 'Portfolio launch',
+  description: null,
+  targetDate: null,
+  isArchived: false,
+  archivedAt: null,
+  categories: [{
+    id: 'category-1',
+    projectId: '10000000-0000-0000-0000-000000000001',
+    name: 'Client Work',
+  }],
+}
 const members = [{
   userId: 'user-1',
   displayName: 'Jadesola Aliu',
@@ -63,15 +85,7 @@ function mockApi() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
       const url = String(input)
-      const value = url.includes('/activity')
-        ? activity
-        : url.includes('/workspaces/workspace-1/members')
-        ? members
-        : url.endsWith('/workspaces')
-          ? workspaces
-          : url.includes('/dashboard')
-            ? dashboard
-            : taskPage
+      const value = mockResponseFor(url, taskPage)
       return new Response(JSON.stringify(value), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -84,23 +98,26 @@ function mockPagedApi() {
     async (input) => {
       const url = String(input)
       const pageTwo = url.includes('pageNumber=2')
-      const value = url.includes('/activity')
-        ? []
-        : url.includes('/workspaces/workspace-1/members')
-        ? members
-        : url.endsWith('/workspaces')
-          ? workspaces
-          : url.includes('/dashboard')
-            ? dashboard
-            : {
-                totalCount: 11,
-                items: pageTwo ? [secondTask] : taskPage.items,
-              }
+      const value = mockResponseFor(url, {
+        totalCount: 11,
+        items: pageTwo ? [secondTask] : taskPage.items,
+      }, [])
       return new Response(JSON.stringify(value), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     })
+}
+
+function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
+  if (url.includes('/activity')) return activityItems
+  if (url.includes('/workspaces/workspace-1/members')) return members
+  if (url.endsWith('/workspaces')) return workspaces
+  if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001')) return projectDetails
+  if (url.includes('/api/v1/tasks/task-1')) return taskPage.items[0]
+  if (url.includes('/api/v1/tasks/task-2')) return secondTask
+  if (url.includes('/dashboard')) return dashboard
+  return page
 }
 
 afterEach(() => {
@@ -190,7 +207,7 @@ describe('delivery workspace', () => {
     expect(screen.getByText('Showing 11-11 of 11')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^logout$/i }))
-    expect(screen.getByText('You have been logged out of the browser session.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('opens the activity page from a direct hash URL', async () => {

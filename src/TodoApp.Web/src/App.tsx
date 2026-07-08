@@ -7,12 +7,14 @@ import {
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, GripVertical, LayoutList, LogOut, Menu, Pencil, Plus,
-  Save, Search, Settings2, ShieldCheck, UserRound, X,
+  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
+  Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
+  Tags, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  Dashboard, TaskActivity, TaskItem, TaskStatus, Workspace, WorkspaceMember,
+  AccountSession, Dashboard, ProjectCategory, TaskActivity, TaskItem,
+  TaskStatus, Workspace, WorkspaceMember,
 } from './api'
 import './styles.css'
 
@@ -59,6 +61,8 @@ const defaultSettings: UserSettings = {
   emailDigest: true,
 }
 
+const defaultAccount: AccountSession | null = null
+
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const value = localStorage.getItem(key)
@@ -91,6 +95,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [categories, setCategories] = useState<ProjectCategory[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
   const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
@@ -106,6 +111,10 @@ export default function App() {
     readLocal('todoapp_profile', defaultProfile))
   const [settings, setSettings] = useState<UserSettings>(() =>
     readLocal('todoapp_settings', defaultSettings))
+  const [account, setAccount] = useState<AccountSession | null>(() =>
+    readLocal('todoapp_account', defaultAccount))
+  const [loggedOut, setLoggedOut] = useState(() =>
+    localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
 
   const load = async () => {
@@ -115,11 +124,12 @@ export default function App() {
       const available = await api.workspaces()
       const selected = available[0]
       if (!selected) throw new Error('No workspace membership was found.')
-      const [summary, page, workspaceMembers] = await Promise.all([
-        api.dashboard(), api.tasks(search, pageNumber, pageSize), api.members(selected.id),
+      const [summary, project, page, workspaceMembers] = await Promise.all([
+        api.dashboard(), api.project(), api.tasks(search, pageNumber, pageSize), api.members(selected.id),
       ])
       setWorkspace(selected)
       setMembers(workspaceMembers)
+      setCategories(project.categories)
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
@@ -147,9 +157,31 @@ export default function App() {
   const totalPages = Math.max(1, Math.ceil(taskTotal / pageSize))
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
+    localStorage.removeItem('todoapp_account')
+    localStorage.setItem('todoapp_logged_out', 'true')
+    setAccount(null)
+    setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
     window.location.hash = 'workspace'
     setNavOpen(false)
+  }
+  const authenticated = (session: AccountSession) => {
+    localStorage.setItem('todoapp_access_token', session.accessToken)
+    localStorage.setItem('todoapp_account', JSON.stringify(session))
+    localStorage.removeItem('todoapp_logged_out')
+    setAccount(session)
+    setLoggedOut(false)
+    setProfile((current) => {
+      const next = {
+        ...current,
+        displayName: session.displayName,
+        email: session.email,
+      }
+      localStorage.setItem('todoapp_profile', JSON.stringify(next))
+      return next
+    })
+    setNotice(`Signed in as ${session.displayName}.`)
+    void load()
   }
   const openView = (next: View) => {
     setView(next)
@@ -168,6 +200,18 @@ export default function App() {
       setError(reason instanceof Error ? reason.message : 'The task could not be moved.')
       throw reason
     }
+  }
+  const openTaskEditor = async (task: TaskItem) => {
+    setSelectedTask(task)
+    try {
+      setSelectedTask(await api.task(task.id))
+    } catch {
+      setSelectedTask(task)
+    }
+  }
+
+  if (loggedOut || (!import.meta.env.DEV && !localStorage.getItem('todoapp_access_token'))) {
+    return <AuthPage onAuthenticated={authenticated} />
   }
 
   return (
@@ -216,8 +260,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
-                ? <TaskList tasks={visible} onEdit={setSelectedTask} />
-                : <Board tasks={visible} onEdit={setSelectedTask} onMove={moveTask} />}
+                ? <TaskList tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} />
+                : <Board tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} onMove={moveTask} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -233,14 +277,14 @@ export default function App() {
           localStorage.setItem('todoapp_settings', JSON.stringify(next))
           setNotice('Settings saved.')
         }} />}
-        {view === 'profile' && <ProfilePage profile={profile} onSave={(next) => {
+        {view === 'profile' && <ProfilePage profile={profile} account={account} onSave={(next) => {
           setProfile(next)
           localStorage.setItem('todoapp_profile', JSON.stringify(next))
           setNotice('Profile updated.')
         }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={logout} />}
       </main>
-      {dialogOpen && <TaskDialog onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && <TaskEditor task={selectedTask} members={members} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && <TaskDialog categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && <TaskEditor task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
@@ -261,6 +305,57 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'U'
+}
+
+function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    try {
+      const session = mode === 'login'
+        ? await api.login(String(data.get('email')), String(data.get('password')))
+        : await api.register(
+            String(data.get('displayName')),
+            String(data.get('email')),
+            String(data.get('password')),
+            String(data.get('workspaceName')),
+          )
+      onAuthenticated(session)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Account access failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-shell">
+    <section className="auth-panel">
+      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div>
+        <p className="eyebrow">Account access</p>
+        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+      </div>
+      <div className="segmented" aria-label="Account mode">
+        <button className={mode === 'login' ? 'selected' : ''} onClick={() => setMode('login')}><KeyRound size={16} /> Login</button>
+        <button className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}><UserRound size={16} /> Register</button>
+      </div>
+      <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        {mode === 'register' && <>
+          <label>Display name<input name="displayName" required maxLength={120} autoComplete="name" /></label>
+          <label>Workspace name<input name="workspaceName" required maxLength={160} defaultValue="Portfolio workspace" /></label>
+        </>}
+        <label>Email<input name="email" type="email" required autoComplete="email" /></label>
+        <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        {error && <p className="field-error">{error}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Register'}</button>
+      </form>
+    </section>
+  </main>
 }
 
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
@@ -375,11 +470,13 @@ function SettingsPage({
 
 function ProfilePage({
   profile,
+  account,
   onSave,
   onPasswordChanged,
   onLogout,
 }: {
   profile: UserProfile
+  account: AccountSession | null
   onSave: (profile: UserProfile) => void
   onPasswordChanged: () => void
   onLogout: () => void
@@ -394,7 +491,7 @@ function ProfilePage({
       event.preventDefault()
       onSave(draft)
     }}>
-      <div className="profile-heading"><span className="avatar large">{initials(draft.displayName)}</span><div><h2>Personal details</h2><p>Update the identity shown in the workspace menu.</p></div></div>
+      <div className="profile-heading"><span className="avatar large">{initials(draft.displayName)}</span><div><h2>Personal details</h2><p>{account ? `Signed in as ${account.email}.` : 'Using the development workspace session.'}</p></div></div>
       <label>Display name<input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} required maxLength={120} /></label>
       <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} required maxLength={180} /></label>
       <label>Title<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required maxLength={120} /></label>
@@ -425,11 +522,13 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, onEdit }: { tasks: TaskItem[]; categories: ProjectCategory[]; onEdit: (task: TaskItem) => void }) {
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
@@ -438,12 +537,22 @@ function TaskList({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskIte
   </div>
 }
 
+function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName?: string }) {
+  if (!categoryName && !task.tags.length) return null
+  return <span className="metadata-line">
+    {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
+    {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
+  </span>
+}
+
 function Board({
   tasks,
+  categories,
   onEdit,
   onMove,
 }: {
   tasks: TaskItem[]
+  categories: ProjectCategory[]
   onEdit: (task: TaskItem) => void
   onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
 }) {
@@ -483,6 +592,7 @@ function Board({
       {columns.map((status) => <BoardColumn
         key={status}
         status={status}
+        categories={categories}
         tasks={tasks.filter((task) => task.status === status)}
         onEdit={onEdit}
         dragActive={activeTask !== null}
@@ -490,7 +600,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} onEdit={onEdit} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} onEdit={onEdit} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -498,12 +608,14 @@ function Board({
 function BoardColumn({
   status,
   tasks,
+  categories,
   onEdit,
   dragActive,
   validTarget,
 }: {
   status: TaskStatus
   tasks: TaskItem[]
+  categories: ProjectCategory[]
   onEdit: (task: TaskItem) => void
   dragActive: boolean
   validTarget: boolean
@@ -521,7 +633,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {tasks.map((task) =>
-        <BoardCard task={task} onEdit={onEdit} key={task.id} />)}
+        <BoardCard task={task} categories={categories} onEdit={onEdit} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -529,10 +641,12 @@ function BoardColumn({
 
 function BoardCard({
   task,
+  categories,
   onEdit,
   overlay = false,
 }: {
   task: TaskItem
+  categories?: ProjectCategory[]
   onEdit: (task: TaskItem) => void
   overlay?: boolean
 }) {
@@ -573,6 +687,10 @@ function BoardCard({
       </span>
       <b>{task.priorityScore?.toFixed(1) ?? '—'}</b>
     </div>
+    <TaskMetadataLine
+      task={task}
+      categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+    />
   </article>
 }
 
@@ -584,8 +702,11 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
-function TaskEditor({ task, members, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ task, members, categories, onCategoryCreated, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [categoryDraft, setCategoryDraft] = useState('')
+  const [tagDraft, setTagDraft] = useState('')
+  const [noteDraft, setNoteDraft] = useState('')
   const explanation = task.priorityExplanation
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
@@ -602,6 +723,23 @@ function TaskEditor({ task, members, onClose, onSaved }: { task: TaskItem; membe
     const assignee = String(data.get('assignedUserId') ?? '')
     if (assignee) await api.assign(task.id, assignee)
     else if (task.assignedUserId) await api.unassign(task.id)
+    const categoryId = String(data.get('categoryId') ?? '')
+    await api.updateCategory(task.id, categoryId || null)
+    if (tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
+    if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
+    onSaved()
+  }
+  const createCategory = async () => {
+    if (!categoryDraft.trim()) return
+    setSaving(true)
+    const category = await api.createCategory(categoryDraft.trim())
+    onCategoryCreated(category)
+    setCategoryDraft('')
+    setSaving(false)
+  }
+  const removeTag = async (tag: string) => {
+    setSaving(true)
+    await api.removeTag(task.id, tag)
     onSaved()
   }
   const transition = async (action: string) => {
@@ -614,6 +752,14 @@ function TaskEditor({ task, members, onClose, onSaved }: { task: TaskItem; membe
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{[1, 2, 3, 5, 8, 13].map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
+      <fieldset><legend>Metadata</legend><div className="metadata-editor">
+        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
+        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={40} placeholder="client, urgent, research" /></label>
+        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
+        <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
+        {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
+      </div></fieldset>
       <fieldset><legend>Priority inputs</legend><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} /></label>
@@ -624,15 +770,30 @@ function TaskEditor({ task, members, onClose, onSaved }: { task: TaskItem; membe
   </dialog></div>
 }
 
-function TaskDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ categories, onCategoryCreated, onClose, onCreated }: { categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [categoryDraft, setCategoryDraft] = useState('')
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
     const data = new FormData(event.currentTarget)
-    await api.createTask(String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+    const task = await api.createTask(String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+    const categoryId = String(data.get('categoryId') ?? '')
+    const tag = String(data.get('tag') ?? '').trim()
+    const note = String(data.get('note') ?? '').trim()
+    if (categoryId) await api.updateCategory(task.id, categoryId)
+    if (tag) await api.addTag(task.id, tag)
+    if (note) await api.addNote(task.id, note)
     onCreated()
   }
+  const createCategory = async () => {
+    if (!categoryDraft.trim()) return
+    setSaving(true)
+    const category = await api.createCategory(categoryDraft.trim())
+    onCategoryCreated(category)
+    setCategoryDraft('')
+    setSaving(false)
+  }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
   </dialog></div>
 }

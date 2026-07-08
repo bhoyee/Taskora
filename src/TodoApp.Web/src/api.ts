@@ -15,10 +15,13 @@ export interface PriorityExplanation {
 export interface TaskItem {
   id: string
   assignedUserId: string | null
+  categoryId: string | null
   title: string
   status: TaskStatus
   isBlocked: boolean
   dueDate: string | null
+  tags: string[]
+  notes?: TaskNote[]
   priorityScore: number | null
   priorityBand: string | null
   priorityExplanation: PriorityExplanation | null
@@ -49,6 +52,37 @@ export interface WorkspaceMember {
   displayName: string
   email: string
   role: 'Owner' | 'Manager' | 'Member'
+}
+
+export interface ProjectCategory {
+  id: string
+  projectId: string
+  name: string
+}
+
+export interface ProjectDetails {
+  id: string
+  name: string
+  description: string | null
+  targetDate: string | null
+  isArchived: boolean
+  archivedAt: string | null
+  categories: ProjectCategory[]
+}
+
+export interface TaskNote {
+  id: string
+  taskId: string
+  authorId: string
+  body: string
+  createdAt: string
+}
+
+export interface AccountSession {
+  userId: string
+  displayName: string
+  email: string
+  accessToken: string
 }
 
 export interface TaskActivity {
@@ -92,6 +126,7 @@ export const api = {
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
   dashboard: () => request<Dashboard>('/api/v1/dashboard'),
+  project: () => request<ProjectDetails>(`/api/v1/projects/${projectId}`),
   tasks: (search = '', pageNumber = 1, pageSize = 10) =>
     request<TaskPage>(
       `/api/v1/tasks?projectId=${projectId}&search=${encodeURIComponent(search)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
@@ -101,6 +136,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
     }),
+  task: (id: string) => request<TaskItem>(`/api/v1/tasks/${id}`),
   updateTask: (id: string, title: string, dueDate: string, effort: number) =>
     request(`/api/v1/tasks/${id}`, {
       method: 'PUT',
@@ -129,6 +165,45 @@ export const api = {
     }),
   unassign: (id: string) =>
     request(`/api/v1/tasks/${id}/assignment`, { method: 'DELETE' }),
+  createCategory: (name: string) =>
+    request<ProjectCategory>(`/api/v1/projects/${projectId}/categories`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  updateCategory: (id: string, categoryId: string | null) =>
+    request<string | null>(`/api/v1/tasks/${id}/category`, {
+      method: 'PUT',
+      body: JSON.stringify({ categoryId }),
+    }),
+  addTag: (id: string, tag: string) =>
+    request<string[]>(`/api/v1/tasks/${id}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tag }),
+    }),
+  removeTag: (id: string, tag: string) =>
+    request<string[]>(`/api/v1/tasks/${id}/tags/${encodeURIComponent(tag)}`, {
+      method: 'DELETE',
+    }),
+  addNote: (id: string, body: string) =>
+    request<TaskNote>(`/api/v1/tasks/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
   activity: (id: string) =>
     request<TaskActivity[]>(`/api/v1/tasks/${id}/activity`),
+  login: (email: string, password: string) =>
+    request<AccountSession>('/api/v1/account/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (
+    displayName: string,
+    email: string,
+    password: string,
+    workspaceName: string,
+  ) =>
+    request<AccountSession>('/api/v1/account/register', {
+      method: 'POST',
+      body: JSON.stringify({ displayName, email, password, workspaceName }),
+    }),
 }

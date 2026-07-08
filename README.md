@@ -33,6 +33,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
 | 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
 | 8. Delivery and Operations | Complete | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+| 9. Task Metadata and Account Access | Complete | Categories, tags, notes, registration, login, metadata APIs, and React account access |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
 of done, and an expected commit sequence in the
@@ -97,7 +98,7 @@ flowchart LR
 
 ## Current Development
 
-Milestones 1 through 8 are complete on feature branches. The current
+Milestones 1 through 9 are complete on feature branches. The current
 `feature/delivery-operations` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
@@ -129,9 +130,14 @@ Milestones 1 through 8 are complete on feature branches. The current
 - Server-side security tests for unauthorized and forbidden access.
 - Interactive board drag and drop, task pagination, activity fallback, settings,
   profile, password, and logout screens.
+- Project-owned task categories, task tags, and actor-attributed task notes.
+- Registration and login APIs with hashed account credentials and bearer-token
+  development authentication.
+- React login/register screen and task metadata controls for category, tags,
+  and notes.
 - Azure Pipeline coverage publishing, app packaging, optional Docker artifact,
   deployment smoke-test hook, operations runbook, and Azure setup checklist.
-- 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
+- 78 domain, 34 application, 18 Infrastructure, and 24 API integration tests.
 
 Run the complete build and test suite with:
 
