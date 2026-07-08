@@ -145,6 +145,14 @@ public sealed class ProjectHandlerTests
             _projects.Add(project.Id, project);
             return Task.CompletedTask;
         }
+
+        public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Project>>(
+                _projects.Values
+                    .Where(project => project.WorkspaceId == workspaceId)
+                    .ToArray());
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork

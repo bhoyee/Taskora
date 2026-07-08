@@ -132,6 +132,12 @@ public sealed class CreateTaskHandlerTests
             Guid projectId,
             CancellationToken cancellationToken) =>
             Task.FromResult(project?.Id == projectId ? project : null);
+
+        public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Project>>(
+                project is null ? [] : [project]);
     }
 
     private sealed class RecordingTaskRepository : ITaskRepository

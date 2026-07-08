@@ -1,4 +1,5 @@
 using TodoApp.Application.Abstractions;
+using TodoApp.Application.Collaboration;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Domain.Common;
@@ -183,5 +184,32 @@ public sealed class GetProjectByIdHandler(IProjectRepository projects)
                     ErrorType.NotFound))
             : Result<ProjectDto>.Success(
                 CreateProjectHandler.ToDto(project));
+    }
+}
+
+public sealed class ListWorkspaceProjectsHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<IReadOnlyList<ProjectDto>>> HandleAsync(
+        ListWorkspaceProjectsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetWorkspaceMembersHandler.GetWorkspaceAsync(
+            workspaces,
+            currentUser,
+            query.WorkspaceId,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<IReadOnlyList<ProjectDto>>.Failure(access.Error);
+        }
+
+        var result = await projects.ListForWorkspaceAsync(
+            query.WorkspaceId,
+            cancellationToken);
+        return Result<IReadOnlyList<ProjectDto>>.Success(
+            result.Select(CreateProjectHandler.ToDto).ToArray());
     }
 }

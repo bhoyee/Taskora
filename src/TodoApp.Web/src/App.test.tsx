@@ -112,6 +112,7 @@ function mockPagedApi() {
 function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
   if (url.includes('/activity')) return activityItems
   if (url.includes('/workspaces/workspace-1/members')) return members
+  if (url.includes('/workspaces/workspace-1/projects')) return [projectDetails]
   if (url.endsWith('/workspaces')) return workspaces
   if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001')) return projectDetails
   if (url.includes('/api/v1/tasks/task-1')) return taskPage.items[0]
