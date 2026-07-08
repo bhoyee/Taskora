@@ -213,3 +213,54 @@ public sealed class ListWorkspaceProjectsHandler(
             result.Select(CreateProjectHandler.ToDto).ToArray());
     }
 }
+
+public sealed class CreateWorkspaceProjectHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<ProjectDto>> HandleAsync(
+        CreateWorkspaceProjectCommand command,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetWorkspaceMembersHandler.GetWorkspaceAsync(
+            workspaces,
+            currentUser,
+            command.WorkspaceId,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<ProjectDto>.Failure(access.Error);
+        }
+
+        try
+        {
+            var project = Project.Create(
+                identifiers.NewId(),
+                command.Name,
+                command.Description,
+                command.WorkspaceId);
+
+            if (command.TargetDate.HasValue)
+            {
+                project.SetTargetDate(
+                    DueDate.Create(command.TargetDate.Value));
+            }
+
+            await projects.AddAsync(project, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<ProjectDto>.Success(
+                CreateProjectHandler.ToDto(project));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Result<ProjectDto>.Failure(
+                new ApplicationError(
+                    "project.validation",
+                    exception.Message,
+                    ErrorType.Validation));
+        }
+    }
+}

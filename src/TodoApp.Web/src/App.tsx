@@ -126,8 +126,8 @@ export default function App() {
       const selected = available[0]
       if (!selected) throw new Error('No workspace membership was found.')
       const projects = await api.projects(selected.id)
-      const selectedProject = projects[0]
-      if (!selectedProject) throw new Error('No project was found for this workspace.')
+      const selectedProject = projects[0] ??
+        await api.createWorkspaceProject(selected.id, 'My task project')
       const [summary, page, workspaceMembers] = await Promise.all([
         api.dashboard(), api.tasks(selectedProject.id, search, pageNumber, pageSize), api.members(selected.id),
       ])

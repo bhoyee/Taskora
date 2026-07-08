@@ -31,6 +31,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<ArchiveProjectHandler>();
         services.AddScoped<GetProjectByIdHandler>();
         services.AddScoped<ListWorkspaceProjectsHandler>();
+        services.AddScoped<CreateWorkspaceProjectHandler>();
         services.AddScoped<GetProjectBoardHandler>();
 
         services.AddScoped<CreateTaskHandler>();

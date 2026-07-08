@@ -33,6 +33,18 @@ internal static class WorkspaceEndpoints
             ApiResult.From(await handler.HandleAsync(
                 new ListWorkspaceProjectsQuery(workspaceId),
                 cancellationToken)));
+        group.MapPost("/{workspaceId:guid}/projects", async (
+            Guid workspaceId,
+            CreateWorkspaceProjectRequest request,
+            CreateWorkspaceProjectHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new CreateWorkspaceProjectCommand(
+                    workspaceId,
+                    request.Name,
+                    request.Description,
+                    request.TargetDate),
+                cancellationToken)));
         group.MapPost("/{workspaceId:guid}/members", async (
             Guid workspaceId,
             AddWorkspaceMemberRequest request,
@@ -68,3 +80,8 @@ internal static class WorkspaceEndpoints
         return endpoints;
     }
 }
+
+public sealed record CreateWorkspaceProjectRequest(
+    string Name,
+    string? Description = null,
+    DateOnly? TargetDate = null);

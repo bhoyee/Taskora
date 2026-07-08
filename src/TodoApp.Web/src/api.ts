@@ -128,6 +128,14 @@ export const api = {
   dashboard: () => request<Dashboard>('/api/v1/dashboard'),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
+  createWorkspaceProject: (workspaceId: string, name: string) =>
+    request<ProjectDetails>(`/api/v1/workspaces/${workspaceId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description: 'Starter project created for this workspace.',
+      }),
+    }),
   project: (projectId = developmentProjectId) =>
     request<ProjectDetails>(`/api/v1/projects/${projectId}`),
   tasks: (projectId = developmentProjectId, search = '', pageNumber = 1, pageSize = 10) =>
