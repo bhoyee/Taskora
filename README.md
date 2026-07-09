@@ -34,6 +34,7 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
 | 8. Delivery and Operations | Complete | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
 | 9. Task Metadata and Account Access | Complete | Categories, tags, notes, registration, login, metadata APIs, and React account access |
+| 10. Workspace Management and Invitations | In progress | Workspace creation, switching, invites, accept/decline flow, and member administration |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
 of done, and an expected commit sequence in the

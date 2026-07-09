@@ -31,6 +31,7 @@ acceptance criteria, required tests, definition of done, and expected commits.
 - [Milestone 7: Identity And Collaboration](milestones/M07-identity-collaboration.md)
 - [Milestone 8: Delivery And Operations](milestones/M08-delivery-operations.md)
 - [Milestone 9: Task Metadata And Account Access](milestones/M09-task-metadata-account-access.md)
+- [Milestone 10: Workspace Management And Invitations](milestones/M10-workspace-management-invitations.md)
 
 ## Milestone 0: Planning And Baseline
 
