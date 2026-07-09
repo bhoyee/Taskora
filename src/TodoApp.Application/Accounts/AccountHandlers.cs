@@ -128,6 +128,152 @@ public sealed class LoginHandler(IAccountRepository accounts)
                 ErrorType.Unauthorized));
 }
 
+public sealed class GetCurrentAccountHandler(
+    IAccountRepository accounts,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<AccountProfileDto>> HandleAsync(
+        GetCurrentAccountQuery query,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return Unauthorized<AccountProfileDto>();
+        }
+
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+        return account is null
+            ? Result<AccountProfileDto>.Failure(
+                new ApplicationError(
+                    "account.not_found",
+                    "The account was not found.",
+                    ErrorType.NotFound))
+            : Result<AccountProfileDto>.Success(ToProfile(account.User));
+    }
+
+    internal static AccountProfileDto ToProfile(UserProfile user) =>
+        new(user.Id, user.DisplayName, user.Email);
+
+    internal static Result<T> Unauthorized<T>() =>
+        Result<T>.Failure(new ApplicationError(
+            "identity.unauthorized",
+            "Authentication is required.",
+            ErrorType.Unauthorized));
+}
+
+public sealed class UpdateAccountProfileHandler(
+    IAccountRepository accounts,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<AccountProfileDto>> HandleAsync(
+        UpdateAccountProfileCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return GetCurrentAccountHandler.Unauthorized<AccountProfileDto>();
+        }
+
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+        if (account is null)
+        {
+            return Result<AccountProfileDto>.Failure(
+                new ApplicationError(
+                    "account.not_found",
+                    "The account was not found.",
+                    ErrorType.NotFound));
+        }
+
+        var email = RegisterAccountHandler.NormalizeEmail(command.Email);
+        if (email is null)
+        {
+            return Validation<AccountProfileDto>(
+                "A valid email address is required.");
+        }
+
+        if (email != account.User.Email &&
+            await accounts.EmailExistsAsync(email, cancellationToken))
+        {
+            return Result<AccountProfileDto>.Failure(
+                new ApplicationError(
+                    "account.email_exists",
+                    "An account already exists for this email.",
+                    ErrorType.Conflict));
+        }
+
+        try
+        {
+            account.User.UpdateEmail(email);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<AccountProfileDto>.Success(
+                GetCurrentAccountHandler.ToProfile(account.User));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Validation<AccountProfileDto>(exception.Message);
+        }
+    }
+
+    private static Result<T> Validation<T>(string message) =>
+        Result<T>.Failure(
+            new ApplicationError(
+                "account.validation",
+                message,
+                ErrorType.Validation));
+}
+
+public sealed class ChangePasswordHandler(
+    IAccountRepository accounts,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        ChangePasswordCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return GetCurrentAccountHandler.Unauthorized<bool>();
+        }
+
+        if (command.NewPassword.Length < 8)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "account.validation",
+                    "Password must be at least 8 characters.",
+                    ErrorType.Validation));
+        }
+
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+        if (account is null ||
+            !PasswordHasher.Verify(
+                command.CurrentPassword,
+                account.PasswordHash))
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "account.invalid_password",
+                    "Current password is incorrect.",
+                    ErrorType.Unauthorized));
+        }
+
+        await accounts.ChangePasswordAsync(
+            currentUser.UserId,
+            PasswordHasher.Hash(command.NewPassword),
+            cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 internal static class PasswordHasher
 {
     private const int Iterations = 100_000;
