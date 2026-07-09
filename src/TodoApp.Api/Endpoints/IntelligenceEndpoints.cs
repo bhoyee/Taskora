@@ -10,11 +10,12 @@ internal static class IntelligenceEndpoints
         endpoints.MapGet(
                 "/api/v1/dashboard",
                 async (
+                    Guid? workspaceId,
                     Guid? projectId,
                     GetPortfolioDashboardHandler handler,
                     CancellationToken cancellationToken) =>
                     Results.Ok(await handler.HandleAsync(
-                        new GetPortfolioDashboardQuery(projectId),
+                        new GetPortfolioDashboardQuery(workspaceId, projectId),
                         cancellationToken)))
             .WithTags("Intelligence")
             .RequireAuthorization()

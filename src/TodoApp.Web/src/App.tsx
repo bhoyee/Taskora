@@ -129,12 +129,13 @@ export default function App() {
       const selectedProject = projects[0] ??
         await api.createWorkspaceProject(selected.id, 'My task project')
       const [summary, page, workspaceMembers] = await Promise.all([
-        api.dashboard(selectedProject.id), api.tasks(selectedProject.id, search, pageNumber, pageSize), api.members(selected.id),
+        api.dashboard(selected.id), api.tasks(selected.id, search, pageNumber, pageSize), api.members(selected.id),
       ])
       setWorkspace(selected)
       setProject(selectedProject)
       setMembers(workspaceMembers)
-      setCategories(selectedProject.categories)
+      setCategories((projects.length ? projects : [selectedProject])
+        .flatMap((item) => item.categories))
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)

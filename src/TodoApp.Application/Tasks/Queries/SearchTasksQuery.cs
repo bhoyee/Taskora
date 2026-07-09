@@ -4,6 +4,7 @@ namespace TodoApp.Application.Tasks.Queries;
 
 public sealed record SearchTasksQuery(
     Guid? ProjectId = null,
+    Guid? WorkspaceId = null,
     TaskItemStatus? Status = null,
     bool? IsBlocked = null,
     Guid? CategoryId = null,

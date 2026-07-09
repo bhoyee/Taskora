@@ -95,6 +95,7 @@ public sealed class RepositoryTests
         var result = await repository.SearchAsync(
             new TaskSearchCriteria(
                 project.Id,
+                null,
                 TaskItemStatus.Ready,
                 IsBlocked: false,
                 CategoryId: null,
@@ -141,6 +142,7 @@ public sealed class RepositoryTests
         var result = await new TaskRepository(context).SearchAsync(
             new TaskSearchCriteria(
                 project.Id,
+                null,
                 null,
                 null,
                 null,
