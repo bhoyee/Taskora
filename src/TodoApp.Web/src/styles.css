@@ -117,6 +117,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .role-pill { border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; background: #e8edf2; color: #43505d; }
 .role-pill.owner { background: #e3f4ef; color: #17624f; }
 .role-pill.manager { background: #e6f0fb; color: #295f8f; }
+.role-select { position: relative; min-width: 128px; }
+.role-select select { width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; background: white; padding: 7px 30px 7px 9px; margin: 0; }
+.role-select svg { position: absolute; right: 8px; top: 8px; width: 15px; pointer-events: none; color: #667281; }
 .danger-action { color: #a6372e; }
 .invite-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 160px auto; gap: 10px; align-items: end; }
 .invite-form label { position: relative; }

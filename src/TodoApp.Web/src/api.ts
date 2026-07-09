@@ -147,6 +147,15 @@ export const api = {
     request<boolean>(`/api/v1/workspaces/${workspaceId}/members/${userId}`, {
       method: 'DELETE',
     }),
+  changeMemberRole: (
+    workspaceId: string,
+    userId: string,
+    role: 'Manager' | 'Member',
+  ) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
   invitations: (workspaceId: string) =>
     request<WorkspaceInvitation[]>(`/api/v1/workspaces/${workspaceId}/invitations`),
   inviteMember: (

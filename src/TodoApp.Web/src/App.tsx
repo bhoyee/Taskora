@@ -329,6 +329,12 @@ export default function App() {
             setNotice('Workspace member removed.')
             await load()
           }}
+          onRoleChanged={async (userId, role) => {
+            if (!workspace) return
+            await api.changeMemberRole(workspace.id, userId, role)
+            setNotice('Workspace role updated.')
+            await load()
+          }}
           onInvited={async (fullName, email, role) => {
             if (!workspace) return
             const invitation = await api.inviteMember(workspace.id, fullName, email, role)
@@ -643,6 +649,7 @@ function SettingsPage({
   invitations,
   currentUserId,
   onMemberRemoved,
+  onRoleChanged,
   onInvited,
   onInvitationCancelled,
   onSave,
@@ -653,6 +660,7 @@ function SettingsPage({
   invitations: WorkspaceInvitation[]
   currentUserId?: string
   onMemberRemoved: (userId: string) => Promise<void>
+  onRoleChanged: (userId: string, role: 'Manager' | 'Member') => Promise<void>
   onInvited: (fullName: string, email: string, role: 'Manager' | 'Member') => Promise<void>
   onInvitationCancelled: (invitationId: string) => Promise<void>
   onSave: (settings: UserSettings) => void
@@ -710,7 +718,21 @@ function SettingsPage({
         {members.map((member) => <article className="member-row" key={member.userId}>
           <span className="avatar">{initials(member.displayName)}</span>
           <div><strong>{member.displayName}</strong><small>{member.email}</small></div>
-          <span className={`role-pill ${member.role.toLowerCase()}`}>{member.role}</span>
+          {canManage && member.role !== 'Owner'
+            ? <label className="role-select" aria-label={`${member.displayName} role`}>
+                <select value={member.role} disabled={busy} onChange={(event) => {
+                  setBusy(true)
+                  onRoleChanged(
+                    member.userId,
+                    event.target.value as 'Manager' | 'Member',
+                  ).finally(() => setBusy(false))
+                }}>
+                  <option value="Member">Member</option>
+                  <option value="Manager">Manager</option>
+                </select>
+                <ChevronDown />
+              </label>
+            : <span className={`role-pill ${member.role.toLowerCase()}`}>{member.role}</span>}
           {canManage && member.role !== 'Owner' && member.userId !== currentUserId &&
             <button className="icon-button danger-action" disabled={busy} onClick={() => {
               setBusy(true)
