@@ -52,6 +52,23 @@ const workspaces = [{
   name: 'Portfolio team',
   role: 'Owner',
 }]
+const secondWorkspace = {
+  id: 'workspace-2',
+  name: 'Client delivery',
+  role: 'Owner',
+}
+const invitation = {
+  id: 'invite-1',
+  workspaceId: 'workspace-1',
+  workspaceName: 'Portfolio team',
+  fullName: 'Ada Lovelace',
+  email: 'ada@example.com',
+  role: 'Member',
+  status: 'Pending',
+  createdAt: '2026-07-09T09:00:00Z',
+  expiresAt: '2026-07-16T09:00:00Z',
+  inviteLink: '/invite/token-1',
+}
 const projectDetails = {
   id: '10000000-0000-0000-0000-000000000001',
   name: 'Portfolio launch',
@@ -64,6 +81,12 @@ const projectDetails = {
     projectId: '10000000-0000-0000-0000-000000000001',
     name: 'Client Work',
   }],
+}
+const secondProjectDetails = {
+  ...projectDetails,
+  id: 'project-2',
+  name: 'Client delivery project',
+  categories: [],
 }
 const members = [{
   userId: 'user-1',
@@ -120,6 +143,62 @@ function mockResponseFor(url: string, page = taskPage, activityItems = activity)
   if (url.includes('/api/v1/tasks/task-2')) return secondTask
   if (url.includes('/dashboard')) return dashboard
   return page
+}
+
+function mockWorkspaceManagementApi() {
+  let currentWorkspaces = [...workspaces]
+  let currentInvitations: typeof invitation[] = []
+
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input, init) => {
+      const url = String(input)
+      const method = init?.method?.toUpperCase() ?? 'GET'
+
+      if (url.endsWith('/workspaces') && method === 'POST') {
+        currentWorkspaces = [...currentWorkspaces, secondWorkspace]
+        return jsonResponse(secondWorkspace)
+      }
+
+      if (url.includes('/workspaces/workspace-1/invitations') && method === 'POST') {
+        currentInvitations = [invitation]
+        return jsonResponse(invitation)
+      }
+
+      if (url.includes('/workspaces/workspace-1/invitations')) {
+        return jsonResponse(currentInvitations)
+      }
+
+      if (url.endsWith('/workspaces')) {
+        return jsonResponse(currentWorkspaces)
+      }
+
+      if (url.includes('/workspaces/workspace-2/projects')) {
+        return jsonResponse([secondProjectDetails])
+      }
+
+      if (url.includes('workspaceId=workspace-2') && url.includes('/dashboard')) {
+        return jsonResponse({
+          projectCount: 1,
+          activeTaskCount: 0,
+          blockedTaskCount: 0,
+          overdueTaskCount: 0,
+          criticalTaskCount: 0,
+        })
+      }
+
+      if (url.includes('workspaceId=workspace-2') && url.includes('/tasks')) {
+        return jsonResponse({ totalCount: 0, items: [] })
+      }
+
+      return jsonResponse(mockResponseFor(url, taskPage, activity))
+    })
+}
+
+function jsonResponse(value: unknown) {
+  return new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 afterEach(() => {
@@ -221,6 +300,36 @@ describe('delivery workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
     expect(await screen.findByText('No recorded activity yet')).toBeInTheDocument()
     expect(screen.getByText('Current task snapshot')).toBeInTheDocument()
+  })
+
+  it('creates a workspace from the workspace switcher', async () => {
+    mockWorkspaceManagementApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: /^new$/i }))
+    await user.type(screen.getByLabelText('Workspace name'), 'Client delivery')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    expect(await screen.findByText('Workspace Client delivery created.')).toBeInTheDocument()
+    expect(screen.getByDisplayValue(/Client delivery/)).toBeInTheDocument()
+  })
+
+  it('creates a pending invite from workspace settings', async () => {
+    mockWorkspaceManagementApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: /settings/i }))
+    await user.type(screen.getByLabelText('Full name'), 'Ada Lovelace')
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.click(screen.getByRole('button', { name: /send invite/i }))
+
+    expect(await screen.findByText(/Invite link created for ada@example.com/)).toBeInTheDocument()
+    expect(screen.getByText('Pending invitations')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '/invite/token-1' })).toBeInTheDocument()
   })
 
   it('explains when an API request is routed to the frontend', async () => {

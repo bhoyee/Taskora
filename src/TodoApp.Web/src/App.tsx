@@ -225,14 +225,20 @@ export default function App() {
     setPageNumber(1)
   }
   const createWorkspace = async (name: string) => {
-    const created = await api.createWorkspace(name)
-    setWorkspaces((items) => [...items.filter((item) => item.id !== created.id), created])
-    setWorkspace(created)
-    setTasks([])
-    setDashboard(emptyDashboard)
-    setSelectedWorkspaceId(created.id)
-    localStorage.setItem('todoapp_workspace_id', created.id)
-    setNotice(`Workspace ${created.name} created.`)
+    try {
+      setError('')
+      const created = await api.createWorkspace(name)
+      setWorkspaces((items) => [...items.filter((item) => item.id !== created.id), created])
+      setWorkspace(created)
+      setTasks([])
+      setDashboard(emptyDashboard)
+      setSelectedWorkspaceId(created.id)
+      localStorage.setItem('todoapp_workspace_id', created.id)
+      setNotice(`Workspace ${created.name} created.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Workspace could not be created.')
+      throw reason
+    }
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
@@ -289,7 +295,7 @@ export default function App() {
             workspaces={workspaces}
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
             onSwitch={switchWorkspace}
-            onCreate={(name) => void createWorkspace(name)}
+            onCreate={createWorkspace}
           />
           {view === 'workspace' && <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>}
         </header>
@@ -349,7 +355,7 @@ export default function App() {
           onInvited={async (fullName, email, role) => {
             if (!workspace) return
             const invitation = await api.inviteMember(workspace.id, fullName, email, role)
-            setNotice(`Invite created for ${invitation.email}.`)
+            setNotice(`Invite link created for ${invitation.email}. They become a member after accepting it.`)
             await load()
           }}
           onInvitationCancelled={async (invitationId) => {
@@ -541,22 +547,32 @@ function WorkspaceSwitcher({
   workspaces: Workspace[]
   selectedWorkspaceId: string
   onSwitch: (workspaceId: string) => void
-  onCreate: (name: string) => void
+  onCreate: (name: string) => Promise<void>
 }) {
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   if (creating) {
     return <form className="workspace-create" onSubmit={(event) => {
       event.preventDefault()
       if (!name.trim()) return
+      setBusy(true)
+      setError('')
       onCreate(name.trim())
-      setName('')
-      setCreating(false)
+        .then(() => {
+          setName('')
+          setCreating(false)
+        })
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Workspace could not be created.'))
+        .finally(() => setBusy(false))
     }}>
       <input aria-label="Workspace name" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} autoFocus />
-      <button className="primary"><Plus size={16} /> Create</button>
-      <button type="button" className="secondary" onClick={() => setCreating(false)}>Cancel</button>
+      <button className="primary" disabled={busy}><Plus size={16} /> {busy ? 'Creating...' : 'Create'}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => setCreating(false)}>Cancel</button>
+      {error && <p className="field-error">{error}</p>}
     </form>
   }
 
@@ -758,7 +774,7 @@ function SettingsPage({
       <div className="settings-section compact-heading">
         <div>
           <h2>Invite people</h2>
-          <p>Create one-time invitation links for new or existing users.</p>
+          <p>Create one-time invitation links. Invitees appear as members only after they accept.</p>
         </div>
       </div>
       <form className="invite-form" onSubmit={(event) => void invite(event)}>
@@ -769,9 +785,12 @@ function SettingsPage({
         <footer><button className="primary" disabled={busy}><UserPlus size={16} /> Send invite</button></footer>
       </form>
       <div className="invitation-list">
+        {!!invitations.length && <h3>Pending invitations</h3>}
         {invitations.map((invitation) => <article className="invitation-row" key={invitation.id}>
           <div><strong>{invitation.fullName}</strong><small>{invitation.email} - {invitation.status}</small></div>
-          <code>{invitation.inviteLink ?? 'No active link'}</code>
+          {invitation.inviteLink
+            ? <a href={invitation.inviteLink}>{invitation.inviteLink}</a>
+            : <code>No active link</code>}
           {invitation.status === 'Pending' && <button className="secondary" disabled={busy} onClick={() => {
             setBusy(true)
             onInvitationCancelled(invitation.id).finally(() => setBusy(false))
