@@ -21,11 +21,18 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<CreateProjectHandler>();
         services.AddScoped<RegisterAccountHandler>();
         services.AddScoped<LoginHandler>();
+        services.AddScoped<CreateWorkspaceHandler>();
         services.AddScoped<GetMyWorkspacesHandler>();
         services.AddScoped<GetWorkspaceMembersHandler>();
         services.AddScoped<AddWorkspaceMemberHandler>();
         services.AddScoped<ChangeWorkspaceRoleHandler>();
         services.AddScoped<RemoveWorkspaceMemberHandler>();
+        services.AddScoped<InviteWorkspaceMemberHandler>();
+        services.AddScoped<GetWorkspaceInvitationsHandler>();
+        services.AddScoped<GetWorkspaceInvitationByTokenHandler>();
+        services.AddScoped<AcceptWorkspaceInvitationHandler>();
+        services.AddScoped<DeclineWorkspaceInvitationHandler>();
+        services.AddScoped<CancelWorkspaceInvitationHandler>();
         services.AddScoped<GetPortfolioDashboardHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();

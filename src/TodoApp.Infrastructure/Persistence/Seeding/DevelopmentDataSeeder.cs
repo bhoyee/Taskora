@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
@@ -15,6 +16,7 @@ public static class DevelopmentDataSeeder
         Guid.Parse("30000000-0000-0000-0000-000000000003");
     public static readonly Guid WorkspaceId =
         Guid.Parse("40000000-0000-0000-0000-000000000001");
+    public const string DemoPassword = "Portfolio123!";
 
     private static readonly Guid ProjectId =
         Guid.Parse("10000000-0000-0000-0000-000000000001");
@@ -53,6 +55,11 @@ public static class DevelopmentDataSeeder
             await context.SaveChangesAsync(cancellationToken);
         }
 
+        await AddMissingCredentialAsync(context, OwnerId, cancellationToken);
+        await AddMissingCredentialAsync(context, ManagerId, cancellationToken);
+        await AddMissingCredentialAsync(context, MemberId, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+
         if (await context.Projects.AnyAsync(cancellationToken))
         {
             return;
@@ -90,5 +97,43 @@ public static class DevelopmentDataSeeder
 
         context.AddRange(project, backlog, ready, blocked);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task AddMissingCredentialAsync(
+        TodoAppDbContext context,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (await context.UserCredentials.AnyAsync(
+                credential => credential.UserId == userId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        await context.UserCredentials.AddAsync(
+            new UserCredential(
+                userId,
+                DevelopmentPasswordHasher.Hash(DemoPassword)),
+            cancellationToken);
+    }
+}
+
+internal static class DevelopmentPasswordHasher
+{
+    private const int Iterations = 100_000;
+    private const int SaltSize = 16;
+    private const int KeySize = 32;
+
+    public static string Hash(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            Iterations,
+            HashAlgorithmName.SHA256,
+            KeySize);
+        return $"{Iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 }

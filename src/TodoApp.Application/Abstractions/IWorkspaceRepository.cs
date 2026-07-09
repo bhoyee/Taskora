@@ -4,6 +4,10 @@ namespace TodoApp.Application.Abstractions;
 
 public interface IWorkspaceRepository
 {
+    Task AddAsync(
+        Workspace workspace,
+        CancellationToken cancellationToken);
+
     Task<Workspace?> GetByIdAsync(
         Guid workspaceId,
         CancellationToken cancellationToken);
@@ -24,6 +28,25 @@ public interface IUserProfileRepository
         CancellationToken cancellationToken);
 }
 
+public interface IWorkspaceInvitationRepository
+{
+    Task AddAsync(
+        WorkspaceInvitation invitation,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceInvitation?> GetByTokenAsync(
+        string token,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceInvitation?> GetByIdAsync(
+        Guid invitationId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<WorkspaceInvitation>> ListForWorkspaceAsync(
+        Guid workspaceId,
+        CancellationToken cancellationToken);
+}
+
 public sealed record AccountRecord(UserProfile User, string PasswordHash);
 
 public interface IAccountRepository
@@ -39,6 +62,11 @@ public interface IAccountRepository
     Task AddAsync(
         UserProfile user,
         Workspace workspace,
+        string passwordHash,
+        CancellationToken cancellationToken);
+
+    Task AddUserAsync(
+        UserProfile user,
         string passwordHash,
         CancellationToken cancellationToken);
 }

@@ -32,6 +32,9 @@ public sealed class TodoAppDbContext(
     public DbSet<WorkspaceMembership> WorkspaceMemberships =>
         Set<WorkspaceMembership>();
 
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations =>
+        Set<WorkspaceInvitation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(

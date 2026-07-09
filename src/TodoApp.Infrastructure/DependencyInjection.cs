@@ -54,6 +54,8 @@ public static class DependencyInjection
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IWorkspaceInvitationRepository,
+            WorkspaceInvitationRepository>();
         services.AddScoped<IUnitOfWork>(
             provider => provider.GetRequiredService<TodoAppDbContext>());
         services.AddSingleton<IClock, SystemClock>();

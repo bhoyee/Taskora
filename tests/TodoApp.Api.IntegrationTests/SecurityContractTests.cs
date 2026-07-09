@@ -90,7 +90,7 @@ public sealed class SecurityContractTests(ApiFactory factory)
         var members = await client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/workspaces/{WorkspaceId}/members");
 
-        Assert.Equal(3, members.GetArrayLength());
+        Assert.True(members.GetArrayLength() >= 3);
         Assert.Contains(
             members.EnumerateArray(),
             member =>

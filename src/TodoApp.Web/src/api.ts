@@ -54,6 +54,19 @@ export interface WorkspaceMember {
   role: 'Owner' | 'Manager' | 'Member'
 }
 
+export interface WorkspaceInvitation {
+  id: string
+  workspaceId: string
+  workspaceName: string
+  fullName: string
+  email: string
+  role: 'Owner' | 'Manager' | 'Member'
+  status: 'Pending' | 'Accepted' | 'Declined' | 'Cancelled' | 'Expired'
+  createdAt: string
+  expiresAt: string
+  inviteLink: string | null
+}
+
 export interface ProjectCategory {
   id: string
   projectId: string
@@ -111,9 +124,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   })
-  if (!response.ok) throw new Error('The workspace could not be loaded.')
-
   const contentType = response.headers.get('content-type')
+  if (!response.ok) {
+    if (contentType?.includes('application/json')) {
+      const problem = await response.json().catch(() => null) as {
+        title?: string
+        detail?: string
+      } | null
+      throw new Error(
+        problem?.detail ??
+        problem?.title ??
+        `The API returned ${response.status}.`)
+    }
+
+    if (response.status === 401) {
+      throw new Error('Your session is no longer valid. Reset the session or sign in again.')
+    }
+
+    throw new Error(`The API returned ${response.status}. Check that the API server is running.`)
+  }
+
   if (!contentType?.includes('application/json')) {
     throw new Error('The API returned an unexpected response. Check that the API server is running.')
   }
@@ -123,8 +153,54 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   workspaces: () => request<Workspace[]>('/api/v1/workspaces'),
+  createWorkspace: (name: string) =>
+    request<Workspace>('/api/v1/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
+  removeMember: (workspaceId: string, userId: string) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+  changeMemberRole: (
+    workspaceId: string,
+    userId: string,
+    role: 'Manager' | 'Member',
+  ) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  invitations: (workspaceId: string) =>
+    request<WorkspaceInvitation[]>(`/api/v1/workspaces/${workspaceId}/invitations`),
+  inviteMember: (
+    workspaceId: string,
+    fullName: string,
+    email: string,
+    role: 'Manager' | 'Member',
+  ) =>
+    request<WorkspaceInvitation>(`/api/v1/workspaces/${workspaceId}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({ fullName, email, role }),
+    }),
+  cancelInvitation: (workspaceId: string, invitationId: string) =>
+    request<WorkspaceInvitation>(
+      `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}`,
+      { method: 'DELETE' },
+    ),
+  invitation: (token: string) =>
+    request<WorkspaceInvitation>(`/api/v1/invitations/${token}`),
+  acceptInvitation: (token: string, displayName: string, password: string) =>
+    request<WorkspaceInvitation>(`/api/v1/invitations/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ displayName, password }),
+    }),
+  declineInvitation: (token: string) =>
+    request<WorkspaceInvitation>(`/api/v1/invitations/${token}/decline`, {
+      method: 'POST',
+    }),
   dashboard: (workspaceId?: string, projectId?: string) =>
     request<Dashboard>(
       `/api/v1/dashboard?${new URLSearchParams({
