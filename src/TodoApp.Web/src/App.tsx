@@ -700,16 +700,17 @@ function SettingsPage({
 
   const invite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
     setBusy(true)
     setError('')
-    const data = new FormData(event.currentTarget)
+    const data = new FormData(form)
     try {
       await onInvited(
         String(data.get('fullName')),
         String(data.get('email')),
         String(data.get('role')) as 'Manager' | 'Member',
       )
-      event.currentTarget.reset()
+      form.reset()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Invitation could not be created.')
     } finally {
