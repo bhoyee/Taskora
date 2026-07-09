@@ -4,6 +4,8 @@ namespace TodoApp.Application.Collaboration;
 
 public sealed record GetMyWorkspacesQuery;
 
+public sealed record CreateWorkspaceCommand(string Name);
+
 public sealed record GetWorkspaceMembersQuery(Guid WorkspaceId);
 
 public sealed record AddWorkspaceMemberCommand(

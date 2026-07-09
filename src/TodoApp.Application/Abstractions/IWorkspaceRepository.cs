@@ -4,6 +4,10 @@ namespace TodoApp.Application.Abstractions;
 
 public interface IWorkspaceRepository
 {
+    Task AddAsync(
+        Workspace workspace,
+        CancellationToken cancellationToken);
+
     Task<Workspace?> GetByIdAsync(
         Guid workspaceId,
         CancellationToken cancellationToken);

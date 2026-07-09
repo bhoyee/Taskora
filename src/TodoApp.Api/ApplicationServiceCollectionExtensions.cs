@@ -21,6 +21,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<CreateProjectHandler>();
         services.AddScoped<RegisterAccountHandler>();
         services.AddScoped<LoginHandler>();
+        services.AddScoped<CreateWorkspaceHandler>();
         services.AddScoped<GetMyWorkspacesHandler>();
         services.AddScoped<GetWorkspaceMembersHandler>();
         services.AddScoped<AddWorkspaceMemberHandler>();

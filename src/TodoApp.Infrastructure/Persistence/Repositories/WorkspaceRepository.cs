@@ -7,6 +7,13 @@ namespace TodoApp.Infrastructure.Persistence.Repositories;
 public sealed class WorkspaceRepository(TodoAppDbContext context)
     : IWorkspaceRepository
 {
+    public async Task AddAsync(
+        Workspace workspace,
+        CancellationToken cancellationToken)
+    {
+        await context.Workspaces.AddAsync(workspace, cancellationToken);
+    }
+
     public Task<Workspace?> GetByIdAsync(
         Guid workspaceId,
         CancellationToken cancellationToken) =>

@@ -19,6 +19,13 @@ internal static class WorkspaceEndpoints
             ApiResult.From(await handler.HandleAsync(
                 new GetMyWorkspacesQuery(),
                 cancellationToken)));
+        group.MapPost("/", async (
+            CreateWorkspaceRequest request,
+            CreateWorkspaceHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new CreateWorkspaceCommand(request.Name),
+                cancellationToken)));
         group.MapGet("/{workspaceId:guid}/members", async (
             Guid workspaceId,
             GetWorkspaceMembersHandler handler,
@@ -85,3 +92,5 @@ public sealed record CreateWorkspaceProjectRequest(
     string Name,
     string? Description = null,
     DateOnly? TargetDate = null);
+
+public sealed record CreateWorkspaceRequest(string Name);

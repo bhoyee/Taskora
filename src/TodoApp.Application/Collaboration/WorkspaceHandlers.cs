@@ -2,6 +2,7 @@ using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Common;
+using TodoApp.Domain.Projects;
 
 namespace TodoApp.Application.Collaboration;
 
@@ -36,6 +37,55 @@ public sealed class GetMyWorkspacesHandler(
             "identity.unauthorized",
             "Authentication is required.",
             ErrorType.Unauthorized));
+}
+
+public sealed class CreateWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IProjectRepository projects,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<WorkspaceDto>> HandleAsync(
+        CreateWorkspaceCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return GetMyWorkspacesHandler.Unauthorized<WorkspaceDto>();
+        }
+
+        try
+        {
+            var workspace = Workspace.Create(
+                identifiers.NewId(),
+                command.Name,
+                currentUser.UserId);
+            var project = Project.Create(
+                identifiers.NewId(),
+                "My task project",
+                "Starter project created for this workspace.",
+                workspace.Id);
+
+            await workspaces.AddAsync(workspace, cancellationToken);
+            await projects.AddAsync(project, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<WorkspaceDto>.Success(
+                new WorkspaceDto(
+                    workspace.Id,
+                    workspace.Name,
+                    WorkspaceRole.Owner));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Result<WorkspaceDto>.Failure(
+                new ApplicationError(
+                    "workspace.validation",
+                    exception.Message,
+                    ErrorType.Validation));
+        }
+    }
 }
 
 public sealed class GetWorkspaceMembersHandler(
