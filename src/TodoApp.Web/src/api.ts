@@ -98,6 +98,12 @@ export interface AccountSession {
   accessToken: string
 }
 
+export interface AccountProfile {
+  userId: string
+  displayName: string
+  email: string
+}
+
 export interface TaskActivity {
   sequence: number
   taskId: string
@@ -210,12 +216,18 @@ export const api = {
     ),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
-  createWorkspaceProject: (workspaceId: string, name: string) =>
+  createWorkspaceProject: (
+    workspaceId: string,
+    name: string,
+    description = 'Starter project created for this workspace.',
+    targetDate = '',
+  ) =>
     request<ProjectDetails>(`/api/v1/workspaces/${workspaceId}/projects`, {
       method: 'POST',
       body: JSON.stringify({
         name,
-        description: 'Starter project created for this workspace.',
+        description: description || null,
+        targetDate: targetDate || null,
       }),
     }),
   project: (projectId = developmentProjectId) =>
@@ -300,6 +312,17 @@ export const api = {
     request<AccountSession>('/api/v1/account/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+  me: () => request<AccountProfile>('/api/v1/account/me'),
+  updateProfile: (email: string) =>
+    request<AccountProfile>('/api/v1/account/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ email }),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<boolean>('/api/v1/account/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
   register: (
     displayName: string,
