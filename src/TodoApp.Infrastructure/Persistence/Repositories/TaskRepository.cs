@@ -39,6 +39,14 @@ public sealed class TaskRepository(TodoAppDbContext context)
                 task => task.ProjectId == criteria.ProjectId.Value);
         }
 
+        if (criteria.WorkspaceId.HasValue)
+        {
+            query = query.Where(task =>
+                context.Projects.Any(project =>
+                    project.Id == task.ProjectId &&
+                    project.WorkspaceId == criteria.WorkspaceId.Value));
+        }
+
         if (criteria.Status.HasValue)
         {
             query = query.Where(

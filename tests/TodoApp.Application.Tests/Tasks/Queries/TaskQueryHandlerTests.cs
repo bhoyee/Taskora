@@ -24,6 +24,7 @@ public sealed class TaskQueryHandlerTests
         var handler = new SearchTasksHandler(repository, new StubClock(Now));
         var query = new SearchTasksQuery(
             ProjectId,
+            null,
             TaskItemStatus.InProgress,
             IsBlocked: false,
             Search: "release",
@@ -57,6 +58,7 @@ public sealed class TaskQueryHandlerTests
                 Assert.Null(item.PriorityScore);
             });
         Assert.Equal(ProjectId, repository.ReceivedCriteria?.ProjectId);
+        Assert.Null(repository.ReceivedCriteria?.WorkspaceId);
         Assert.Equal("release", repository.ReceivedCriteria?.Search);
         Assert.Equal(cancellation.Token, repository.ReceivedCancellationToken);
     }

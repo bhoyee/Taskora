@@ -23,6 +23,7 @@ public sealed class SearchTasksHandler(
 
         var criteria = new TaskSearchCriteria(
             query.ProjectId,
+            query.WorkspaceId,
             query.Status,
             query.IsBlocked,
             query.CategoryId,

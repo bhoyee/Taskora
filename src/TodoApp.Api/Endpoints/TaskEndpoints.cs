@@ -119,6 +119,7 @@ internal static class TaskEndpoints
 
     private static async Task<IResult> SearchTasksAsync(
         Guid? projectId,
+        Guid? workspaceId,
         TaskItemStatus? status,
         bool? isBlocked,
         Guid? categoryId,
@@ -132,6 +133,7 @@ internal static class TaskEndpoints
         ApiResult.From(await handler.HandleAsync(
             new SearchTasksQuery(
                 projectId,
+                workspaceId,
                 status,
                 isBlocked,
                 categoryId,

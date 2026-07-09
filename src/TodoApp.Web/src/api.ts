@@ -125,9 +125,12 @@ export const api = {
   workspaces: () => request<Workspace[]>('/api/v1/workspaces'),
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
-  dashboard: (projectId?: string) =>
+  dashboard: (workspaceId?: string, projectId?: string) =>
     request<Dashboard>(
-      `/api/v1/dashboard${projectId ? `?projectId=${projectId}` : ''}`,
+      `/api/v1/dashboard?${new URLSearchParams({
+        ...(workspaceId ? { workspaceId } : {}),
+        ...(projectId ? { projectId } : {}),
+      })}`,
     ),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
@@ -141,9 +144,21 @@ export const api = {
     }),
   project: (projectId = developmentProjectId) =>
     request<ProjectDetails>(`/api/v1/projects/${projectId}`),
-  tasks: (projectId = developmentProjectId, search = '', pageNumber = 1, pageSize = 10) =>
+  tasks: (
+    workspaceId: string,
+    search = '',
+    pageNumber = 1,
+    pageSize = 10,
+    projectId?: string,
+  ) =>
     request<TaskPage>(
-      `/api/v1/tasks?projectId=${projectId}&search=${encodeURIComponent(search)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+      `/api/v1/tasks?${new URLSearchParams({
+        workspaceId,
+        ...(projectId ? { projectId } : {}),
+        search,
+        pageNumber: String(pageNumber),
+        pageSize: String(pageSize),
+      })}`,
     ),
   createTask: (projectId: string, title: string, dueDate: string, effort: number) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {

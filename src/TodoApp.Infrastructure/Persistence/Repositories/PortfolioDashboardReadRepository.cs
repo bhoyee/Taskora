@@ -10,18 +10,33 @@ public sealed class PortfolioDashboardReadRepository(
     : IPortfolioDashboardReadRepository
 {
     public async Task<PortfolioDashboardSnapshot> GetAsync(
+        Guid? workspaceId,
         Guid? projectId,
         CancellationToken cancellationToken)
     {
         var active = context.Tasks
             .AsNoTracking()
             .Where(task => task.Status != TaskItemStatus.Completed);
+        if (workspaceId.HasValue)
+        {
+            active = active.Where(task =>
+                context.Projects.Any(project =>
+                    project.Id == task.ProjectId &&
+                    project.WorkspaceId == workspaceId.Value));
+        }
+
         if (projectId.HasValue)
         {
             active = active.Where(task => task.ProjectId == projectId.Value);
         }
 
         var projects = context.Projects.AsNoTracking();
+        if (workspaceId.HasValue)
+        {
+            projects = projects.Where(
+                project => project.WorkspaceId == workspaceId.Value);
+        }
+
         if (projectId.HasValue)
         {
             projects = projects.Where(project => project.Id == projectId.Value);
@@ -45,6 +60,14 @@ public sealed class PortfolioDashboardReadRepository(
         var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
         var dueTasks = context.Tasks.AsNoTracking()
             .Where(task => task.DueDate != null);
+        if (workspaceId.HasValue)
+        {
+            dueTasks = dueTasks.Where(task =>
+                context.Projects.Any(project =>
+                    project.Id == task.ProjectId &&
+                    project.WorkspaceId == workspaceId.Value));
+        }
+
         if (projectId.HasValue)
         {
             dueTasks = dueTasks.Where(task => task.ProjectId == projectId.Value);
