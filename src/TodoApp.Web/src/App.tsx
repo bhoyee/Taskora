@@ -9,12 +9,12 @@ import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
   Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
   Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
-  Tags, UserRound, X,
+  Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
 import type {
   AccountSession, Dashboard, ProjectCategory, ProjectDetails, TaskActivity, TaskItem,
-  TaskStatus, Workspace, WorkspaceMember,
+  TaskStatus, Workspace, WorkspaceInvitation, WorkspaceMember,
 } from './api'
 import './styles.css'
 
@@ -93,9 +93,13 @@ export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
   const [dashboard, setDashboard] = useState(emptyDashboard)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
+    localStorage.getItem('todoapp_workspace_id') ?? '')
   const [project, setProject] = useState<ProjectDetails | null>(null)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
   const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
@@ -117,23 +121,33 @@ export default function App() {
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
+  const inviteToken = inviteTokenFromPath()
 
   const load = async () => {
     try {
       setLoading(true)
       setError('')
       const available = await api.workspaces()
-      const selected = available[0]
+      setWorkspaces(available)
+      const selected = available.find((item) => item.id === selectedWorkspaceId) ?? available[0]
       if (!selected) throw new Error('No workspace membership was found.')
+      if (selected.id !== selectedWorkspaceId) {
+        setSelectedWorkspaceId(selected.id)
+        localStorage.setItem('todoapp_workspace_id', selected.id)
+      }
       const projects = await api.projects(selected.id)
       const selectedProject = projects[0] ??
         await api.createWorkspaceProject(selected.id, 'My task project')
-      const [summary, page, workspaceMembers] = await Promise.all([
-        api.dashboard(selected.id), api.tasks(selected.id, search, pageNumber, pageSize), api.members(selected.id),
+      const [summary, page, workspaceMembers, workspaceInvitations] = await Promise.all([
+        api.dashboard(selected.id),
+        api.tasks(selected.id, search, pageNumber, pageSize),
+        api.members(selected.id),
+        selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
       ])
       setWorkspace(selected)
       setProject(selectedProject)
       setMembers(workspaceMembers)
+      setInvitations(workspaceInvitations)
       setCategories((projects.length ? projects : [selectedProject])
         .flatMap((item) => item.categories))
       setDashboard(summary)
@@ -151,7 +165,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -194,6 +208,21 @@ export default function App() {
     window.location.hash = next
     setNavOpen(false)
   }
+  const switchWorkspace = (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId)
+    localStorage.setItem('todoapp_workspace_id', workspaceId)
+    setPageNumber(1)
+  }
+  const createWorkspace = async (name: string) => {
+    const created = await api.createWorkspace(name)
+    setWorkspaces((items) => [...items.filter((item) => item.id !== created.id), created])
+    setWorkspace(created)
+    setTasks([])
+    setDashboard(emptyDashboard)
+    setSelectedWorkspaceId(created.id)
+    localStorage.setItem('todoapp_workspace_id', created.id)
+    setNotice(`Workspace ${created.name} created.`)
+  }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
     if (!transition) return
@@ -214,6 +243,10 @@ export default function App() {
     } catch {
       setSelectedTask(task)
     }
+  }
+
+  if (inviteToken) {
+    return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
   }
 
   if (loggedOut || (!import.meta.env.DEV && !localStorage.getItem('todoapp_access_token'))) {
@@ -241,6 +274,12 @@ export default function App() {
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
           <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
+            onSwitch={switchWorkspace}
+            onCreate={(name) => void createWorkspace(name)}
+          />
           {view === 'workspace' && <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>}
         </header>
 
@@ -278,7 +317,31 @@ export default function App() {
           </section>
         </>}
         {view === 'activity' && <ActivityPage activity={activity} tasks={tasks} loading={loading} />}
-        {view === 'settings' && <SettingsPage settings={settings} onSave={(next) => {
+        {view === 'settings' && <SettingsPage
+          settings={settings}
+          workspace={workspace}
+          members={members}
+          invitations={invitations}
+          currentUserId={account?.userId}
+          onMemberRemoved={async (userId) => {
+            if (!workspace) return
+            await api.removeMember(workspace.id, userId)
+            setNotice('Workspace member removed.')
+            await load()
+          }}
+          onInvited={async (fullName, email, role) => {
+            if (!workspace) return
+            const invitation = await api.inviteMember(workspace.id, fullName, email, role)
+            setNotice(`Invite created for ${invitation.email}.`)
+            await load()
+          }}
+          onInvitationCancelled={async (invitationId) => {
+            if (!workspace) return
+            await api.cancelInvitation(workspace.id, invitationId)
+            setNotice('Workspace invitation cancelled.')
+            await load()
+          }}
+          onSave={(next) => {
           setSettings(next)
           localStorage.setItem('todoapp_settings', JSON.stringify(next))
           setNotice('Settings saved.')
@@ -311,6 +374,11 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'U'
+}
+
+function inviteTokenFromPath() {
+  const match = window.location.pathname.match(/^\/invite\/([^/]+)$/i)
+  return match ? decodeURIComponent(match[1]) : ''
 }
 
 function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
@@ -362,6 +430,129 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSessi
       </form>
     </section>
   </main>
+}
+
+function InvitationPage({
+  token,
+  onAuthenticated,
+}: {
+  token: string
+  onAuthenticated: (session: AccountSession) => void
+}) {
+  const [invitation, setInvitation] = useState<WorkspaceInvitation | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [declined, setDeclined] = useState(false)
+
+  useEffect(() => {
+    api.invitation(token)
+      .then(setInvitation)
+      .catch((reason) => setError(
+        reason instanceof Error ? reason.message : 'Invitation could not be loaded.'))
+  }, [token])
+
+  const accept = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    try {
+      await api.acceptInvitation(
+        token,
+        String(data.get('displayName')),
+        String(data.get('password')),
+      )
+      const session = await api.login(
+        invitation?.email ?? String(data.get('email')),
+        String(data.get('password')),
+      )
+      window.history.replaceState(null, '', '/')
+      onAuthenticated(session)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be accepted.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const decline = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.declineInvitation(token)
+      setDeclined(true)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be declined.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-shell">
+    <section className="auth-panel">
+      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      {declined ? <>
+        <div><p className="eyebrow">Workspace invitation</p><h1>Invitation declined</h1></div>
+        <p className="muted">The workspace owner can send a new invitation later.</p>
+      </> : <>
+        <div>
+          <p className="eyebrow">Workspace invitation</p>
+          <h1>{invitation ? invitation.workspaceName : 'Loading invitation'}</h1>
+        </div>
+        {invitation && <p className="muted">{invitation.fullName} was invited as {invitation.role}. This invite expires {new Date(invitation.expiresAt).toLocaleDateString()}.</p>}
+        <form className="auth-form" onSubmit={(event) => void accept(event)}>
+          <label>Display name<input name="displayName" required maxLength={120} defaultValue={invitation?.fullName ?? ''} /></label>
+          <label>Email<input name="email" type="email" required readOnly value={invitation?.email ?? ''} /></label>
+          <label>Password<input name="password" type="password" required minLength={8} autoComplete="new-password" /></label>
+          {error && <p className="field-error">{error}</p>}
+          <footer className="invite-actions">
+            <button type="button" className="secondary" disabled={busy || !invitation} onClick={() => void decline()}>Decline</button>
+            <button className="primary" disabled={busy || !invitation}>{busy ? 'Working...' : 'Accept invitation'}</button>
+          </footer>
+        </form>
+      </>}
+    </section>
+  </main>
+}
+
+function WorkspaceSwitcher({
+  workspaces,
+  selectedWorkspaceId,
+  onSwitch,
+  onCreate,
+}: {
+  workspaces: Workspace[]
+  selectedWorkspaceId: string
+  onSwitch: (workspaceId: string) => void
+  onCreate: (name: string) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+
+  if (creating) {
+    return <form className="workspace-create" onSubmit={(event) => {
+      event.preventDefault()
+      if (!name.trim()) return
+      onCreate(name.trim())
+      setName('')
+      setCreating(false)
+    }}>
+      <input aria-label="Workspace name" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} autoFocus />
+      <button className="primary"><Plus size={16} /> Create</button>
+      <button type="button" className="secondary" onClick={() => setCreating(false)}>Cancel</button>
+    </form>
+  }
+
+  return <div className="workspace-switcher">
+    <label>
+      <span>Workspace</span>
+      <select value={selectedWorkspaceId} onChange={(event) => onSwitch(event.target.value)}>
+        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name} ({item.role})</option>)}
+      </select>
+      <ChevronDown />
+    </label>
+    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New</button>
+  </div>
 }
 
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
@@ -447,16 +638,52 @@ function Pagination({
 
 function SettingsPage({
   settings,
+  workspace,
+  members,
+  invitations,
+  currentUserId,
+  onMemberRemoved,
+  onInvited,
+  onInvitationCancelled,
   onSave,
 }: {
   settings: UserSettings
+  workspace: Workspace | null
+  members: WorkspaceMember[]
+  invitations: WorkspaceInvitation[]
+  currentUserId?: string
+  onMemberRemoved: (userId: string) => Promise<void>
+  onInvited: (fullName: string, email: string, role: 'Manager' | 'Member') => Promise<void>
+  onInvitationCancelled: (invitationId: string) => Promise<void>
   onSave: (settings: UserSettings) => void
 }) {
   const [draft, setDraft] = useState(settings)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   useEffect(() => setDraft(settings), [settings])
+  const canManage = workspace?.role === 'Owner'
 
-  return <section className="panel-page settings-page">
-    <form className="settings-form" onSubmit={(event) => {
+  const invite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    try {
+      await onInvited(
+        String(data.get('fullName')),
+        String(data.get('email')),
+        String(data.get('role')) as 'Manager' | 'Member',
+      )
+      event.currentTarget.reset()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be created.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="settings-grid">
+    <form className="panel-page settings-form" onSubmit={(event) => {
       event.preventDefault()
       onSave(draft)
     }}>
@@ -471,6 +698,55 @@ function SettingsPage({
       <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
       <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
     </form>
+
+    <section className="panel-page member-admin">
+      <div className="settings-section compact-heading">
+        <div>
+          <h2>Members</h2>
+          <p>{workspace ? `${workspace.name} access and roles.` : 'Workspace access and roles.'}</p>
+        </div>
+      </div>
+      <div className="member-list">
+        {members.map((member) => <article className="member-row" key={member.userId}>
+          <span className="avatar">{initials(member.displayName)}</span>
+          <div><strong>{member.displayName}</strong><small>{member.email}</small></div>
+          <span className={`role-pill ${member.role.toLowerCase()}`}>{member.role}</span>
+          {canManage && member.role !== 'Owner' && member.userId !== currentUserId &&
+            <button className="icon-button danger-action" disabled={busy} onClick={() => {
+              setBusy(true)
+              onMemberRemoved(member.userId).finally(() => setBusy(false))
+            }} aria-label={`Remove ${member.displayName}`} title="Remove member"><Trash2 /></button>}
+        </article>)}
+      </div>
+      {!canManage && <p className="muted">Only the workspace owner can invite or remove members.</p>}
+    </section>
+
+    {canManage && <section className="panel-page invite-admin">
+      <div className="settings-section compact-heading">
+        <div>
+          <h2>Invite people</h2>
+          <p>Create one-time invitation links for new or existing users.</p>
+        </div>
+      </div>
+      <form className="invite-form" onSubmit={(event) => void invite(event)}>
+        <label>Full name<input name="fullName" required maxLength={120} /></label>
+        <label>Email<input name="email" type="email" required maxLength={180} /></label>
+        <label>Role<select name="role" defaultValue="Member"><option value="Member">Member</option><option value="Manager">Manager</option></select><ChevronDown /></label>
+        {error && <p className="field-error">{error}</p>}
+        <footer><button className="primary" disabled={busy}><UserPlus size={16} /> Send invite</button></footer>
+      </form>
+      <div className="invitation-list">
+        {invitations.map((invitation) => <article className="invitation-row" key={invitation.id}>
+          <div><strong>{invitation.fullName}</strong><small>{invitation.email} - {invitation.status}</small></div>
+          <code>{invitation.inviteLink ?? 'No active link'}</code>
+          {invitation.status === 'Pending' && <button className="secondary" disabled={busy} onClick={() => {
+            setBusy(true)
+            onInvitationCancelled(invitation.id).finally(() => setBusy(false))
+          }}>Cancel</button>}
+        </article>)}
+        {!invitations.length && <p className="muted">No pending invitations for this workspace.</p>}
+      </div>
+    </section>}
   </section>
 }
 
