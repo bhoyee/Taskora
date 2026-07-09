@@ -83,6 +83,64 @@ internal static class WorkspaceEndpoints
             ApiResult.From(await handler.HandleAsync(
                 new RemoveWorkspaceMemberCommand(workspaceId, userId),
                 cancellationToken)));
+        group.MapGet("/{workspaceId:guid}/invitations", async (
+            Guid workspaceId,
+            GetWorkspaceInvitationsHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new GetWorkspaceInvitationsQuery(workspaceId),
+                cancellationToken)));
+        group.MapPost("/{workspaceId:guid}/invitations", async (
+            Guid workspaceId,
+            InviteWorkspaceMemberRequest request,
+            InviteWorkspaceMemberHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new InviteWorkspaceMemberCommand(
+                    workspaceId,
+                    request.FullName,
+                    request.Email,
+                    request.Role),
+                cancellationToken)));
+        group.MapDelete("/{workspaceId:guid}/invitations/{invitationId:guid}", async (
+            Guid workspaceId,
+            Guid invitationId,
+            CancelWorkspaceInvitationHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new CancelWorkspaceInvitationCommand(
+                    workspaceId,
+                    invitationId),
+                cancellationToken)));
+
+        var invitations = endpoints.MapGroup("/api/v1/invitations")
+            .WithTags("Workspace Invitations");
+
+        invitations.MapGet("/{token}", async (
+            string token,
+            GetWorkspaceInvitationByTokenHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new GetWorkspaceInvitationByTokenQuery(token),
+                cancellationToken)));
+        invitations.MapPost("/{token}/accept", async (
+            string token,
+            AcceptWorkspaceInvitationRequest request,
+            AcceptWorkspaceInvitationHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new AcceptWorkspaceInvitationCommand(
+                    token,
+                    request.DisplayName,
+                    request.Password),
+                cancellationToken)));
+        invitations.MapPost("/{token}/decline", async (
+            string token,
+            DeclineWorkspaceInvitationHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new DeclineWorkspaceInvitationCommand(token),
+                cancellationToken)));
 
         return endpoints;
     }
@@ -94,3 +152,12 @@ public sealed record CreateWorkspaceProjectRequest(
     DateOnly? TargetDate = null);
 
 public sealed record CreateWorkspaceRequest(string Name);
+
+public sealed record InviteWorkspaceMemberRequest(
+    string FullName,
+    string Email,
+    TodoApp.Domain.Collaboration.WorkspaceRole Role);
+
+public sealed record AcceptWorkspaceInvitationRequest(
+    string? DisplayName,
+    string? Password);

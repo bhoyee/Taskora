@@ -56,6 +56,42 @@ public sealed class UserProfileRepository(TodoAppDbContext context)
             .ToArrayAsync(cancellationToken);
 }
 
+public sealed class WorkspaceInvitationRepository(TodoAppDbContext context)
+    : IWorkspaceInvitationRepository
+{
+    public async Task AddAsync(
+        WorkspaceInvitation invitation,
+        CancellationToken cancellationToken)
+    {
+        await context.WorkspaceInvitations.AddAsync(
+            invitation,
+            cancellationToken);
+    }
+
+    public Task<WorkspaceInvitation?> GetByTokenAsync(
+        string token,
+        CancellationToken cancellationToken) =>
+        context.WorkspaceInvitations.SingleOrDefaultAsync(
+            invitation => invitation.Token == token,
+            cancellationToken);
+
+    public Task<WorkspaceInvitation?> GetByIdAsync(
+        Guid invitationId,
+        CancellationToken cancellationToken) =>
+        context.WorkspaceInvitations.SingleOrDefaultAsync(
+            invitation => invitation.Id == invitationId,
+            cancellationToken);
+
+    public async Task<IReadOnlyList<WorkspaceInvitation>> ListForWorkspaceAsync(
+        Guid workspaceId,
+        CancellationToken cancellationToken) =>
+        await context.WorkspaceInvitations
+            .AsNoTracking()
+            .Where(invitation => invitation.WorkspaceId == workspaceId)
+            .OrderByDescending(invitation => invitation.CreatedAt)
+            .ToArrayAsync(cancellationToken);
+}
+
 public sealed class AccountRepository(TodoAppDbContext context)
     : IAccountRepository
 {
@@ -94,6 +130,17 @@ public sealed class AccountRepository(TodoAppDbContext context)
     {
         await context.UserProfiles.AddAsync(user, cancellationToken);
         await context.Workspaces.AddAsync(workspace, cancellationToken);
+        await context.UserCredentials.AddAsync(
+            new UserCredential(user.Id, passwordHash),
+            cancellationToken);
+    }
+
+    public async Task AddUserAsync(
+        UserProfile user,
+        string passwordHash,
+        CancellationToken cancellationToken)
+    {
+        await context.UserProfiles.AddAsync(user, cancellationToken);
         await context.UserCredentials.AddAsync(
             new UserCredential(user.Id, passwordHash),
             cancellationToken);

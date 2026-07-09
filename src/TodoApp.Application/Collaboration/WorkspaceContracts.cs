@@ -22,6 +22,27 @@ public sealed record RemoveWorkspaceMemberCommand(
     Guid WorkspaceId,
     Guid UserId);
 
+public sealed record InviteWorkspaceMemberCommand(
+    Guid WorkspaceId,
+    string FullName,
+    string Email,
+    WorkspaceRole Role);
+
+public sealed record GetWorkspaceInvitationsQuery(Guid WorkspaceId);
+
+public sealed record GetWorkspaceInvitationByTokenQuery(string Token);
+
+public sealed record AcceptWorkspaceInvitationCommand(
+    string Token,
+    string? DisplayName,
+    string? Password);
+
+public sealed record DeclineWorkspaceInvitationCommand(string Token);
+
+public sealed record CancelWorkspaceInvitationCommand(
+    Guid WorkspaceId,
+    Guid InvitationId);
+
 public sealed record WorkspaceDto(
     Guid Id,
     string Name,
@@ -32,3 +53,15 @@ public sealed record WorkspaceMemberDto(
     string DisplayName,
     string Email,
     WorkspaceRole Role);
+
+public sealed record WorkspaceInvitationDto(
+    Guid Id,
+    Guid WorkspaceId,
+    string WorkspaceName,
+    string FullName,
+    string Email,
+    WorkspaceRole Role,
+    WorkspaceInvitationStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt,
+    string? InviteLink);
