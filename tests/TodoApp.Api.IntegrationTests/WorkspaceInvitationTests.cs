@@ -23,6 +23,12 @@ public sealed class WorkspaceInvitationTests(ApiFactory factory)
 
         var invitation = await InviteAsync(owner, email);
         var token = ExtractToken(invitation.GetProperty("inviteLink").GetString());
+        var invitations = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/workspaces/{WorkspaceId}/invitations");
+
+        Assert.Contains(
+            invitations.EnumerateArray(),
+            item => item.GetProperty("email").GetString() == email);
 
         using var anonymous = CreateAnonymousClient();
         var publicInvitation = await anonymous.GetFromJsonAsync<JsonElement>(

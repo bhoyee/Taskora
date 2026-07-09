@@ -84,12 +84,17 @@ public sealed class WorkspaceInvitationRepository(TodoAppDbContext context)
 
     public async Task<IReadOnlyList<WorkspaceInvitation>> ListForWorkspaceAsync(
         Guid workspaceId,
-        CancellationToken cancellationToken) =>
-        await context.WorkspaceInvitations
+        CancellationToken cancellationToken)
+    {
+        var invitations = await context.WorkspaceInvitations
             .AsNoTracking()
             .Where(invitation => invitation.WorkspaceId == workspaceId)
-            .OrderByDescending(invitation => invitation.CreatedAt)
             .ToArrayAsync(cancellationToken);
+
+        return invitations
+            .OrderByDescending(invitation => invitation.CreatedAt)
+            .ToArray();
+    }
 }
 
 public sealed class AccountRepository(TodoAppDbContext context)
