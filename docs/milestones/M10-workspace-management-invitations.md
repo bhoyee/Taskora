@@ -2,13 +2,17 @@
 
 ## Status
 
-In progress
+Complete
 
 ## Objective
 
 Support a professional multi-workspace collaboration model where users can
 create workspaces, invite anyone by email, accept or decline invitations, and
 only access workspace data where they are a member.
+
+Invitation delivery is implemented as a secure, one-time link in the
+application. SMTP or an external email provider can send that link in a hosted
+environment without changing the invite acceptance model.
 
 ## User Stories
 
@@ -19,7 +23,8 @@ only access workspace data where they are a member.
   link.
 - As an invited person without an account, I can set my password during invite
   acceptance.
-- As a workspace owner, I can view, resend, cancel, change, and remove members.
+- As a workspace owner, I can view invitations, cancel invitations, change
+  member roles, and remove members.
 - As a removed member, I can no longer see dashboard, board, list, members,
   projects, or other workspace data.
 - As a user in multiple workspaces, I can switch workspace and see cards,
@@ -29,12 +34,12 @@ only access workspace data where they are a member.
 
 - Add workspace creation use case and endpoint.
 - Add workspace invitation domain/persistence model.
-- Add invitation create, list, accept, decline, resend, and cancel use cases.
+- Add invitation create, list, accept, decline, and cancel use cases.
 - Add account creation during invitation acceptance for unknown emails.
-- Add development email outbox abstraction for invite links.
+- Expose invite links for development and portfolio demonstration.
 - Add workspace switcher and selected-workspace persistence in React.
 - Add member management UI with role change and removal.
-- Add pending invitations UI with resend/cancel actions.
+- Add pending invitations UI with visible invite links and cancel actions.
 - Scope cards, board, list, members, projects, and task creation by selected
   workspace.
 
@@ -73,8 +78,9 @@ only access workspace data where they are a member.
 
 1. `docs: define workspace management invitation milestone`
 2. `feat: add workspace creation use case`
-3. `feat: model workspace invitations`
-4. `feat: add invitation APIs`
-5. `test: cover workspace invitation access rules`
-6. `feat: add workspace switcher and member management UI`
-7. `docs: complete workspace management invitation milestone`
+3. `feat: add workspace invitation workflow`
+4. `test: cover workspace invitations and access removal`
+5. `feat: add workspace switcher and invite management UI`
+6. `feat: manage workspace member roles`
+7. `test: keep workspace member assertions isolated`
+8. `docs: complete workspace management invitation milestone`
