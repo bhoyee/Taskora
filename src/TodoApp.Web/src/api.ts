@@ -124,9 +124,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   })
-  if (!response.ok) throw new Error('The workspace could not be loaded.')
-
   const contentType = response.headers.get('content-type')
+  if (!response.ok) {
+    if (contentType?.includes('application/json')) {
+      const problem = await response.json().catch(() => null) as {
+        title?: string
+        detail?: string
+      } | null
+      throw new Error(
+        problem?.detail ??
+        problem?.title ??
+        `The API returned ${response.status}.`)
+    }
+
+    if (response.status === 401) {
+      throw new Error('Your session is no longer valid. Reset the session or sign in again.')
+    }
+
+    throw new Error(`The API returned ${response.status}. Check that the API server is running.`)
+  }
+
   if (!contentType?.includes('application/json')) {
     throw new Error('The API returned an unexpected response. Check that the API server is running.')
   }

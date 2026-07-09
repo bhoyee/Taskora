@@ -185,6 +185,17 @@ export default function App() {
     window.location.hash = 'workspace'
     setNavOpen(false)
   }
+  const resetSession = () => {
+    localStorage.removeItem('todoapp_access_token')
+    localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_workspace_id')
+    localStorage.removeItem('todoapp_logged_out')
+    setAccount(null)
+    setLoggedOut(false)
+    setSelectedWorkspaceId('')
+    setNotice('Local browser session reset.')
+    void load()
+  }
   const authenticated = (session: AccountSession) => {
     localStorage.setItem('todoapp_access_token', session.accessToken)
     localStorage.setItem('todoapp_account', JSON.stringify(session))
@@ -284,7 +295,7 @@ export default function App() {
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
-        {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button></div>}
+        {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button><button onClick={resetSession}>Reset session</button></div>}
 
         {view === 'workspace' && <>
           <section className="metrics" aria-label="Portfolio health">
