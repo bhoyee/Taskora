@@ -12,6 +12,28 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
+    public async Task Seeded_development_owner_can_login()
+    {
+        var login = await _client.PostAsJsonAsync(
+            "/api/v1/account/login",
+            new
+            {
+                email = "jadesola@example.com",
+                password = "Portfolio123!"
+            });
+
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = await login.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(
+            "jadesola@example.com",
+            session.GetProperty("email").GetString());
+        Assert.Equal(
+            "30000000-0000-0000-0000-000000000001",
+            session.GetProperty("accessToken").GetString());
+    }
+
+    [Fact]
     public async Task Account_can_register_and_login_with_bearer_token()
     {
         var email = $"owner-{Guid.NewGuid():N}@example.com";
