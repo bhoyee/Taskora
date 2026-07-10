@@ -82,7 +82,7 @@ const projectDetails = {
   id: '10000000-0000-0000-0000-000000000001',
   name: 'Portfolio launch',
   description: null as string | null,
-  targetDate: null,
+  targetDate: '2026-08-30',
   isArchived: false,
   archivedAt: null,
   categories: [{
@@ -102,7 +102,14 @@ const createdProjectDetails = {
   id: 'project-3',
   name: 'Client onboarding',
   description: 'New project for onboarding work.',
+  targetDate: '2026-09-15',
   categories: [],
+}
+const updatedProjectDetails = {
+  ...projectDetails,
+  name: 'Portfolio delivery',
+  description: 'Updated delivery scope.',
+  targetDate: '2026-09-20',
 }
 const members = [{
   userId: 'user-1',
@@ -249,6 +256,17 @@ function mockWorkspaceManagementApi() {
       if (url.includes('/workspaces/workspace-1/projects') && method === 'POST') {
         currentProjects = [...currentProjects, createdProjectDetails]
         return jsonResponse(createdProjectDetails)
+      }
+
+      if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001') && method === 'PUT') {
+        currentProjects = currentProjects.map((project) =>
+          project.id === projectDetails.id ? updatedProjectDetails : project)
+        return jsonResponse(updatedProjectDetails)
+      }
+
+      if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001/archive') && method === 'POST') {
+        currentProjects = currentProjects.filter((project) => project.id !== projectDetails.id)
+        return jsonResponse({ ...projectDetails, isArchived: true, archivedAt: '2026-07-10T09:00:00Z' })
       }
 
       if (url.includes('/workspaces/workspace-1/projects')) {
@@ -421,10 +439,36 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /new project/i }))
     await user.type(screen.getByLabelText('Project name'), 'Client onboarding')
     await user.type(screen.getByLabelText('Description'), 'New project for onboarding work.')
+    await user.type(screen.getByLabelText('Delivery date'), '2026-09-15')
     await user.click(screen.getByRole('button', { name: /create project/i }))
 
     expect(await screen.findByText('Project Client onboarding created.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Client onboarding')).toBeInTheDocument()
+  })
+
+  it('edits and archives a project from the project bar', async () => {
+    mockWorkspaceManagementApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    expect(screen.getByText(/Delivery date:/)).toBeInTheDocument()
+    expect(screen.getByText(/days left|overdue|Due today/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^edit$/i }))
+    await user.clear(screen.getByLabelText('Project name'))
+    await user.type(screen.getByLabelText('Project name'), 'Portfolio delivery')
+    await user.clear(screen.getByLabelText('Description'))
+    await user.type(screen.getByLabelText('Description'), 'Updated delivery scope.')
+    await user.clear(screen.getByLabelText('Delivery date'))
+    await user.type(screen.getByLabelText('Delivery date'), '2026-09-20')
+    await user.click(screen.getByRole('button', { name: /save project/i }))
+
+    expect(await screen.findByText('Project Portfolio delivery updated.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portfolio delivery' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /archive/i }))
+    expect(await screen.findByText('Project Portfolio launch archived.')).toBeInTheDocument()
   })
 
   it('hides project creation and disables tasks for member workspaces with no project', async () => {

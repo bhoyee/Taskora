@@ -254,7 +254,7 @@ export default function App() {
   const createProject = async (
     name: string,
     description: string,
-    targetDate: string,
+    deliveryDate: string,
   ) => {
     if (!workspace) return
     try {
@@ -263,7 +263,7 @@ export default function App() {
         workspace.id,
         name,
         description,
-        targetDate,
+        deliveryDate,
       )
       setProjects((items) => [...items, created]
         .sort((left, right) => left.name.localeCompare(right.name)))
@@ -274,6 +274,56 @@ export default function App() {
       setNotice(`Project ${created.name} created.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Project could not be created.')
+      throw reason
+    }
+  }
+  const updateProject = async (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => {
+    try {
+      setError('')
+      const updated = await api.updateProject(
+        projectId,
+        name,
+        description,
+        deliveryDate,
+      )
+      setProjects((items) => items.map((item) =>
+        item.id === updated.id ? updated : item)
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setProject(updated)
+      setCategories((items) => [
+        ...items.filter((category) => category.projectId !== updated.id),
+        ...updated.categories,
+      ].sort((left, right) => left.name.localeCompare(right.name)))
+      setNotice(`Project ${updated.name} updated.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be updated.')
+      throw reason
+    }
+  }
+  const archiveProject = async (projectId: string) => {
+    try {
+      setError('')
+      const archived = await api.archiveProject(projectId)
+      const remaining = projects.filter((item) => item.id !== projectId)
+      setProjects(remaining)
+      const next = remaining[0] ?? null
+      setProject(next)
+      setSelectedProjectId(next?.id ?? '')
+      if (next) {
+        localStorage.setItem('todoapp_project_id', next.id)
+      } else {
+        localStorage.removeItem('todoapp_project_id')
+      }
+      setPageNumber(1)
+      setNotice(`Project ${archived.name} archived.`)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be archived.')
       throw reason
     }
   }
@@ -384,6 +434,8 @@ export default function App() {
             workspaceRole={workspace?.role ?? null}
             onSwitch={switchProject}
             onCreate={createProject}
+            onUpdate={updateProject}
+            onArchive={archiveProject}
           />
 
           <section className="work-area">
@@ -690,6 +742,8 @@ function ProjectBar({
   workspaceRole,
   onSwitch,
   onCreate,
+  onUpdate,
+  onArchive,
 }: {
   projects: ProjectDetails[]
   selectedProjectId: string
@@ -698,13 +752,23 @@ function ProjectBar({
   onCreate: (
     name: string,
     description: string,
-    targetDate: string,
+    deliveryDate: string,
   ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
 }) {
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
+  const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
 
   if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
@@ -716,7 +780,7 @@ function ProjectBar({
       onCreate(
         String(data.get('name')),
         String(data.get('description')),
-        String(data.get('targetDate')),
+        String(data.get('deliveryDate')),
       )
         .then(() => {
           form.reset()
@@ -728,7 +792,7 @@ function ProjectBar({
     }}>
       <label>Project name<input name="name" required maxLength={160} autoFocus /></label>
       <label>Description<input name="description" maxLength={500} /></label>
-      <label>Target date<input name="targetDate" type="date" /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required /></label>
       {error && <p className="field-error">{error}</p>}
       <footer>
         <button type="button" className="secondary" disabled={busy} onClick={() => setCreating(false)}>Cancel</button>
@@ -737,10 +801,43 @@ function ProjectBar({
     </form>
   }
 
+  if (editing && selectedProject && canCreateProject) {
+    return <form className="project-create panel-page" onSubmit={(event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const data = new FormData(form)
+      setBusy(true)
+      setError('')
+      onUpdate(
+        selectedProject.id,
+        String(data.get('name')),
+        String(data.get('description')),
+        String(data.get('deliveryDate')),
+      )
+        .then(() => setEditing(false))
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Project could not be updated.'))
+        .finally(() => setBusy(false))
+    }}>
+      <label>Project name<input name="name" required maxLength={160} defaultValue={selectedProject.name} autoFocus /></label>
+      <label>Description<input name="description" maxLength={500} defaultValue={selectedProject.description ?? ''} /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required defaultValue={selectedProject.targetDate ?? ''} /></label>
+      {error && <p className="field-error">{error}</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+        <button className="primary" disabled={busy}><Save size={16} /> {busy ? 'Saving...' : 'Save project'}</button>
+      </footer>
+    </form>
+  }
+
   return <section className="project-bar panel-page" aria-label="Projects">
     <div>
       <p className="eyebrow">Project</p>
-      <h2>{projects.find((item) => item.id === selectedProjectId)?.name ?? 'No project yet'}</h2>
+      <h2>{selectedProject?.name ?? 'No project yet'}</h2>
+      {selectedProject && <p className="project-delivery">
+        Delivery date: <strong>{selectedProject.targetDate ? formatDate(selectedProject.targetDate) : 'Not set'}</strong>
+        {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+      </p>}
     </div>
     {projects.length > 0 && <label>
       <span>Project</span>
@@ -749,10 +846,38 @@ function ProjectBar({
       </select>
       <ChevronDown />
     </label>}
-    {canCreateProject
-      ? <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
-      : null}
+    {canCreateProject && <div className="project-actions">
+      <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
+      {selectedProject && <>
+        <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
+        <button className="secondary danger-action" disabled={busy} onClick={() => {
+          setBusy(true)
+          setError('')
+          onArchive(selectedProject.id)
+            .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
+            .finally(() => setBusy(false))
+        }}><Trash2 size={16} /> Archive</button>
+      </>}
+    </div>}
+    {error && <p className="field-error">{error}</p>}
   </section>
+}
+
+function deliveryStatus(deliveryDate: string | null) {
+  if (!deliveryDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const delivery = new Date(`${deliveryDate}T00:00:00`)
+  const days = Math.ceil((delivery.getTime() - today.getTime()) / 86400000)
+  if (days < 0) return { label: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`, tone: 'critical' }
+  if (days === 0) return { label: 'Due today', tone: 'critical' }
+  if (days === 1) return { label: '1 day left', tone: 'warning' }
+  if (days <= 7) return { label: `${days} days left`, tone: 'warning' }
+  return { label: `${days} days left`, tone: 'healthy' }
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString()
 }
 
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {

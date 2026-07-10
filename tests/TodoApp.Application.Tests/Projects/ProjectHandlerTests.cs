@@ -48,10 +48,18 @@ public sealed class ProjectHandlerTests
     [Fact]
     public async Task Update_WhenProjectExists_UpdatesDetails()
     {
-        var project = Project.Create(ProjectId, "Portfolio launch");
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
         var repository = new InMemoryProjectRepository(project);
         var unitOfWork = new RecordingUnitOfWork();
-        var handler = new UpdateProjectHandler(repository, unitOfWork);
+        var handler = new UpdateProjectHandler(
+            repository,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubCurrentUser(OwnerId));
 
         var result = await handler.HandleAsync(
             new UpdateProjectCommand(
@@ -72,12 +80,18 @@ public sealed class ProjectHandlerTests
     {
         var archivedAt =
             new DateTimeOffset(2026, 7, 1, 15, 0, 0, TimeSpan.Zero);
-        var project = Project.Create(ProjectId, "Portfolio launch");
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
         var unitOfWork = new RecordingUnitOfWork();
         var handler = new ArchiveProjectHandler(
             new InMemoryProjectRepository(project),
+            new StubWorkspaceRepository(workspace),
             unitOfWork,
-            new StubClock(archivedAt));
+            new StubClock(archivedAt),
+            new StubCurrentUser(OwnerId));
 
         var result = await handler.HandleAsync(
             new ArchiveProjectCommand(ProjectId),
@@ -114,7 +128,9 @@ public sealed class ProjectHandlerTests
         var unitOfWork = new RecordingUnitOfWork();
         var handler = new UpdateProjectHandler(
             new InMemoryProjectRepository(),
-            unitOfWork);
+            new StubWorkspaceRepository(null),
+            unitOfWork,
+            new StubCurrentUser(OwnerId));
 
         var result = await handler.HandleAsync(
             new UpdateProjectCommand(
@@ -127,6 +143,35 @@ public sealed class ProjectHandlerTests
         Assert.False(result.IsSuccess);
         Assert.Equal(ErrorType.NotFound, result.Error.Type);
         Assert.Equal("project.not_found", result.Error.Code);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Update_WhenDeliveryDateIsMissing_ReturnsValidation()
+    {
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new UpdateProjectHandler(
+            new InMemoryProjectRepository(project),
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubCurrentUser(OwnerId));
+
+        var result = await handler.HandleAsync(
+            new UpdateProjectCommand(
+                ProjectId,
+                "Portfolio release",
+                null,
+                null),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Validation, result.Error.Type);
+        Assert.Equal("Project delivery date is required.", result.Error.Description);
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
@@ -179,7 +224,7 @@ public sealed class ProjectHandlerTests
                 WorkspaceId,
                 "Client portal",
                 null,
-                null),
+                new DateOnly(2026, 10, 15)),
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);

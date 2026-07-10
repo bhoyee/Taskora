@@ -17,6 +17,11 @@ public sealed class CreateProjectHandler(
         CreateProjectCommand command,
         CancellationToken cancellationToken)
     {
+        if (!command.TargetDate.HasValue)
+        {
+            return ValidationFailure("Project delivery date is required.");
+        }
+
         try
         {
             var project = Project.Create(
@@ -24,11 +29,8 @@ public sealed class CreateProjectHandler(
                 command.Name,
                 command.Description);
 
-            if (command.TargetDate.HasValue)
-            {
-                project.SetTargetDate(
-                    DueDate.Create(command.TargetDate.Value));
-            }
+            project.SetTargetDate(
+                DueDate.Create(command.TargetDate.Value));
 
             await projects.AddAsync(project, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -66,7 +68,9 @@ public sealed class CreateProjectHandler(
 
 public sealed class UpdateProjectHandler(
     IProjectRepository projects,
-    IUnitOfWork unitOfWork)
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
     public async Task<Result<ProjectDto>> HandleAsync(
         UpdateProjectCommand command,
@@ -81,16 +85,30 @@ public sealed class UpdateProjectHandler(
             return ProjectNotFound();
         }
 
+        var permission = await ProjectAccess.RequireManagerAsync(
+            workspaces,
+            currentUser,
+            project,
+            cancellationToken);
+        if (!permission.IsSuccess)
+        {
+            return Result<ProjectDto>.Failure(permission.Error);
+        }
+
+        if (!command.TargetDate.HasValue)
+        {
+            return Failure(
+                "project.validation",
+                "Project delivery date is required.",
+                ErrorType.Validation);
+        }
+
         try
         {
             project.Rename(command.Name);
             project.UpdateDescription(command.Description);
-
-            if (command.TargetDate.HasValue)
-            {
-                project.SetTargetDate(
-                    DueDate.Create(command.TargetDate.Value));
-            }
+            project.SetTargetDate(
+                DueDate.Create(command.TargetDate.Value));
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return Result<ProjectDto>.Success(
@@ -128,8 +146,10 @@ public sealed class UpdateProjectHandler(
 
 public sealed class ArchiveProjectHandler(
     IProjectRepository projects,
+    IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
 {
     public async Task<Result<ProjectDto>> HandleAsync(
         ArchiveProjectCommand command,
@@ -148,6 +168,16 @@ public sealed class ArchiveProjectHandler(
                     ErrorType.NotFound));
         }
 
+        var permission = await ProjectAccess.RequireManagerAsync(
+            workspaces,
+            currentUser,
+            project,
+            cancellationToken);
+        if (!permission.IsSuccess)
+        {
+            return Result<ProjectDto>.Failure(permission.Error);
+        }
+
         try
         {
             project.Archive(clock.UtcNow);
@@ -163,6 +193,46 @@ public sealed class ArchiveProjectHandler(
                     exception.Message,
                     ErrorType.Conflict));
         }
+    }
+}
+
+internal static class ProjectAccess
+{
+    public static async Task<Result<bool>> RequireManagerAsync(
+        IWorkspaceRepository workspaces,
+        ICurrentUser currentUser,
+        Project project,
+        CancellationToken cancellationToken)
+    {
+        if (project.WorkspaceId == Guid.Empty)
+        {
+            return Result<bool>.Success(true);
+        }
+
+        var workspace = await workspaces.GetByIdAsync(
+            project.WorkspaceId,
+            cancellationToken);
+        if (workspace is null ||
+            !workspace.HasMember(currentUser.UserId))
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "workspace.not_found",
+                    "The workspace was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (workspace.GetRole(currentUser.UserId) ==
+            Domain.Collaboration.WorkspaceRole.Member)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "workspace.forbidden",
+                    "Only workspace owners and managers can manage projects.",
+                    ErrorType.Forbidden));
+        }
+
+        return Result<bool>.Success(true);
     }
 }
 
@@ -235,6 +305,15 @@ public sealed class CreateWorkspaceProjectHandler(
             return Result<ProjectDto>.Failure(access.Error);
         }
 
+        if (!command.TargetDate.HasValue)
+        {
+            return Result<ProjectDto>.Failure(
+                new ApplicationError(
+                    "project.validation",
+                    "Project delivery date is required.",
+                    ErrorType.Validation));
+        }
+
         var role = access.Value.GetRole(currentUser.UserId);
         if (role == Domain.Collaboration.WorkspaceRole.Member)
         {
@@ -253,11 +332,8 @@ public sealed class CreateWorkspaceProjectHandler(
                 command.Description,
                 command.WorkspaceId);
 
-            if (command.TargetDate.HasValue)
-            {
-                project.SetTargetDate(
-                    DueDate.Create(command.TargetDate.Value));
-            }
+            project.SetTargetDate(
+                DueDate.Create(command.TargetDate.Value));
 
             await projects.AddAsync(project, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);

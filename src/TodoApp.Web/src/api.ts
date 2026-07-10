@@ -230,16 +230,34 @@ export const api = {
   createWorkspaceProject: (
     workspaceId: string,
     name: string,
-    description = 'Starter project created for this workspace.',
-    targetDate = '',
+    description: string,
+    deliveryDate: string,
   ) =>
     request<ProjectDetails>(`/api/v1/workspaces/${workspaceId}/projects`, {
       method: 'POST',
       body: JSON.stringify({
         name,
         description: description || null,
-        targetDate: targetDate || null,
+        targetDate: deliveryDate,
       }),
+    }),
+  updateProject: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) =>
+    request<ProjectDetails>(`/api/v1/projects/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name,
+        description: description || null,
+        targetDate: deliveryDate,
+      }),
+    }),
+  archiveProject: (projectId: string) =>
+    request<ProjectDetails>(`/api/v1/projects/${projectId}/archive`, {
+      method: 'POST',
     }),
   project: (projectId = developmentProjectId) =>
     request<ProjectDetails>(`/api/v1/projects/${projectId}`),

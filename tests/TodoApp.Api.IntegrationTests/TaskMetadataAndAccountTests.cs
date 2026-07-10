@@ -132,7 +132,11 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
 
         var project = await authenticated.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Bearer project {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Bearer project {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
 
         Assert.Equal(HttpStatusCode.Created, project.StatusCode);
     }
@@ -191,7 +195,11 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Metadata {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Metadata {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
         AssertSuccess(response);
         return (await response.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id")

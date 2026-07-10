@@ -82,15 +82,15 @@ public sealed class SendDueDateNotificationsHandler(
     {
         return new NotificationEmailMessage(
             reminder.Recipients,
-            $"Project reminder: {reminder.ProjectName} target date is in 24 hours",
+            $"Project reminder: {reminder.ProjectName} delivery date is in 24 hours",
             $"""
             Hello,
 
-            This is a professional project target-date reminder from Todo Intelligence.
+            This is a professional project delivery-date reminder from Todo Intelligence.
 
             Project: {reminder.ProjectName}
-            Target date: {reminder.TargetDate:yyyy-MM-dd}
-            Status: The project target date is in 24 hours.
+            Delivery date: {reminder.TargetDate:yyyy-MM-dd}
+            Status: The project delivery date is in 24 hours.
 
             Please confirm delivery readiness, outstanding tasks, and stakeholder communication.
             """);

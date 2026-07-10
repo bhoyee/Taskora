@@ -126,8 +126,8 @@ public sealed class PortfolioDashboardReadRepository(
             .Select(project => new DashboardWarning(
                 "ProjectTarget",
                 "warning",
-                "Project target date reminder",
-                $"{project.Name} reaches its target date in 24 hours.",
+                "Project delivery date reminder",
+                $"{project.Name} reaches its delivery date in 24 hours.",
                 ProjectId: project.Id,
                 DueDate: project.TargetDate!.Value));
 
