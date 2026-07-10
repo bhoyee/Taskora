@@ -39,6 +39,17 @@ export interface Dashboard {
   blockedTaskCount: number
   overdueTaskCount: number
   criticalTaskCount: number
+  warnings: DashboardWarning[]
+}
+
+export interface DashboardWarning {
+  type: string
+  severity: 'info' | 'warning' | 'critical'
+  title: string
+  message: string
+  projectId: string | null
+  taskId: string | null
+  dueDate: string | null
 }
 
 export interface Workspace {

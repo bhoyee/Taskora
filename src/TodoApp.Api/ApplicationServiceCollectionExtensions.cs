@@ -2,6 +2,7 @@ using TodoApp.Application.Projects;
 using TodoApp.Application.Accounts;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Intelligence;
+using TodoApp.Application.Notifications;
 using TodoApp.Application.Projects.Board;
 using TodoApp.Application.Tasks.CreateTask;
 using TodoApp.Application.Tasks.Activity;
@@ -37,6 +38,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<DeclineWorkspaceInvitationHandler>();
         services.AddScoped<CancelWorkspaceInvitationHandler>();
         services.AddScoped<GetPortfolioDashboardHandler>();
+        services.AddScoped<SendDueDateNotificationsHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();
         services.AddScoped<GetProjectByIdHandler>();

@@ -39,6 +39,14 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .metric-icon { color: #147d68; width: 32px; height: 32px; display: grid; place-items: center; background: #e3f4ef; border-radius: 6px; }.metric-icon svg { width: 17px; }
 .metric.danger .metric-icon { background: #fce8e6; color: #b23b30; }.metric.warn .metric-icon { background: #fff1d7; color: #94620b; }
 .metric strong { display: block; font-size: 23px; }.metric span { font-size: 12px; color: #687483; }
+.deadline-warnings { display: grid; gap: 10px; margin: -6px 0 20px; }
+.deadline-warning { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; border: 1px solid #d7dce2; border-left-width: 4px; border-radius: 8px; padding: 12px 14px; background: white; color: #26313d; }
+.deadline-warning svg { margin-top: 2px; }
+.deadline-warning strong { display: block; font-size: 14px; }
+.deadline-warning span { display: block; margin-top: 3px; color: #667281; font-size: 13px; line-height: 1.45; }
+.deadline-warning.info { border-left-color: #2b6f9f; }
+.deadline-warning.warning { border-left-color: #c78911; }
+.deadline-warning.critical { border-left-color: #c0322b; }
 .project-bar { margin-bottom: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto; gap: 14px; align-items: end; }
 .project-bar h2 { margin: 0; font-size: 18px; }
 .project-bar label { position: relative; }

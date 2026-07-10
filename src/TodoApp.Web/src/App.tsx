@@ -25,7 +25,7 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const emptyDashboard: Dashboard = {
   projectCount: 0, activeTaskCount: 0, blockedTaskCount: 0,
-  overdueTaskCount: 0, criticalTaskCount: 0,
+  overdueTaskCount: 0, criticalTaskCount: 0, warnings: [],
 }
 
 type View = 'workspace' | 'activity' | 'settings' | 'profile'
@@ -367,6 +367,16 @@ export default function App() {
             <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
             <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
           </section>
+
+          {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
+            {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+              <AlertTriangle size={18} />
+              <div>
+                <strong>{warning.title}</strong>
+                <span>{warning.message}{warning.dueDate ? ` Deadline: ${new Date(`${warning.dueDate}T00:00:00`).toLocaleDateString()}.` : ''}</span>
+              </div>
+            </article>)}
+          </section>}
 
           <ProjectBar
             projects={projects}

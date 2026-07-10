@@ -57,6 +57,8 @@ public sealed class TaskItem
 
     public Guid? AssignedUserId { get; private set; }
 
+    public Guid? CreatedByUserId { get; private set; }
+
     public Guid? CategoryId { get; private set; }
 
     public DueDate? DueDate { get; private set; }
@@ -222,6 +224,17 @@ public sealed class TaskItem
     }
 
     public void Unassign() => AssignedUserId = null;
+
+    public void RecordCreator(Guid userId)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Task creator identifier is required.");
+        }
+
+        CreatedByUserId = userId;
+    }
 
     public void AssignCategory(Guid? categoryId)
     {

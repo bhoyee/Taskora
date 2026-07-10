@@ -9,6 +9,15 @@ const dashboard = {
   blockedTaskCount: 1,
   overdueTaskCount: 1,
   criticalTaskCount: 2,
+  warnings: [{
+    type: 'TaskDue',
+    severity: 'warning',
+    title: 'Task deadline reminder',
+    message: 'Ship portfolio is due in 24 hours.',
+    projectId: '10000000-0000-0000-0000-000000000001',
+    taskId: 'task-1',
+    dueDate: '2026-07-10',
+  }],
 }
 const taskPage = {
   totalCount: 1,
@@ -172,6 +181,7 @@ function mockMemberWorkspaceWithoutProjectsApi() {
           blockedTaskCount: 0,
           overdueTaskCount: 0,
           criticalTaskCount: 0,
+          warnings: [],
         })
       }
       return jsonResponse({ totalCount: 0, items: [] })
@@ -260,6 +270,7 @@ function mockWorkspaceManagementApi() {
           blockedTaskCount: 0,
           overdueTaskCount: 0,
           criticalTaskCount: 0,
+          warnings: [],
         })
       }
 

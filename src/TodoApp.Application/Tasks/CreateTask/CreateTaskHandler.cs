@@ -10,7 +10,8 @@ public sealed class CreateTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
 {
     public async Task<Result<TaskDto>> HandleAsync(
         CreateTaskCommand command,
@@ -38,6 +39,10 @@ public sealed class CreateTaskHandler(
                 project.Id,
                 command.Title,
                 clock.UtcNow);
+            if (currentUser.IsAuthenticated)
+            {
+                task.RecordCreator(currentUser.UserId);
+            }
 
             if (command.DueDate.HasValue)
             {
