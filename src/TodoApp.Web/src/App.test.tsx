@@ -395,7 +395,7 @@ describe('delivery workspace', () => {
     expect(screen.getByText('No recorded activity yet')).toBeInTheDocument()
     expect(screen.getByText('Current task snapshot')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /workspace/i }))
+    await user.click(screen.getByRole('button', { name: /^workspace$/i }))
     expect(screen.getByText('Showing 1-10 of 11')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /next/i }))
     expect(await screen.findByText('Review deployment runbook')).toBeInTheDocument()
@@ -422,7 +422,7 @@ describe('delivery workspace', () => {
     render(<App />)
     await screen.findByText('Ship portfolio')
 
-    await user.click(screen.getByRole('button', { name: /^new$/i }))
+    await user.click(screen.getByRole('button', { name: /^new workspace$/i }))
     await user.type(screen.getByLabelText('Workspace name'), 'Client delivery')
     await user.click(screen.getByRole('button', { name: /create/i }))
 
