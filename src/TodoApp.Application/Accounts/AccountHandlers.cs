@@ -4,13 +4,11 @@ using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Common;
-using TodoApp.Domain.Projects;
 
 namespace TodoApp.Application.Accounts;
 
 public sealed class RegisterAccountHandler(
     IAccountRepository accounts,
-    IProjectRepository projects,
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers)
 {
@@ -50,17 +48,11 @@ public sealed class RegisterAccountHandler(
                     ? $"{user.DisplayName}'s workspace"
                     : command.WorkspaceName,
                 user.Id);
-            var project = Project.Create(
-                identifiers.NewId(),
-                "My task project",
-                "Starter project created during account registration.",
-                workspace.Id);
             await accounts.AddAsync(
                 user,
                 workspace,
                 PasswordHasher.Hash(command.Password),
                 cancellationToken);
-            await projects.AddAsync(project, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return Result<AccountSessionDto>.Success(ToSession(user));

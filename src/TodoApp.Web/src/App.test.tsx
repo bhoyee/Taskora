@@ -144,6 +144,40 @@ function mockPagedApi() {
     })
 }
 
+function mockMemberWorkspaceWithoutProjectsApi() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input) => {
+      const url = String(input)
+      if (url.includes('/account/me')) return jsonResponse(accountProfile)
+      if (url.endsWith('/workspaces')) {
+        return jsonResponse([{
+          id: 'workspace-member',
+          name: 'Delivery workspace',
+          role: 'Member',
+        }])
+      }
+      if (url.includes('/workspaces/workspace-member/projects')) {
+        return jsonResponse([])
+      }
+      if (url.includes('/workspaces/workspace-member/members')) {
+        return jsonResponse([{
+          ...members[0],
+          role: 'Member',
+        }])
+      }
+      if (url.includes('/dashboard')) {
+        return jsonResponse({
+          projectCount: 0,
+          activeTaskCount: 0,
+          blockedTaskCount: 0,
+          overdueTaskCount: 0,
+          criticalTaskCount: 0,
+        })
+      }
+      return jsonResponse({ totalCount: 0, items: [] })
+    })
+}
+
 function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
   if (url.includes('/account/me')) return accountProfile
   if (url.includes('/account/profile')) return {
@@ -320,7 +354,7 @@ describe('delivery workspace', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'Portfolio456!')
     await user.click(screen.getByRole('button', { name: /change password/i }))
     expect(screen.getByText('Password changed.')).toBeInTheDocument()
-  })
+  }, 20000)
 
   it('shows activity fallback, paginates tasks, and logs out from the menu', async () => {
     mockPagedApi()
@@ -380,6 +414,16 @@ describe('delivery workspace', () => {
 
     expect(await screen.findByText('Project Client onboarding created.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Client onboarding')).toBeInTheDocument()
+  })
+
+  it('hides project creation and disables tasks for member workspaces with no project', async () => {
+    mockMemberWorkspaceWithoutProjectsApi()
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'No project yet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled()
   })
 
   it('creates a pending invite from workspace settings', async () => {

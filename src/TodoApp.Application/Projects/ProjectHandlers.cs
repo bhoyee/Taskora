@@ -235,6 +235,16 @@ public sealed class CreateWorkspaceProjectHandler(
             return Result<ProjectDto>.Failure(access.Error);
         }
 
+        var role = access.Value.GetRole(currentUser.UserId);
+        if (role == Domain.Collaboration.WorkspaceRole.Member)
+        {
+            return Result<ProjectDto>.Failure(
+                new ApplicationError(
+                    "workspace.forbidden",
+                    "Only workspace owners and managers can create projects.",
+                    ErrorType.Forbidden));
+        }
+
         try
         {
             var project = Project.Create(

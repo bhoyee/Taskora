@@ -139,14 +139,19 @@ export default function App() {
       const projects = await api.projects(selected.id)
       const selectedProject = projects.find((item) => item.id === selectedProjectId) ??
         projects[0] ??
-        await api.createWorkspaceProject(selected.id, 'My task project')
-      if (selectedProject.id !== selectedProjectId) {
+        null
+      if (selectedProject && selectedProject.id !== selectedProjectId) {
         setSelectedProjectId(selectedProject.id)
         localStorage.setItem('todoapp_project_id', selectedProject.id)
+      } else if (!selectedProject) {
+        setSelectedProjectId('')
+        localStorage.removeItem('todoapp_project_id')
       }
       const [summary, page, workspaceMembers, workspaceInvitations] = await Promise.all([
-        api.dashboard(selected.id, selectedProject.id),
-        api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id),
+        api.dashboard(selected.id, selectedProject?.id),
+        selectedProject
+          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
+          : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
       ])
@@ -160,12 +165,11 @@ export default function App() {
         localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
       }
       setWorkspace(selected)
-      setProjects(projects.length ? projects : [selectedProject])
+      setProjects(projects)
       setProject(selectedProject)
       setMembers(workspaceMembers)
       setInvitations(workspaceInvitations)
-      setCategories((projects.length ? projects : [selectedProject])
-        .flatMap((item) => item.categories))
+      setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
@@ -350,7 +354,7 @@ export default function App() {
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
-          {view === 'workspace' && <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>}
+          {view === 'workspace' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -367,6 +371,7 @@ export default function App() {
           <ProjectBar
             projects={projects}
             selectedProjectId={project?.id ?? selectedProjectId}
+            workspaceRole={workspace?.role ?? null}
             onSwitch={switchProject}
             onCreate={createProject}
           />
@@ -672,11 +677,13 @@ function WorkspaceSwitcher({
 function ProjectBar({
   projects,
   selectedProjectId,
+  workspaceRole,
   onSwitch,
   onCreate,
 }: {
   projects: ProjectDetails[]
   selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
   onSwitch: (projectId: string) => void
   onCreate: (
     name: string,
@@ -687,8 +694,9 @@ function ProjectBar({
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
 
-  if (creating) {
+  if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
       event.preventDefault()
       const form = event.currentTarget
@@ -722,16 +730,18 @@ function ProjectBar({
   return <section className="project-bar panel-page" aria-label="Projects">
     <div>
       <p className="eyebrow">Project</p>
-      <h2>{projects.find((item) => item.id === selectedProjectId)?.name ?? 'Project'}</h2>
+      <h2>{projects.find((item) => item.id === selectedProjectId)?.name ?? 'No project yet'}</h2>
     </div>
-    <label>
+    {projects.length > 0 && <label>
       <span>Project</span>
       <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
         {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
       </select>
       <ChevronDown />
-    </label>
-    <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
+    </label>}
+    {canCreateProject
+      ? <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
+      : null}
   </section>
 }
 

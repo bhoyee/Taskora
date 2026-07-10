@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Application.Projects;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 
 namespace TodoApp.Application.Tests.Projects;
@@ -9,6 +10,14 @@ public sealed class ProjectHandlerTests
 {
     private static readonly Guid ProjectId =
         Guid.Parse("ad047ea8-2a79-4c2c-a0bb-76fc3f594842");
+    private static readonly Guid WorkspaceId =
+        Guid.Parse("9a1f876a-5f63-4ef1-bf87-2643f31fb54a");
+    private static readonly Guid OwnerId =
+        Guid.Parse("2e42f664-b1a8-49a5-8d98-feb3ec0f94c8");
+    private static readonly Guid ManagerId =
+        Guid.Parse("3a5043e5-41aa-4e73-9a04-1dd6b1570e4d");
+    private static readonly Guid MemberId =
+        Guid.Parse("5855f8d9-6471-486a-9957-a59c09672d01");
 
     [Fact]
     public async Task Create_WhenCommandIsValid_PersistsProject()
@@ -121,6 +130,65 @@ public sealed class ProjectHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    [Fact]
+    public async Task CreateWorkspaceProject_WhenCurrentUserIsManager_PersistsProject()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.AddMember(OwnerId, ManagerId, WorkspaceRole.Manager);
+        var projects = new InMemoryProjectRepository();
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new CreateWorkspaceProjectHandler(
+            projects,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubIdentifierGenerator(ProjectId),
+            new StubCurrentUser(ManagerId));
+
+        var result = await handler.HandleAsync(
+            new CreateWorkspaceProjectCommand(
+                WorkspaceId,
+                "Client portal",
+                "Secure workspace delivery",
+                new DateOnly(2026, 10, 15)),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ProjectId, result.Value.Id);
+        Assert.Equal("Client portal", result.Value.Name);
+        Assert.Equal(new DateOnly(2026, 10, 15), result.Value.TargetDate);
+        Assert.Equal(WorkspaceId, projects.AddedProject?.WorkspaceId);
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceProject_WhenCurrentUserIsMember_ReturnsForbidden()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.AddMember(OwnerId, MemberId, WorkspaceRole.Member);
+        var projects = new InMemoryProjectRepository();
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new CreateWorkspaceProjectHandler(
+            projects,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubIdentifierGenerator(ProjectId),
+            new StubCurrentUser(MemberId));
+
+        var result = await handler.HandleAsync(
+            new CreateWorkspaceProjectCommand(
+                WorkspaceId,
+                "Client portal",
+                null,
+                null),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("workspace.forbidden", result.Error.Code);
+        Assert.Null(projects.AddedProject);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
     private sealed class InMemoryProjectRepository(params Project[] projects)
         : IProjectRepository
     {
@@ -170,6 +238,35 @@ public sealed class ProjectHandlerTests
         : IIdentifierGenerator
     {
         public Guid NewId() => identifier;
+    }
+
+    private sealed class StubCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
+    }
+
+    private sealed class StubWorkspaceRepository(Workspace? workspace)
+        : IWorkspaceRepository
+    {
+        public Task AddAsync(
+            Workspace workspaceToAdd,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<Workspace?> GetByIdAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(workspace?.Id == workspaceId ? workspace : null);
+
+        public Task<IReadOnlyList<Workspace>> ListForUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Workspace>>(
+                workspace is not null && workspace.HasMember(userId)
+                    ? [workspace]
+                    : []);
     }
 
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
