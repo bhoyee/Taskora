@@ -33,6 +33,14 @@ export interface TaskPage {
   totalCount: number
 }
 
+export interface PagedResponse<T> {
+  items: T[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+  totalPages: number
+}
+
 export interface Dashboard {
   projectCount: number
   activeTaskCount: number
@@ -141,6 +149,13 @@ export interface TaskActivity {
   occurredAt: string
 }
 
+export interface WorkspaceActivity extends TaskActivity {
+  action: string
+  taskTitle: string
+  projectId: string
+  projectName: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   const identityHeaders: Record<string, string> = accessToken
@@ -207,6 +222,19 @@ export const api = {
     }),
   invitations: (workspaceId: string) =>
     request<WorkspaceInvitation[]>(`/api/v1/workspaces/${workspaceId}/invitations`),
+  workspaceActivity: (
+    workspaceId: string,
+    type = 'All',
+    pageNumber = 1,
+    pageSize = 10,
+  ) =>
+    request<PagedResponse<WorkspaceActivity>>(
+      `/api/v1/workspaces/${workspaceId}/activity?${new URLSearchParams({
+        type,
+        pageNumber: String(pageNumber),
+        pageSize: String(pageSize),
+      })}`,
+    ),
   inviteMember: (
     workspaceId: string,
     fullName: string,

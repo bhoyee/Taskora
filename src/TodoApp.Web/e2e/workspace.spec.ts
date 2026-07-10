@@ -71,6 +71,27 @@ test.beforeEach(async ({ page }) => {
     }))
   await page.route('**/api/v1/dashboard', (route) =>
     route.fulfill({ json: dashboard }))
+  await page.route('**/api/v1/workspaces/workspace-1/activity?**', (route) =>
+    route.fulfill({
+      json: {
+        items: [{
+          sequence: 1,
+          taskId: 'task-1',
+          taskTitle: 'Ship portfolio',
+          projectId: '10000000-0000-0000-0000-000000000001',
+          projectName: 'Portfolio launch',
+          actor: 'Jadesola Aliu',
+          action: 'StatusChanged',
+          previousValue: 'Backlog',
+          currentValue: 'Ready',
+          occurredAt: '2026-07-06T10:00:00Z',
+        }],
+        totalCount: 1,
+        pageNumber: 1,
+        pageSize: 10,
+        totalPages: 1,
+      },
+    }))
   await page.route('**/api/v1/tasks?**', (route) =>
     route.fulfill({ json: tasks }))
   await page.route('**/api/v1/tasks/*/activity', (route) =>

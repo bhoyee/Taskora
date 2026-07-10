@@ -14,7 +14,7 @@ import {
 import { api } from './api'
 import type {
   AccountSession, Dashboard, DashboardBreakdownItem, ProjectCategory, ProjectDetails,
-  TaskActivity, TaskItem, TaskStatus, Workspace, WorkspaceInvitation, WorkspaceMember,
+  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember,
 } from './api'
 import './styles.css'
 
@@ -92,6 +92,19 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   Completed: { Ready: { action: 'reopen' } },
 }
 
+const activityTypes = [
+  'All',
+  'TaskCreated',
+  'TaskRenamed',
+  'StatusChanged',
+  'DueDateChanged',
+  'AssignmentChanged',
+  'CategoryChanged',
+  'TagAdded',
+  'TagRemoved',
+  'NoteAdded',
+] as const
+
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
@@ -117,7 +130,11 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [navOpen, setNavOpen] = useState(false)
-  const [activity, setActivity] = useState<TaskActivity[]>([])
+  const [activity, setActivity] = useState<WorkspaceActivity[]>([])
+  const [activityTotal, setActivityTotal] = useState(0)
+  const [activityPageNumber, setActivityPageNumber] = useState(1)
+  const activityPageSize = 10
+  const [activityType, setActivityType] = useState<(typeof activityTypes)[number]>('All')
   const [profile, setProfile] = useState<UserProfile>(() =>
     readLocal('todoapp_profile', defaultProfile))
   const [settings, setSettings] = useState<UserSettings>(() =>
@@ -152,13 +169,14 @@ export default function App() {
         setSelectedProjectId('')
         localStorage.removeItem('todoapp_project_id')
       }
-      const [summary, page, workspaceMembers, workspaceInvitations] = await Promise.all([
+      const [summary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
         api.dashboard(selected.id, selectedProject?.id),
         selectedProject
           ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
           : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
+        api.workspaceActivity(selected.id, activityType, activityPageNumber, activityPageSize),
       ])
       const currentProfile = await api.me().catch(() => null)
       if (currentProfile) {
@@ -178,11 +196,8 @@ export default function App() {
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
-      const activityItems = await Promise.all(
-        page.items.slice(0, 10).map((task) => api.activity(task.id).catch(() => [])),
-      )
-      setActivity(activityItems.flat().sort((left, right) =>
-        Date.parse(right.occurredAt) - Date.parse(left.occurredAt)))
+      setActivity(activityPage.items)
+      setActivityTotal(activityPage.totalCount)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
@@ -190,7 +205,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'workspace' || loading) return undefined
     const interval = window.setInterval(() => void load(), 15000)
@@ -472,7 +487,20 @@ export default function App() {
             />}
           </section>
         </>}
-        {view === 'activity' && <ActivityPage activity={activity} tasks={tasks} loading={loading} />}
+        {view === 'activity' && <ActivityPage
+          activity={activity}
+          tasks={tasks}
+          loading={loading}
+          selectedType={activityType}
+          onTypeChange={(nextType) => {
+            setActivityType(nextType)
+            setActivityPageNumber(1)
+          }}
+          pageNumber={activityPageNumber}
+          pageSize={activityPageSize}
+          totalCount={activityTotal}
+          onPageChange={setActivityPageNumber}
+        />}
         {view === 'settings' && <SettingsPage
           settings={settings}
           workspace={workspace}
@@ -1043,15 +1071,33 @@ function ActivityPage({
   activity,
   tasks,
   loading,
+  selectedType,
+  onTypeChange,
+  pageNumber,
+  pageSize,
+  totalCount,
+  onPageChange,
 }: {
-  activity: TaskActivity[]
+  activity: WorkspaceActivity[]
   tasks: TaskItem[]
   loading: boolean
+  selectedType: (typeof activityTypes)[number]
+  onTypeChange: (type: (typeof activityTypes)[number]) => void
+  pageNumber: number
+  pageSize: number
+  totalCount: number
+  onPageChange: (page: number) => void
 }) {
-  const taskTitles = new Map(tasks.map((task) => [task.id, task.title]))
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const controls = <ActivityControls
+    selectedType={selectedType}
+    onTypeChange={onTypeChange}
+  />
+
   if (!activity.length) {
     return <section className="panel-page activity-page">
+      {controls}
       <div className="empty compact"><Activity /><h2>No recorded activity yet</h2><p>Move tasks across the board or edit work items to build the timeline.</p></div>
       {!!tasks.length && <div className="activity-snapshot" aria-label="Current task snapshot">
         <h2>Current task snapshot</h2>
@@ -1068,19 +1114,115 @@ function ActivityPage({
   }
 
   return <section className="panel-page activity-page" aria-label="Activity timeline">
-    {activity.slice(0, 20).map((item) => <article className="activity-item" key={item.sequence}>
-      <span className="activity-icon"><Activity /></span>
+    {controls}
+    <div className="activity-timeline">
+      {activity.map((item) => <article className="activity-item" key={item.sequence}>
+      <span className="activity-icon">{activityIcon(item.action)}</span>
       <div>
-        <strong>{taskTitles.get(item.taskId) ?? 'Task activity'}</strong>
-        <p>{item.actor} changed {activityLabel(item)} from {item.previousValue ?? 'none'} to {item.currentValue ?? 'none'}.</p>
-        <small>{new Date(item.occurredAt).toLocaleString()}</small>
+        <strong>{item.taskTitle}</strong>
+        <p>{activityMessage(item)}</p>
+        <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
       </div>
     </article>)}
+    </div>
+    <Pagination
+      pageNumber={pageNumber}
+      pageSize={pageSize}
+      totalCount={totalCount}
+      totalPages={totalPages}
+      itemLabel="activity"
+      onPageChange={onPageChange}
+    />
   </section>
 }
 
-function activityLabel(item: TaskActivity) {
-  return (item.action ?? item.activityType ?? 'Activity')
+function ActivityControls({
+  selectedType,
+  onTypeChange,
+}: {
+  selectedType: (typeof activityTypes)[number]
+  onTypeChange: (type: (typeof activityTypes)[number]) => void
+}) {
+  return <div className="activity-toolbar">
+    <div>
+      <p className="eyebrow">Audit trail</p>
+      <h2>Workspace activity</h2>
+    </div>
+    <label>
+      <span>Filter</span>
+      <select
+        value={selectedType}
+        onChange={(event) => onTypeChange(event.target.value as (typeof activityTypes)[number])}
+      >
+        {activityTypes.map((type) =>
+          <option value={type} key={type}>{activityTypeLabel(type)}</option>)}
+      </select>
+      <ChevronDown />
+    </label>
+  </div>
+}
+
+function activityMessage(item: WorkspaceActivity) {
+  const previous = item.previousValue || 'none'
+  const current = item.currentValue || 'none'
+  switch (item.action) {
+    case 'TaskCreated':
+      return `${item.actor} created this task.`
+    case 'TaskRenamed':
+      return `${item.actor} renamed the task from ${previous} to ${current}.`
+    case 'StatusChanged':
+      return `${item.actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
+    case 'DueDateChanged':
+      return `${item.actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
+    case 'EffortChanged':
+      return `${item.actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
+    case 'AssignmentChanged':
+      return `${item.actor} changed the assignee from ${previous} to ${current}.`
+    case 'CategoryChanged':
+      return `${item.actor} changed the category from ${previous} to ${current}.`
+    case 'TagAdded':
+      return `${item.actor} added tag #${current}.`
+    case 'TagRemoved':
+      return `${item.actor} removed tag #${previous}.`
+    case 'NoteAdded':
+      return `${item.actor} added a note: ${current}`
+    default:
+      return `${item.actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
+  }
+}
+
+function activityIcon(action: string) {
+  switch (action) {
+    case 'TaskCreated':
+      return <Plus />
+    case 'StatusChanged':
+      return <Activity />
+    case 'TagAdded':
+    case 'TagRemoved':
+      return <Tags />
+    case 'NoteAdded':
+      return <MessageSquare />
+    case 'AssignmentChanged':
+      return <UserPlus />
+    default:
+      return <CircleGauge />
+  }
+}
+
+function activityTypeLabel(type: string) {
+  return type === 'All'
+    ? 'All activity'
+    : type.replace(/([A-Z])/g, ' $1').trim()
+}
+
+function formatActivityValue(value: string) {
+  if (!value) return 'none'
+  const date = new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+}
+
+function activityLabel(item: Pick<WorkspaceActivity, 'action'>) {
+  return item.action
     .replace(/([A-Z])/g, ' $1')
     .trim()
     .toLowerCase()
@@ -1091,22 +1233,24 @@ function Pagination({
   pageSize,
   totalCount,
   totalPages,
+  itemLabel = 'task',
   onPageChange,
 }: {
   pageNumber: number
   pageSize: number
   totalCount: number
   totalPages: number
+  itemLabel?: string
   onPageChange: (page: number) => void
 }) {
   if (totalCount <= pageSize) {
-    return <footer className="pagination"><span>{totalCount} task{totalCount === 1 ? '' : 's'}</span></footer>
+    return <footer className="pagination"><span>{totalCount} {itemLabel}{totalCount === 1 ? '' : 's'}</span></footer>
   }
 
   const start = (pageNumber - 1) * pageSize + 1
   const end = Math.min(pageNumber * pageSize, totalCount)
 
-  return <footer className="pagination" aria-label="Task pagination">
+  return <footer className="pagination" aria-label={`${itemLabel} pagination`}>
     <span>Showing {start}-{end} of {totalCount}</span>
     <div>
       <button className="secondary" disabled={pageNumber === 1} onClick={() => onPageChange(pageNumber - 1)}>Previous</button>
