@@ -732,7 +732,7 @@ function WorkspaceSwitcher({
       </select>
       <ChevronDown />
     </label>
-    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New</button>
+    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New workspace</button>
   </div>
 }
 
