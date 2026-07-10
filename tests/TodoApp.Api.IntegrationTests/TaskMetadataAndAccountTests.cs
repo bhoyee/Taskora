@@ -34,6 +34,61 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Account_profile_and_password_can_be_updated()
+    {
+        var email = $"profile-{Guid.NewGuid():N}@example.com";
+        var registered = await _client.PostAsJsonAsync(
+            "/api/v1/account/register",
+            new
+            {
+                displayName = "Profile Owner",
+                email,
+                password = "SecurePass123!",
+                workspaceName = "Profile workspace"
+            });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+        var registration = await registered.Content
+            .ReadFromJsonAsync<JsonElement>();
+
+        using var authenticated = factory.CreateClient();
+        authenticated.DefaultRequestHeaders.Remove("X-User-Id");
+        authenticated.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                registration.GetProperty("accessToken").GetString());
+
+        var updatedEmail = $"updated-{Guid.NewGuid():N}@example.com";
+        var profileResponse = await authenticated.PutAsJsonAsync(
+            "/api/v1/account/profile",
+            new { email = updatedEmail });
+
+        Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
+        var profile = await profileResponse.Content
+            .ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Profile Owner", profile.GetProperty("displayName").GetString());
+        Assert.Equal(updatedEmail, profile.GetProperty("email").GetString());
+
+        var passwordResponse = await authenticated.PutAsJsonAsync(
+            "/api/v1/account/password",
+            new
+            {
+                currentPassword = "SecurePass123!",
+                newPassword = "SecurePass456!"
+            });
+        Assert.Equal(HttpStatusCode.OK, passwordResponse.StatusCode);
+
+        var oldLogin = await _client.PostAsJsonAsync(
+            "/api/v1/account/login",
+            new { email = updatedEmail, password = "SecurePass123!" });
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+
+        var newLogin = await _client.PostAsJsonAsync(
+            "/api/v1/account/login",
+            new { email = updatedEmail, password = "SecurePass456!" });
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
     public async Task Account_can_register_and_login_with_bearer_token()
     {
         var email = $"owner-{Guid.NewGuid():N}@example.com";
@@ -77,7 +132,11 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
 
         var project = await authenticated.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Bearer project {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Bearer project {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
 
         Assert.Equal(HttpStatusCode.Created, project.StatusCode);
     }
@@ -136,7 +195,11 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Metadata {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Metadata {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
         AssertSuccess(response);
         return (await response.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id")

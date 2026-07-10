@@ -127,6 +127,26 @@ public sealed class AccountRepository(TodoAppDbContext context)
             : new AccountRecord(user, credential.PasswordHash);
     }
 
+    public async Task<AccountRecord?> GetByIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var user = await context.UserProfiles.SingleOrDefaultAsync(
+            user => user.Id == userId,
+            cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var credential = await context.UserCredentials.FindAsync(
+            [user.Id],
+            cancellationToken);
+        return credential is null
+            ? null
+            : new AccountRecord(user, credential.PasswordHash);
+    }
+
     public async Task AddAsync(
         UserProfile user,
         Workspace workspace,
@@ -149,5 +169,24 @@ public sealed class AccountRepository(TodoAppDbContext context)
         await context.UserCredentials.AddAsync(
             new UserCredential(user.Id, passwordHash),
             cancellationToken);
+    }
+
+    public async Task ChangePasswordAsync(
+        Guid userId,
+        string passwordHash,
+        CancellationToken cancellationToken)
+    {
+        var credential = await context.UserCredentials.FindAsync(
+            [userId],
+            cancellationToken);
+        if (credential is null)
+        {
+            await context.UserCredentials.AddAsync(
+                new UserCredential(userId, passwordHash),
+                cancellationToken);
+            return;
+        }
+
+        credential.ChangePasswordHash(passwordHash);
     }
 }

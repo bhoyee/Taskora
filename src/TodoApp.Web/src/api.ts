@@ -39,6 +39,17 @@ export interface Dashboard {
   blockedTaskCount: number
   overdueTaskCount: number
   criticalTaskCount: number
+  warnings: DashboardWarning[]
+}
+
+export interface DashboardWarning {
+  type: string
+  severity: 'info' | 'warning' | 'critical'
+  title: string
+  message: string
+  projectId: string | null
+  taskId: string | null
+  dueDate: string | null
 }
 
 export interface Workspace {
@@ -96,6 +107,12 @@ export interface AccountSession {
   displayName: string
   email: string
   accessToken: string
+}
+
+export interface AccountProfile {
+  userId: string
+  displayName: string
+  email: string
 }
 
 export interface TaskActivity {
@@ -210,13 +227,37 @@ export const api = {
     ),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
-  createWorkspaceProject: (workspaceId: string, name: string) =>
+  createWorkspaceProject: (
+    workspaceId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) =>
     request<ProjectDetails>(`/api/v1/workspaces/${workspaceId}/projects`, {
       method: 'POST',
       body: JSON.stringify({
         name,
-        description: 'Starter project created for this workspace.',
+        description: description || null,
+        targetDate: deliveryDate,
       }),
+    }),
+  updateProject: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) =>
+    request<ProjectDetails>(`/api/v1/projects/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name,
+        description: description || null,
+        targetDate: deliveryDate,
+      }),
+    }),
+  archiveProject: (projectId: string) =>
+    request<ProjectDetails>(`/api/v1/projects/${projectId}/archive`, {
+      method: 'POST',
     }),
   project: (projectId = developmentProjectId) =>
     request<ProjectDetails>(`/api/v1/projects/${projectId}`),
@@ -300,6 +341,17 @@ export const api = {
     request<AccountSession>('/api/v1/account/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+  me: () => request<AccountProfile>('/api/v1/account/me'),
+  updateProfile: (email: string) =>
+    request<AccountProfile>('/api/v1/account/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ email }),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<boolean>('/api/v1/account/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
   register: (
     displayName: string,

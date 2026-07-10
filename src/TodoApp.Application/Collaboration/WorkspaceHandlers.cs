@@ -42,7 +42,6 @@ public sealed class GetMyWorkspacesHandler(
 
 public sealed class CreateWorkspaceHandler(
     IWorkspaceRepository workspaces,
-    IProjectRepository projects,
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers,
     ICurrentUser currentUser)
@@ -62,14 +61,8 @@ public sealed class CreateWorkspaceHandler(
                 identifiers.NewId(),
                 command.Name,
                 currentUser.UserId);
-            var project = Project.Create(
-                identifiers.NewId(),
-                "My task project",
-                "Starter project created for this workspace.",
-                workspace.Id);
 
             await workspaces.AddAsync(workspace, cancellationToken);
-            await projects.AddAsync(project, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return Result<WorkspaceDto>.Success(

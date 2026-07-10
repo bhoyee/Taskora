@@ -15,4 +15,9 @@ public sealed class UserCredential
     public Guid UserId { get; private set; }
 
     public string PasswordHash { get; private set; } = string.Empty;
+
+    public void ChangePasswordHash(string passwordHash)
+    {
+        PasswordHash = passwordHash;
+    }
 }

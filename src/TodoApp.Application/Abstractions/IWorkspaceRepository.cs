@@ -59,6 +59,10 @@ public interface IAccountRepository
         string email,
         CancellationToken cancellationToken);
 
+    Task<AccountRecord?> GetByIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken);
+
     Task AddAsync(
         UserProfile user,
         Workspace workspace,
@@ -67,6 +71,11 @@ public interface IAccountRepository
 
     Task AddUserAsync(
         UserProfile user,
+        string passwordHash,
+        CancellationToken cancellationToken);
+
+    Task ChangePasswordAsync(
+        Guid userId,
         string passwordHash,
         CancellationToken cancellationToken);
 }

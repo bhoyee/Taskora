@@ -40,6 +40,11 @@ public sealed class UserProfile
         string email) =>
         new(id, displayName, email);
 
+    public void UpdateEmail(string email)
+    {
+        Email = NormalizeEmail(email);
+    }
+
     private static string NormalizeEmail(string email)
     {
         try

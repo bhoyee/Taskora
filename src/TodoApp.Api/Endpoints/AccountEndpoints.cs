@@ -14,6 +14,15 @@ internal static class AccountEndpoints
             .WithName("RegisterAccount");
         group.MapPost("/login", LoginAsync)
             .WithName("Login");
+        group.MapGet("/me", GetCurrentAsync)
+            .RequireAuthorization()
+            .WithName("GetCurrentAccount");
+        group.MapPut("/profile", UpdateProfileAsync)
+            .RequireAuthorization()
+            .WithName("UpdateAccountProfile");
+        group.MapPut("/password", ChangePasswordAsync)
+            .RequireAuthorization()
+            .WithName("ChangePassword");
 
         return endpoints;
     }
@@ -37,6 +46,31 @@ internal static class AccountEndpoints
         ApiResult.From(await handler.HandleAsync(
             new LoginCommand(request.Email, request.Password),
             cancellationToken));
+
+    private static async Task<IResult> GetCurrentAsync(
+        GetCurrentAccountHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new GetCurrentAccountQuery(),
+            cancellationToken));
+
+    private static async Task<IResult> UpdateProfileAsync(
+        UpdateAccountProfileRequest request,
+        UpdateAccountProfileHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new UpdateAccountProfileCommand(request.Email),
+            cancellationToken));
+
+    private static async Task<IResult> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        ChangePasswordHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new ChangePasswordCommand(
+                request.CurrentPassword,
+                request.NewPassword),
+            cancellationToken));
 }
 
 public sealed record RegisterAccountRequest(
@@ -46,3 +80,9 @@ public sealed record RegisterAccountRequest(
     string WorkspaceName);
 
 public sealed record LoginRequest(string Email, string Password);
+
+public sealed record UpdateAccountProfileRequest(string Email);
+
+public sealed record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword);

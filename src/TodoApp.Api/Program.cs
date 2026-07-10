@@ -69,6 +69,7 @@ app.MapHealthChecks(
 app.MapProjectEndpoints();
 app.MapTaskEndpoints();
 app.MapIntelligenceEndpoints();
+app.MapNotificationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapAccountEndpoints();
 app.Map("/api/{**path}", () => Results.Problem(

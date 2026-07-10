@@ -9,6 +9,15 @@ const dashboard = {
   blockedTaskCount: 1,
   overdueTaskCount: 1,
   criticalTaskCount: 2,
+  warnings: [{
+    type: 'TaskDue',
+    severity: 'warning',
+    title: 'Task deadline reminder',
+    message: 'Ship portfolio is due in 24 hours.',
+    projectId: '10000000-0000-0000-0000-000000000001',
+    taskId: 'task-1',
+    dueDate: '2026-07-10',
+  }],
 }
 const taskPage = {
   totalCount: 1,
@@ -72,8 +81,8 @@ const invitation = {
 const projectDetails = {
   id: '10000000-0000-0000-0000-000000000001',
   name: 'Portfolio launch',
-  description: null,
-  targetDate: null,
+  description: null as string | null,
+  targetDate: '2026-08-30',
   isArchived: false,
   archivedAt: null,
   categories: [{
@@ -87,6 +96,20 @@ const secondProjectDetails = {
   id: 'project-2',
   name: 'Client delivery project',
   categories: [],
+}
+const createdProjectDetails = {
+  ...projectDetails,
+  id: 'project-3',
+  name: 'Client onboarding',
+  description: 'New project for onboarding work.',
+  targetDate: '2026-09-15',
+  categories: [],
+}
+const updatedProjectDetails = {
+  ...projectDetails,
+  name: 'Portfolio delivery',
+  description: 'Updated delivery scope.',
+  targetDate: '2026-09-20',
 }
 const members = [{
   userId: 'user-1',
@@ -103,6 +126,11 @@ const activity = [{
   currentValue: 'InProgress',
   occurredAt: '2026-07-06T10:00:00Z',
 }]
+const accountProfile = {
+  userId: 'user-1',
+  displayName: 'Jadesola Aliu',
+  email: 'jadesola@example.com',
+}
 
 function mockApi() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -132,11 +160,52 @@ function mockPagedApi() {
     })
 }
 
+function mockMemberWorkspaceWithoutProjectsApi() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input) => {
+      const url = String(input)
+      if (url.includes('/account/me')) return jsonResponse(accountProfile)
+      if (url.endsWith('/workspaces')) {
+        return jsonResponse([{
+          id: 'workspace-member',
+          name: 'Delivery workspace',
+          role: 'Member',
+        }])
+      }
+      if (url.includes('/workspaces/workspace-member/projects')) {
+        return jsonResponse([])
+      }
+      if (url.includes('/workspaces/workspace-member/members')) {
+        return jsonResponse([{
+          ...members[0],
+          role: 'Member',
+        }])
+      }
+      if (url.includes('/dashboard')) {
+        return jsonResponse({
+          projectCount: 0,
+          activeTaskCount: 0,
+          blockedTaskCount: 0,
+          overdueTaskCount: 0,
+          criticalTaskCount: 0,
+          warnings: [],
+        })
+      }
+      return jsonResponse({ totalCount: 0, items: [] })
+    })
+}
+
 function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
+  if (url.includes('/account/me')) return accountProfile
+  if (url.includes('/account/profile')) return {
+    ...accountProfile,
+    email: 'jadesola.portfolio@example.com',
+  }
+  if (url.includes('/account/password')) return true
   if (url.includes('/activity')) return activityItems
   if (url.includes('/workspaces/workspace-1/invitations')) return []
-  if (url.includes('/workspaces/workspace-1/members')) return members
   if (url.includes('/workspaces/workspace-1/projects')) return [projectDetails]
+  if (url.includes('/workspaces/workspace-1/members')) return members
   if (url.endsWith('/workspaces')) return workspaces
   if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001')) return projectDetails
   if (url.includes('/api/v1/tasks/task-1')) return taskPage.items[0]
@@ -148,6 +217,7 @@ function mockResponseFor(url: string, page = taskPage, activityItems = activity)
 function mockWorkspaceManagementApi() {
   let currentWorkspaces = [...workspaces]
   let currentInvitations: typeof invitation[] = []
+  let currentProjects = [projectDetails]
 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input, init) => {
@@ -168,6 +238,41 @@ function mockWorkspaceManagementApi() {
         return jsonResponse(currentInvitations)
       }
 
+      if (url.includes('/account/me')) {
+        return jsonResponse(accountProfile)
+      }
+
+      if (url.includes('/account/profile')) {
+        return jsonResponse({
+          ...accountProfile,
+          email: 'jadesola.portfolio@example.com',
+        })
+      }
+
+      if (url.includes('/account/password')) {
+        return jsonResponse(true)
+      }
+
+      if (url.includes('/workspaces/workspace-1/projects') && method === 'POST') {
+        currentProjects = [...currentProjects, createdProjectDetails]
+        return jsonResponse(createdProjectDetails)
+      }
+
+      if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001') && method === 'PUT') {
+        currentProjects = currentProjects.map((project) =>
+          project.id === projectDetails.id ? updatedProjectDetails : project)
+        return jsonResponse(updatedProjectDetails)
+      }
+
+      if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001/archive') && method === 'POST') {
+        currentProjects = currentProjects.filter((project) => project.id !== projectDetails.id)
+        return jsonResponse({ ...projectDetails, isArchived: true, archivedAt: '2026-07-10T09:00:00Z' })
+      }
+
+      if (url.includes('/workspaces/workspace-1/projects')) {
+        return jsonResponse(currentProjects)
+      }
+
       if (url.endsWith('/workspaces')) {
         return jsonResponse(currentWorkspaces)
       }
@@ -183,6 +288,7 @@ function mockWorkspaceManagementApi() {
           blockedTaskCount: 0,
           overdueTaskCount: 0,
           criticalTaskCount: 0,
+          warnings: [],
         })
       }
 
@@ -265,11 +371,19 @@ describe('delivery workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /profile/i }))
     expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-    await user.clear(screen.getByLabelText('Display name'))
-    await user.type(screen.getByLabelText('Display name'), 'Jadesola Portfolio')
+    expect(screen.getByLabelText('Full name')).toHaveValue('Jadesola Aliu')
+    expect(screen.getByLabelText('Workspace role')).toHaveValue('Owner')
+    await user.clear(screen.getByLabelText('Email'))
+    await user.type(screen.getByLabelText('Email'), 'jadesola.portfolio@example.com')
     await user.click(screen.getByRole('button', { name: /save profile/i }))
     expect(screen.getByText('Profile updated.')).toBeInTheDocument()
-  })
+
+    await user.type(screen.getByLabelText('Current password'), 'Portfolio123!')
+    await user.type(screen.getByLabelText('New password'), 'Portfolio456!')
+    await user.type(screen.getByLabelText('Confirm password'), 'Portfolio456!')
+    await user.click(screen.getByRole('button', { name: /change password/i }))
+    expect(screen.getByText('Password changed.')).toBeInTheDocument()
+  }, 20000)
 
   it('shows activity fallback, paginates tasks, and logs out from the menu', async () => {
     mockPagedApi()
@@ -313,7 +427,58 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /create/i }))
 
     expect(await screen.findByText('Workspace Client delivery created.')).toBeInTheDocument()
-    expect(screen.getByDisplayValue(/Client delivery/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^Project$/)).toHaveValue('project-2')
+  })
+
+  it('creates and selects a project inside the workspace', async () => {
+    mockWorkspaceManagementApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    await user.click(screen.getByRole('button', { name: /new project/i }))
+    await user.type(screen.getByLabelText('Project name'), 'Client onboarding')
+    await user.type(screen.getByLabelText('Description'), 'New project for onboarding work.')
+    await user.type(screen.getByLabelText('Delivery date'), '2026-09-15')
+    await user.click(screen.getByRole('button', { name: /create project/i }))
+
+    expect(await screen.findByText('Project Client onboarding created.')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Client onboarding')).toBeInTheDocument()
+  })
+
+  it('edits and archives a project from the project bar', async () => {
+    mockWorkspaceManagementApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Ship portfolio')
+
+    expect(screen.getByText(/Delivery date:/)).toBeInTheDocument()
+    expect(screen.getByText(/days left|overdue|Due today/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^edit$/i }))
+    await user.clear(screen.getByLabelText('Project name'))
+    await user.type(screen.getByLabelText('Project name'), 'Portfolio delivery')
+    await user.clear(screen.getByLabelText('Description'))
+    await user.type(screen.getByLabelText('Description'), 'Updated delivery scope.')
+    await user.clear(screen.getByLabelText('Delivery date'))
+    await user.type(screen.getByLabelText('Delivery date'), '2026-09-20')
+    await user.click(screen.getByRole('button', { name: /save project/i }))
+
+    expect(await screen.findByText('Project Portfolio delivery updated.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portfolio delivery' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /archive/i }))
+    expect(await screen.findByText('Project Portfolio launch archived.')).toBeInTheDocument()
+  })
+
+  it('hides project creation and disables tasks for member workspaces with no project', async () => {
+    mockMemberWorkspaceWithoutProjectsApi()
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'No project yet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled()
   })
 
   it('creates a pending invite from workspace settings', async () => {

@@ -25,7 +25,7 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const emptyDashboard: Dashboard = {
   projectCount: 0, activeTaskCount: 0, blockedTaskCount: 0,
-  overdueTaskCount: 0, criticalTaskCount: 0,
+  overdueTaskCount: 0, criticalTaskCount: 0, warnings: [],
 }
 
 type View = 'workspace' | 'activity' | 'settings' | 'profile'
@@ -40,7 +40,6 @@ function viewFromHash(hash: string): View {
 interface UserProfile {
   displayName: string
   email: string
-  title: string
 }
 
 interface UserSettings {
@@ -52,7 +51,6 @@ interface UserSettings {
 const defaultProfile: UserProfile = {
   displayName: 'Jadesola Aliu',
   email: 'jadesola@example.com',
-  title: 'Portfolio owner',
 }
 
 const defaultSettings: UserSettings = {
@@ -97,7 +95,10 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
     localStorage.getItem('todoapp_workspace_id') ?? '')
+  const [projects, setProjects] = useState<ProjectDetails[]>([])
   const [project, setProject] = useState<ProjectDetails | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState(() =>
+    localStorage.getItem('todoapp_project_id') ?? '')
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
@@ -136,20 +137,39 @@ export default function App() {
         localStorage.setItem('todoapp_workspace_id', selected.id)
       }
       const projects = await api.projects(selected.id)
-      const selectedProject = projects[0] ??
-        await api.createWorkspaceProject(selected.id, 'My task project')
+      const selectedProject = projects.find((item) => item.id === selectedProjectId) ??
+        projects[0] ??
+        null
+      if (selectedProject && selectedProject.id !== selectedProjectId) {
+        setSelectedProjectId(selectedProject.id)
+        localStorage.setItem('todoapp_project_id', selectedProject.id)
+      } else if (!selectedProject) {
+        setSelectedProjectId('')
+        localStorage.removeItem('todoapp_project_id')
+      }
       const [summary, page, workspaceMembers, workspaceInvitations] = await Promise.all([
-        api.dashboard(selected.id),
-        api.tasks(selected.id, search, pageNumber, pageSize),
+        api.dashboard(selected.id, selectedProject?.id),
+        selectedProject
+          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
+          : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
       ])
+      const currentProfile = await api.me().catch(() => null)
+      if (currentProfile) {
+        const nextProfile = {
+          displayName: currentProfile.displayName,
+          email: currentProfile.email,
+        }
+        setProfile(nextProfile)
+        localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
+      }
       setWorkspace(selected)
+      setProjects(projects)
       setProject(selectedProject)
       setMembers(workspaceMembers)
       setInvitations(workspaceInvitations)
-      setCategories((projects.length ? projects : [selectedProject])
-        .flatMap((item) => item.categories))
+      setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
@@ -165,7 +185,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -222,18 +242,105 @@ export default function App() {
   const switchWorkspace = (workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId)
     localStorage.setItem('todoapp_workspace_id', workspaceId)
+    setSelectedProjectId('')
+    localStorage.removeItem('todoapp_project_id')
     setPageNumber(1)
+  }
+  const switchProject = (projectId: string) => {
+    setSelectedProjectId(projectId)
+    localStorage.setItem('todoapp_project_id', projectId)
+    setPageNumber(1)
+  }
+  const createProject = async (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => {
+    if (!workspace) return
+    try {
+      setError('')
+      const created = await api.createWorkspaceProject(
+        workspace.id,
+        name,
+        description,
+        deliveryDate,
+      )
+      setProjects((items) => [...items, created]
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setProject(created)
+      setSelectedProjectId(created.id)
+      localStorage.setItem('todoapp_project_id', created.id)
+      setPageNumber(1)
+      setNotice(`Project ${created.name} created.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be created.')
+      throw reason
+    }
+  }
+  const updateProject = async (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => {
+    try {
+      setError('')
+      const updated = await api.updateProject(
+        projectId,
+        name,
+        description,
+        deliveryDate,
+      )
+      setProjects((items) => items.map((item) =>
+        item.id === updated.id ? updated : item)
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setProject(updated)
+      setCategories((items) => [
+        ...items.filter((category) => category.projectId !== updated.id),
+        ...updated.categories,
+      ].sort((left, right) => left.name.localeCompare(right.name)))
+      setNotice(`Project ${updated.name} updated.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be updated.')
+      throw reason
+    }
+  }
+  const archiveProject = async (projectId: string) => {
+    try {
+      setError('')
+      const archived = await api.archiveProject(projectId)
+      const remaining = projects.filter((item) => item.id !== projectId)
+      setProjects(remaining)
+      const next = remaining[0] ?? null
+      setProject(next)
+      setSelectedProjectId(next?.id ?? '')
+      if (next) {
+        localStorage.setItem('todoapp_project_id', next.id)
+      } else {
+        localStorage.removeItem('todoapp_project_id')
+      }
+      setPageNumber(1)
+      setNotice(`Project ${archived.name} archived.`)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be archived.')
+      throw reason
+    }
   }
   const createWorkspace = async (name: string) => {
     try {
       setError('')
       const created = await api.createWorkspace(name)
       setWorkspaces((items) => [...items.filter((item) => item.id !== created.id), created])
-      setWorkspace(created)
-      setTasks([])
-      setDashboard(emptyDashboard)
-      setSelectedWorkspaceId(created.id)
-      localStorage.setItem('todoapp_workspace_id', created.id)
+    setWorkspace(created)
+    setProjects([])
+    setProject(null)
+    setTasks([])
+    setDashboard(emptyDashboard)
+    setSelectedWorkspaceId(created.id)
+    setSelectedProjectId('')
+    localStorage.setItem('todoapp_workspace_id', created.id)
+    localStorage.removeItem('todoapp_project_id')
       setNotice(`Workspace ${created.name} created.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Workspace could not be created.')
@@ -283,7 +390,7 @@ export default function App() {
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
-          <div><strong>{profile.displayName}</strong><small>{profile.title}</small></div>
+          <div><strong>{profile.displayName}</strong><small>{workspace?.role ?? 'Member'}</small></div>
         </button>
       </aside>
 
@@ -297,7 +404,7 @@ export default function App() {
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
-          {view === 'workspace' && <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>}
+          {view === 'workspace' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -310,6 +417,26 @@ export default function App() {
             <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
             <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
           </section>
+
+          {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
+            {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+              <AlertTriangle size={18} />
+              <div>
+                <strong>{warning.title}</strong>
+                <span>{warning.message}{warning.dueDate ? ` Deadline: ${new Date(`${warning.dueDate}T00:00:00`).toLocaleDateString()}.` : ''}</span>
+              </div>
+            </article>)}
+          </section>}
+
+          <ProjectBar
+            projects={projects}
+            selectedProjectId={project?.id ?? selectedProjectId}
+            workspaceRole={workspace?.role ?? null}
+            onSwitch={switchProject}
+            onCreate={createProject}
+            onUpdate={updateProject}
+            onArchive={archiveProject}
+          />
 
           <section className="work-area">
             <div className="toolbar">
@@ -369,11 +496,32 @@ export default function App() {
           localStorage.setItem('todoapp_settings', JSON.stringify(next))
           setNotice('Settings saved.')
         }} />}
-        {view === 'profile' && <ProfilePage profile={profile} account={account} onSave={(next) => {
-          setProfile(next)
-          localStorage.setItem('todoapp_profile', JSON.stringify(next))
-          setNotice('Profile updated.')
-        }} onPasswordChanged={() => setNotice('Password preference recorded. Connect a production identity provider to enforce password changes.')} onLogout={logout} />}
+        {view === 'profile' && <ProfilePage
+          profile={profile}
+          account={account}
+          role={workspace?.role ?? null}
+          onSave={async (next) => {
+            const updated = await api.updateProfile(next.email)
+            const profileUpdate = {
+              displayName: updated.displayName,
+              email: updated.email,
+            }
+            setProfile(profileUpdate)
+            localStorage.setItem('todoapp_profile', JSON.stringify(profileUpdate))
+            setAccount((current) => {
+              if (!current) return current
+              const updatedAccount = { ...current, email: updated.email }
+              localStorage.setItem('todoapp_account', JSON.stringify(updatedAccount))
+              return updatedAccount
+            })
+            setNotice('Profile updated.')
+          }}
+          onPasswordChanged={async (currentPassword, newPassword) => {
+            await api.changePassword(currentPassword, newPassword)
+            setNotice('Password changed.')
+          }}
+          onLogout={logout}
+        />}
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
@@ -586,6 +734,150 @@ function WorkspaceSwitcher({
     </label>
     <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New</button>
   </div>
+}
+
+function ProjectBar({
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  onSwitch,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  onSwitch: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+}) {
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
+  const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
+
+  if (creating && canCreateProject) {
+    return <form className="project-create panel-page" onSubmit={(event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const data = new FormData(form)
+      setBusy(true)
+      setError('')
+      onCreate(
+        String(data.get('name')),
+        String(data.get('description')),
+        String(data.get('deliveryDate')),
+      )
+        .then(() => {
+          form.reset()
+          setCreating(false)
+        })
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Project could not be created.'))
+        .finally(() => setBusy(false))
+    }}>
+      <label>Project name<input name="name" required maxLength={160} autoFocus /></label>
+      <label>Description<input name="description" maxLength={500} /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required /></label>
+      {error && <p className="field-error">{error}</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setCreating(false)}>Cancel</button>
+        <button className="primary" disabled={busy}><FolderPlus size={16} /> {busy ? 'Creating...' : 'Create project'}</button>
+      </footer>
+    </form>
+  }
+
+  if (editing && selectedProject && canCreateProject) {
+    return <form className="project-create panel-page" onSubmit={(event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const data = new FormData(form)
+      setBusy(true)
+      setError('')
+      onUpdate(
+        selectedProject.id,
+        String(data.get('name')),
+        String(data.get('description')),
+        String(data.get('deliveryDate')),
+      )
+        .then(() => setEditing(false))
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Project could not be updated.'))
+        .finally(() => setBusy(false))
+    }}>
+      <label>Project name<input name="name" required maxLength={160} defaultValue={selectedProject.name} autoFocus /></label>
+      <label>Description<input name="description" maxLength={500} defaultValue={selectedProject.description ?? ''} /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required defaultValue={selectedProject.targetDate ?? ''} /></label>
+      {error && <p className="field-error">{error}</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+        <button className="primary" disabled={busy}><Save size={16} /> {busy ? 'Saving...' : 'Save project'}</button>
+      </footer>
+    </form>
+  }
+
+  return <section className="project-bar panel-page" aria-label="Projects">
+    <div>
+      <p className="eyebrow">Project</p>
+      <h2>{selectedProject?.name ?? 'No project yet'}</h2>
+      {selectedProject && <p className="project-delivery">
+        Delivery date: <strong>{selectedProject.targetDate ? formatDate(selectedProject.targetDate) : 'Not set'}</strong>
+        {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+      </p>}
+    </div>
+    {projects.length > 0 && <label>
+      <span>Project</span>
+      <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
+        {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+      </select>
+      <ChevronDown />
+    </label>}
+    {canCreateProject && <div className="project-actions">
+      <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
+      {selectedProject && <>
+        <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
+        <button className="secondary danger-action" disabled={busy} onClick={() => {
+          setBusy(true)
+          setError('')
+          onArchive(selectedProject.id)
+            .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
+            .finally(() => setBusy(false))
+        }}><Trash2 size={16} /> Archive</button>
+      </>}
+    </div>}
+    {error && <p className="field-error">{error}</p>}
+  </section>
+}
+
+function deliveryStatus(deliveryDate: string | null) {
+  if (!deliveryDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const delivery = new Date(`${deliveryDate}T00:00:00`)
+  const days = Math.ceil((delivery.getTime() - today.getTime()) / 86400000)
+  if (days < 0) return { label: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`, tone: 'critical' }
+  if (days === 0) return { label: 'Due today', tone: 'critical' }
+  if (days === 1) return { label: '1 day left', tone: 'warning' }
+  if (days <= 7) return { label: `${days} days left`, tone: 'warning' }
+  return { label: `${days} days left`, tone: 'healthy' }
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString()
 }
 
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
@@ -806,31 +1098,45 @@ function SettingsPage({
 function ProfilePage({
   profile,
   account,
+  role,
   onSave,
   onPasswordChanged,
   onLogout,
 }: {
   profile: UserProfile
   account: AccountSession | null
-  onSave: (profile: UserProfile) => void
-  onPasswordChanged: () => void
+  role: Workspace['role'] | null
+  onSave: (profile: UserProfile) => Promise<void>
+  onPasswordChanged: (
+    currentPassword: string,
+    newPassword: string,
+  ) => Promise<void>
   onLogout: () => void
 }) {
   const [draft, setDraft] = useState(profile)
   const [password, setPassword] = useState({ current: '', next: '', confirm: '' })
   const [passwordError, setPasswordError] = useState('')
+  const [profileError, setProfileError] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
   useEffect(() => setDraft(profile), [profile])
 
   return <section className="profile-grid">
     <form className="panel-page profile-card" onSubmit={(event) => {
       event.preventDefault()
-      onSave(draft)
+      setSavingProfile(true)
+      setProfileError('')
+      Promise.resolve(onSave(draft))
+        .catch((reason) => setProfileError(
+          reason instanceof Error ? reason.message : 'Profile could not be updated.'))
+        .finally(() => setSavingProfile(false))
     }}>
       <div className="profile-heading"><span className="avatar large">{initials(draft.displayName)}</span><div><h2>Personal details</h2><p>{account ? `Signed in as ${account.email}.` : 'Using the development workspace session.'}</p></div></div>
-      <label>Display name<input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} required maxLength={120} /></label>
+      <label>Full name<input value={draft.displayName} readOnly /></label>
       <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} required maxLength={180} /></label>
-      <label>Title<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required maxLength={120} /></label>
-      <footer><button className="primary"><Save size={16} /> Save profile</button></footer>
+      <label>Workspace role<input value={role ?? 'Member'} readOnly /></label>
+      {profileError && <p className="field-error">{profileError}</p>}
+      <footer><button className="primary" disabled={savingProfile}><Save size={16} /> {savingProfile ? 'Saving...' : 'Save profile'}</button></footer>
     </form>
 
     <form className="panel-page profile-card" onSubmit={(event) => {
@@ -844,15 +1150,19 @@ function ProfilePage({
         setPasswordError('New password and confirmation must match.')
         return
       }
-      setPassword({ current: '', next: '', confirm: '' })
-      onPasswordChanged()
+      setSavingPassword(true)
+      onPasswordChanged(password.current, password.next)
+        .then(() => setPassword({ current: '', next: '', confirm: '' }))
+        .catch((reason) => setPasswordError(
+          reason instanceof Error ? reason.message : 'Password could not be changed.'))
+        .finally(() => setSavingPassword(false))
     }}>
-      <div className="profile-heading"><span className="metric-icon"><ShieldCheck /></span><div><h2>Password</h2><p>Record the change intent until production identity is connected.</p></div></div>
-      <label>Current password<input type="password" value={password.current} onChange={(event) => setPassword({ ...password, current: event.target.value })} autoComplete="current-password" /></label>
-      <label>New password<input type="password" value={password.next} onChange={(event) => setPassword({ ...password, next: event.target.value })} autoComplete="new-password" /></label>
-      <label>Confirm password<input type="password" value={password.confirm} onChange={(event) => setPassword({ ...password, confirm: event.target.value })} autoComplete="new-password" /></label>
+      <div className="profile-heading"><span className="metric-icon"><ShieldCheck /></span><div><h2>Password</h2><p>Change the password used for this account.</p></div></div>
+      <label>Current password<input type="password" value={password.current} required onChange={(event) => setPassword({ ...password, current: event.target.value })} autoComplete="current-password" /></label>
+      <label>New password<input type="password" value={password.next} required onChange={(event) => setPassword({ ...password, next: event.target.value })} autoComplete="new-password" /></label>
+      <label>Confirm password<input type="password" value={password.confirm} required onChange={(event) => setPassword({ ...password, confirm: event.target.value })} autoComplete="new-password" /></label>
       {passwordError && <p className="field-error">{passwordError}</p>}
-      <footer><button className="secondary" type="button" onClick={onLogout}><LogOut size={16} /> Logout</button><button className="primary">Change password</button></footer>
+      <footer><button className="secondary" type="button" onClick={onLogout}><LogOut size={16} /> Logout</button><button className="primary" disabled={savingPassword}>{savingPassword ? 'Changing...' : 'Change password'}</button></footer>
     </form>
   </section>
 }

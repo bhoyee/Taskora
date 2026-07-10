@@ -74,16 +74,69 @@ public sealed class PortfolioDashboardReadRepository(
         }
 
         var dueTaskValues = await dueTasks
-            .Select(task => new { task.DueDate, task.Status })
+            .Select(task => new
+            {
+                task.Id,
+                task.ProjectId,
+                task.Title,
+                task.DueDate,
+                task.Status
+            })
             .ToArrayAsync(cancellationToken);
         var overdueCount = dueTaskValues.Count(task =>
             task.DueDate!.IsOverdue(today, task.Status));
+        var tomorrow = today.AddDays(1);
+        var twoDaysFromNow = today.AddDays(2);
+        var taskWarnings = dueTaskValues
+            .Where(task => task.Status != TaskItemStatus.Completed)
+            .Where(task =>
+                task.DueDate!.Value == today ||
+                task.DueDate.Value == tomorrow ||
+                task.DueDate.Value == twoDaysFromNow)
+            .Select(task =>
+            {
+                var dueDate = task.DueDate!.Value;
+                var (severity, message) = dueDate == today
+                    ? ("critical", $"{task.Title} is due today.")
+                    : dueDate == tomorrow
+                        ? ("warning", $"{task.Title} is due in 24 hours.")
+                        : ("info", $"{task.Title} is due in 2 days.");
+                return new DashboardWarning(
+                    "TaskDue",
+                    severity,
+                    "Task deadline reminder",
+                    message,
+                    ProjectId: task.ProjectId,
+                    TaskId: task.Id,
+                    DueDate: dueDate);
+            });
+        var projectValues = await projects
+            .Where(project => project.TargetDate != null)
+            .Select(project => new
+            {
+                project.Id,
+                project.Name,
+                project.TargetDate,
+                project.ArchivedAt
+            })
+            .ToArrayAsync(cancellationToken);
+        var projectWarnings = projectValues
+            .Where(project => project.ArchivedAt is null)
+            .Where(project => project.TargetDate!.Value == tomorrow)
+            .Select(project => new DashboardWarning(
+                "ProjectTarget",
+                "warning",
+                "Project delivery date reminder",
+                $"{project.Name} reaches its delivery date in 24 hours.",
+                ProjectId: project.Id,
+                DueDate: project.TargetDate!.Value));
 
         return new PortfolioDashboardSnapshot(
             projectCount,
             activeCount,
             blockedCount,
             overdueCount,
-            criticalCount);
+            criticalCount,
+            taskWarnings.Concat(projectWarnings).ToArray());
     }
 }

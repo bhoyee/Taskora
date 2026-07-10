@@ -51,6 +51,10 @@ public static class DependencyInjection
             TaskActivityReadRepository>();
         services.AddScoped<IPortfolioDashboardReadRepository,
             PortfolioDashboardReadRepository>();
+        services.AddScoped<IDueDateNotificationReadRepository,
+            DueDateNotificationReadRepository>();
+        services.AddScoped<INotificationEmailSender,
+            LoggingNotificationEmailSender>();
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IAccountRepository, AccountRepository>();

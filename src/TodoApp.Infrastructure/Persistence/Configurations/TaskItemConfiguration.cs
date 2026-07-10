@@ -28,6 +28,7 @@ internal sealed class TaskItemConfiguration
             .HasMaxLength(1000);
         builder.Property(task => task.CompletedAt);
         builder.Property(task => task.AssignedUserId);
+        builder.Property(task => task.CreatedByUserId);
         builder.Property(task => task.CategoryId);
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
