@@ -6,6 +6,31 @@ const dashboard = {
   blockedTaskCount: 1,
   overdueTaskCount: 0,
   criticalTaskCount: 1,
+  statusBreakdown: [
+    { label: 'Backlog', count: 0 },
+    { label: 'Ready', count: 1 },
+    { label: 'InProgress', count: 1 },
+    { label: 'Blocked', count: 0 },
+    { label: 'Completed', count: 0 },
+  ],
+  priorityBreakdown: [
+    { label: 'Low', count: 0 },
+    { label: 'Medium', count: 0 },
+    { label: 'High', count: 1 },
+    { label: 'Critical', count: 1 },
+  ],
+  deadlineBreakdown: [
+    { label: 'Overdue', count: 0 },
+    { label: 'Due today', count: 0 },
+    { label: 'Due in 7 days', count: 0 },
+    { label: 'Healthy', count: 2 },
+  ],
+  projectProgress: {
+    completedTasks: 0,
+    totalTasks: 2,
+    completionPercentage: 0,
+  },
+  warnings: [],
 }
 const tasks = {
   totalCount: 1,

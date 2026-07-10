@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  AccountSession, Dashboard, ProjectCategory, ProjectDetails, TaskActivity, TaskItem,
-  TaskStatus, Workspace, WorkspaceInvitation, WorkspaceMember,
+  AccountSession, Dashboard, DashboardBreakdownItem, ProjectCategory, ProjectDetails,
+  TaskActivity, TaskItem, TaskStatus, Workspace, WorkspaceInvitation, WorkspaceMember,
 } from './api'
 import './styles.css'
 
@@ -25,7 +25,12 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const emptyDashboard: Dashboard = {
   projectCount: 0, activeTaskCount: 0, blockedTaskCount: 0,
-  overdueTaskCount: 0, criticalTaskCount: 0, warnings: [],
+  overdueTaskCount: 0, criticalTaskCount: 0,
+  statusBreakdown: [],
+  priorityBreakdown: [],
+  deadlineBreakdown: [],
+  projectProgress: { completedTasks: 0, totalTasks: 0, completionPercentage: 0 },
+  warnings: [],
 }
 
 type View = 'workspace' | 'activity' | 'settings' | 'profile'
@@ -186,6 +191,11 @@ export default function App() {
   }
 
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId])
+  useEffect(() => {
+    if (view !== 'workspace' || loading) return undefined
+    const interval = window.setInterval(() => void load(), 15000)
+    return () => window.clearInterval(interval)
+  }, [view, loading, pageNumber, search, selectedWorkspaceId, selectedProjectId])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -418,6 +428,8 @@ export default function App() {
             <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
           </section>
 
+          <DashboardAnalytics dashboard={dashboard} />
+
           {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
             {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
               <AlertTriangle size={18} />
@@ -522,6 +534,7 @@ export default function App() {
           }}
           onLogout={logout}
         />}
+        <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
@@ -882,6 +895,148 @@ function formatDate(value: string) {
 
 function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
   return <div className={`metric ${tone}`}><span className="metric-icon">{icon}</span><div><strong>{value}</strong><span>{label}</span></div></div>
+}
+
+const statusChartColors: Record<string, string> = {
+  Backlog: '#687483',
+  Ready: '#b7791f',
+  InProgress: '#2875a5',
+  Blocked: '#b23b30',
+  Completed: '#287258',
+}
+
+const priorityChartColors: Record<string, string> = {
+  Low: '#4d9b78',
+  Medium: '#4388c7',
+  High: '#e49625',
+  Critical: '#c33f35',
+}
+
+const deadlineChartColors: Record<string, string> = {
+  Overdue: '#c33f35',
+  'Due today': '#b7791f',
+  'Due in 7 days': '#4388c7',
+  Healthy: '#4d9b78',
+}
+
+function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
+  return <section className="analytics-grid" aria-label="Dashboard analytics">
+    <DonutChart title="Task status" items={dashboard.statusBreakdown} colors={statusChartColors} />
+    <BarChart title="Priority mix" items={dashboard.priorityBreakdown} colors={priorityChartColors} />
+    <BarChart title="Due date risk" items={dashboard.deadlineBreakdown} colors={deadlineChartColors} />
+    <ProgressChart
+      title="Project completion"
+      completed={dashboard.projectProgress.completedTasks}
+      total={dashboard.projectProgress.totalTasks}
+      percentage={dashboard.projectProgress.completionPercentage}
+    />
+  </section>
+}
+
+function DonutChart({
+  title,
+  items,
+  colors,
+}: {
+  title: string
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  const radius = 42
+  const circumference = 2 * Math.PI * radius
+  let offset = 0
+
+  return <article className="analytics-card">
+    <header><h2>{title}</h2><span>{total} tasks</span></header>
+    <div className="donut-wrap">
+      <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={`${title}: ${total} tasks`}>
+        <circle cx="60" cy="60" r={radius} className="donut-track" />
+        {total > 0 && items.filter((item) => item.count > 0).map((item) => {
+          const length = item.count / total * circumference
+          const segment = <circle
+            key={item.label}
+            cx="60"
+            cy="60"
+            r={radius}
+            className="donut-segment"
+            stroke={colors[item.label] ?? '#73808d'}
+            strokeDasharray={`${length} ${circumference - length}`}
+            strokeDashoffset={-offset}
+          />
+          offset += length
+          return segment
+        })}
+      </svg>
+      <div className="donut-center"><strong>{total ? Math.round((items.find((item) => item.label === 'Completed')?.count ?? 0) * 100 / total) : 0}%</strong><span>done</span></div>
+    </div>
+    <ChartLegend items={items} colors={colors} />
+  </article>
+}
+
+function BarChart({
+  title,
+  items,
+  colors,
+}: {
+  title: string
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  const max = Math.max(1, ...items.map((item) => item.count))
+  return <article className="analytics-card">
+    <header><h2>{title}</h2><span>{items.reduce((sum, item) => sum + item.count, 0)} total</span></header>
+    <div className="bar-chart">
+      {items.map((item) => <div className="bar-row" key={item.label}>
+        <span>{friendlyChartLabel(item.label)}</span>
+        <div className="bar-track"><i style={{
+          width: `${item.count / max * 100}%`,
+          backgroundColor: colors[item.label] ?? '#73808d',
+        }} /></div>
+        <strong>{item.count}</strong>
+      </div>)}
+    </div>
+  </article>
+}
+
+function ProgressChart({
+  title,
+  completed,
+  total,
+  percentage,
+}: {
+  title: string
+  completed: number
+  total: number
+  percentage: number
+}) {
+  return <article className="analytics-card progress-card">
+    <header><h2>{title}</h2><span>{completed}/{total} tasks</span></header>
+    <strong>{percentage}%</strong>
+    <div className="progress-track" aria-label={`${title}: ${percentage}% complete`}>
+      <i style={{ width: `${percentage}%` }} />
+    </div>
+    <p>{total === 0 ? 'Create tasks to start tracking delivery progress.' : `${completed} completed and ${Math.max(0, total - completed)} still open.`}</p>
+  </article>
+}
+
+function ChartLegend({
+  items,
+  colors,
+}: {
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  return <div className="chart-legend">
+    {items.map((item) => <span key={item.label}>
+      <i style={{ backgroundColor: colors[item.label] ?? '#73808d' }} />
+      {friendlyChartLabel(item.label)} <strong>{item.count}</strong>
+    </span>)}
+  </div>
+}
+
+function friendlyChartLabel(label: string) {
+  return label === 'InProgress' ? 'In progress' : label
 }
 
 function ActivityPage({

@@ -14,7 +14,18 @@ public sealed record PortfolioDashboardSnapshot(
     int BlockedTaskCount,
     int OverdueTaskCount,
     int CriticalTaskCount,
+    IReadOnlyList<DashboardBreakdownItem> StatusBreakdown,
+    IReadOnlyList<DashboardBreakdownItem> PriorityBreakdown,
+    IReadOnlyList<DashboardBreakdownItem> DeadlineBreakdown,
+    DashboardProjectProgress ProjectProgress,
     IReadOnlyList<DashboardWarning> Warnings);
+
+public sealed record DashboardBreakdownItem(string Label, int Count);
+
+public sealed record DashboardProjectProgress(
+    int CompletedTasks,
+    int TotalTasks,
+    int CompletionPercentage);
 
 public sealed record DashboardWarning(
     string Type,

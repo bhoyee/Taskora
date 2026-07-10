@@ -3,12 +3,67 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
+const dashboardAnalytics = {
+  statusBreakdown: [
+    { label: 'Backlog', count: 0 },
+    { label: 'Ready', count: 1 },
+    { label: 'InProgress', count: 1 },
+    { label: 'Blocked', count: 1 },
+    { label: 'Completed', count: 0 },
+  ],
+  priorityBreakdown: [
+    { label: 'Low', count: 0 },
+    { label: 'Medium', count: 0 },
+    { label: 'High', count: 1 },
+    { label: 'Critical', count: 2 },
+  ],
+  deadlineBreakdown: [
+    { label: 'Overdue', count: 1 },
+    { label: 'Due today', count: 0 },
+    { label: 'Due in 7 days', count: 1 },
+    { label: 'Healthy', count: 1 },
+  ],
+  projectProgress: {
+    completedTasks: 1,
+    totalTasks: 4,
+    completionPercentage: 25,
+  },
+}
+
+const emptyDashboardAnalytics = {
+  statusBreakdown: [
+    { label: 'Backlog', count: 0 },
+    { label: 'Ready', count: 0 },
+    { label: 'InProgress', count: 0 },
+    { label: 'Blocked', count: 0 },
+    { label: 'Completed', count: 0 },
+  ],
+  priorityBreakdown: [
+    { label: 'Low', count: 0 },
+    { label: 'Medium', count: 0 },
+    { label: 'High', count: 0 },
+    { label: 'Critical', count: 0 },
+  ],
+  deadlineBreakdown: [
+    { label: 'Overdue', count: 0 },
+    { label: 'Due today', count: 0 },
+    { label: 'Due in 7 days', count: 0 },
+    { label: 'Healthy', count: 0 },
+  ],
+  projectProgress: {
+    completedTasks: 0,
+    totalTasks: 0,
+    completionPercentage: 0,
+  },
+}
+
 const dashboard = {
   projectCount: 1,
   activeTaskCount: 3,
   blockedTaskCount: 1,
   overdueTaskCount: 1,
   criticalTaskCount: 2,
+  ...dashboardAnalytics,
   warnings: [{
     type: 'TaskDue',
     severity: 'warning',
@@ -188,6 +243,7 @@ function mockMemberWorkspaceWithoutProjectsApi() {
           blockedTaskCount: 0,
           overdueTaskCount: 0,
           criticalTaskCount: 0,
+          ...emptyDashboardAnalytics,
           warnings: [],
         })
       }
@@ -288,6 +344,7 @@ function mockWorkspaceManagementApi() {
           blockedTaskCount: 0,
           overdueTaskCount: 0,
           criticalTaskCount: 0,
+          ...emptyDashboardAnalytics,
           warnings: [],
         })
       }
@@ -324,6 +381,9 @@ describe('delivery workspace', () => {
     expect(screen.getByText('12.5')).toBeInTheDocument()
     expect(screen.getByText(/Value 15/)).toBeInTheDocument()
     expect(screen.getByText('Critical', { selector: '.metric span' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Dashboard analytics' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Task status' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Project completion' })).toBeInTheDocument()
   })
 
   it('switches to the board and opens task creation', async () => {
@@ -333,7 +393,7 @@ describe('delivery workspace', () => {
     await screen.findByText('Ship portfolio')
 
     await user.click(screen.getByRole('button', { name: /board/i }))
-    expect(screen.getByText('In progress')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'In progress tasks' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /new task/i }))
     await waitFor(() =>
@@ -453,7 +513,7 @@ describe('delivery workspace', () => {
     await screen.findByText('Ship portfolio')
 
     expect(screen.getByText(/Delivery date:/)).toBeInTheDocument()
-    expect(screen.getByText(/days left|overdue|Due today/)).toBeInTheDocument()
+    expect(screen.getByText(/days left|overdue|Due today/, { selector: '.delivery-badge' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^edit$/i }))
     await user.clear(screen.getByLabelText('Project name'))
