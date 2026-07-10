@@ -14,12 +14,10 @@ public sealed class PortfolioDashboardReadRepository(
         Guid? projectId,
         CancellationToken cancellationToken)
     {
-        var active = context.Tasks
-            .AsNoTracking()
-            .Where(task => task.Status != TaskItemStatus.Completed);
+        var scopedTasks = context.Tasks.AsNoTracking();
         if (workspaceId.HasValue)
         {
-            active = active.Where(task =>
+            scopedTasks = scopedTasks.Where(task =>
                 context.Projects.Any(project =>
                     project.Id == task.ProjectId &&
                     project.WorkspaceId == workspaceId.Value));
@@ -27,8 +25,10 @@ public sealed class PortfolioDashboardReadRepository(
 
         if (projectId.HasValue)
         {
-            active = active.Where(task => task.ProjectId == projectId.Value);
+            scopedTasks = scopedTasks.Where(task => task.ProjectId == projectId.Value);
         }
+
+        var active = scopedTasks.Where(task => task.Status != TaskItemStatus.Completed);
 
         var projects = context.Projects.AsNoTracking();
         if (workspaceId.HasValue)
@@ -58,22 +58,8 @@ public sealed class PortfolioDashboardReadRepository(
                     PriorityBand.Critical,
             cancellationToken);
         var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
-        var dueTasks = context.Tasks.AsNoTracking()
-            .Where(task => task.DueDate != null);
-        if (workspaceId.HasValue)
-        {
-            dueTasks = dueTasks.Where(task =>
-                context.Projects.Any(project =>
-                    project.Id == task.ProjectId &&
-                    project.WorkspaceId == workspaceId.Value));
-        }
-
-        if (projectId.HasValue)
-        {
-            dueTasks = dueTasks.Where(task => task.ProjectId == projectId.Value);
-        }
-
-        var dueTaskValues = await dueTasks
+        var dueTaskValues = await scopedTasks
+            .Where(task => task.DueDate != null)
             .Select(task => new
             {
                 task.Id,
@@ -83,8 +69,62 @@ public sealed class PortfolioDashboardReadRepository(
                 task.Status
             })
             .ToArrayAsync(cancellationToken);
+        var taskAnalytics = await scopedTasks
+            .Select(task => new
+            {
+                task.Status,
+                task.DueDate,
+                PriorityBand = EF.Property<PriorityScore>(task, "_priority") == null
+                    ? (PriorityBand?)null
+                    : EF.Property<PriorityScore>(task, "_priority").Band
+            })
+            .ToArrayAsync(cancellationToken);
         var overdueCount = dueTaskValues.Count(task =>
             task.DueDate!.IsOverdue(today, task.Status));
+        var statusBreakdown = Enum.GetValues<TaskItemStatus>()
+            .Select(status => new DashboardBreakdownItem(
+                status.ToString(),
+                taskAnalytics.Count(task => task.Status == status)))
+            .ToArray();
+        var priorityBreakdown = Enum.GetValues<PriorityBand>()
+            .Select(band => new DashboardBreakdownItem(
+                band.ToString(),
+                taskAnalytics.Count(task => task.PriorityBand == band)))
+            .ToArray();
+        var deadlineBreakdown = new[]
+        {
+            new DashboardBreakdownItem(
+                "Overdue",
+                taskAnalytics.Count(task =>
+                    task.DueDate?.IsOverdue(today, task.Status) == true)),
+            new DashboardBreakdownItem(
+                "Due today",
+                taskAnalytics.Count(task =>
+                    task.Status != TaskItemStatus.Completed &&
+                    task.DueDate?.Value == today)),
+            new DashboardBreakdownItem(
+                "Due in 7 days",
+                taskAnalytics.Count(task =>
+                    task.Status != TaskItemStatus.Completed &&
+                    task.DueDate is not null &&
+                    task.DueDate.Value > today &&
+                    task.DueDate.Value <= today.AddDays(7))),
+            new DashboardBreakdownItem(
+                "Healthy",
+                taskAnalytics.Count(task =>
+                    task.Status != TaskItemStatus.Completed &&
+                    (task.DueDate is null || task.DueDate.Value > today.AddDays(7))))
+        };
+        var totalTasks = taskAnalytics.Length;
+        var completedTasks = taskAnalytics.Count(
+            task => task.Status == TaskItemStatus.Completed);
+        var completionPercentage = totalTasks == 0
+            ? 0
+            : (int)Math.Round(completedTasks * 100m / totalTasks);
+        var projectProgress = new DashboardProjectProgress(
+            completedTasks,
+            totalTasks,
+            completionPercentage);
         var tomorrow = today.AddDays(1);
         var twoDaysFromNow = today.AddDays(2);
         var taskWarnings = dueTaskValues
@@ -137,6 +177,10 @@ public sealed class PortfolioDashboardReadRepository(
             blockedCount,
             overdueCount,
             criticalCount,
+            statusBreakdown,
+            priorityBreakdown,
+            deadlineBreakdown,
+            projectProgress,
             taskWarnings.Concat(projectWarnings).ToArray());
     }
 }

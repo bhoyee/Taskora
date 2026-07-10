@@ -39,7 +39,22 @@ export interface Dashboard {
   blockedTaskCount: number
   overdueTaskCount: number
   criticalTaskCount: number
+  statusBreakdown: DashboardBreakdownItem[]
+  priorityBreakdown: DashboardBreakdownItem[]
+  deadlineBreakdown: DashboardBreakdownItem[]
+  projectProgress: DashboardProjectProgress
   warnings: DashboardWarning[]
+}
+
+export interface DashboardBreakdownItem {
+  label: string
+  count: number
+}
+
+export interface DashboardProjectProgress {
+  completedTasks: number
+  totalTasks: number
+  completionPercentage: number
 }
 
 export interface DashboardWarning {
