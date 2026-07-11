@@ -67,6 +67,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .donut-center strong, .progress-card > strong { display: block; font-size: 28px; line-height: 1; color: #17202b; }
 .donut-center span { color: #73808d; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.donut-tooltip { position: absolute; left: 50%; top: -6px; z-index: 4; width: max-content; max-width: min(240px, 70vw); transform: translate(-50%, -100%); border: 1px solid #243142; border-radius: 6px; background: #18202b; color: white; padding: 7px 9px; box-shadow: 0 12px 28px #18202b33; font-size: 12px; font-weight: 800; line-height: 1.35; }
+.donut-tooltip::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: #18202b; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 7px; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 5px; color: #596675; font-size: 12px; }
 .chart-legend i { width: 8px; height: 8px; border-radius: 50%; }

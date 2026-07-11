@@ -1178,10 +1178,7 @@ function DonutChart({
 
   return <article className="analytics-card">
     <header><h2>{title}</h2><span>{total} tasks</span></header>
-    <div
-      className="donut-wrap chart-hover-target"
-      data-tooltip={activeSegment ?? `Hover a ${title.toLowerCase()} slice for details`}
-    >
+    <div className="donut-wrap">
       <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={`${title}: ${total} tasks`}>
         <circle cx="60" cy="60" r={radius} className="donut-track" />
         {total > 0 && items.filter((item) => item.count > 0).map((item) => {
@@ -1210,6 +1207,7 @@ function DonutChart({
           return segment
         })}
       </svg>
+      {activeSegment && <div className="donut-tooltip" role="status">{activeSegment}</div>}
       <div className="donut-center"><strong>{total ? Math.round((items.find((item) => item.label === 'Completed')?.count ?? 0) * 100 / total) : 0}%</strong><span>done</span></div>
     </div>
     <ChartLegend items={items} colors={colors} />
