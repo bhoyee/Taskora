@@ -53,7 +53,9 @@ public sealed class MigrationAndSeedTests
 
             await using var readContext = new TodoAppDbContext(options);
             Assert.Equal(1, await readContext.Projects.CountAsync());
-            Assert.Equal(3, await readContext.Tasks.CountAsync());
+            Assert.Equal(5, await readContext.Tasks.CountAsync());
+            Assert.Equal(2, await readContext.ProjectCategories.CountAsync());
+            Assert.Equal(3, await readContext.UserCredentials.CountAsync());
         }
         finally
         {
@@ -81,6 +83,8 @@ public sealed class MigrationAndSeedTests
             CancellationToken.None);
 
         Assert.Equal(1, await context.Projects.CountAsync());
-        Assert.Equal(3, await context.Tasks.CountAsync());
+        Assert.Equal(5, await context.Tasks.CountAsync());
+        Assert.Equal(2, await context.ProjectCategories.CountAsync());
+        Assert.True(await context.TaskActivities.AnyAsync());
     }
 }
