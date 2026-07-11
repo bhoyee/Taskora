@@ -14,9 +14,37 @@ LoadEnvironmentFile();
 
 var builder = WebApplication.CreateBuilder(args);
 
+ValidateDeploymentConfiguration(
+    builder.Environment,
+    builder.Configuration);
+
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "ConfiguredFrontend",
+        policy =>
+        {
+            var origins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>() ?? [];
+
+            if (origins.Length == 0 && builder.Environment.IsDevelopment())
+            {
+                origins = ["http://localhost:5173"];
+            }
+
+            if (origins.Length > 0)
+            {
+                policy
+                    .WithOrigins(origins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod();
+            }
+        });
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(
         new JsonStringEnumConverter()));
@@ -39,23 +67,50 @@ var app = builder.Build();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseCors("ConfiguredFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
 
-    await using var scope = app.Services.CreateAsyncScope();
-    var database = scope.ServiceProvider
+if (ShouldApplyMigrations(app.Environment, app.Configuration))
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    var logger = migrationScope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup");
+    var database = migrationScope.ServiceProvider
         .GetRequiredService<TodoAppDbContext>();
+    logger.LogInformation("Applying EF Core database migrations.");
     await database.Database.MigrateAsync();
+}
+
+if (ShouldSeedDemoData(app.Environment, app.Configuration))
+{
+    await using var seedScope = app.Services.CreateAsyncScope();
+    var logger = seedScope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup");
+    var database = seedScope.ServiceProvider
+        .GetRequiredService<TodoAppDbContext>();
+    logger.LogInformation(
+        "Seeding demo workspace with owner {Email}.",
+        DevelopmentDataSeeder.DemoOwnerEmail);
     await DevelopmentDataSeeder.SeedAsync(
         database,
         CancellationToken.None);
 }
 
 app.MapStaticAssets();
+app.MapHealthChecks(
+    "/health",
+    new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready")
+    });
 app.MapHealthChecks(
     "/health/live",
     new HealthCheckOptions
@@ -130,6 +185,73 @@ static void LoadEnvironmentFile()
         }
 
         directory = directory.Parent;
+    }
+}
+
+static bool ShouldApplyMigrations(
+    IWebHostEnvironment environment,
+    IConfiguration configuration) =>
+    environment.IsDevelopment() ||
+    bool.TryParse(
+        configuration["Database:ApplyMigrationsOnStartup"],
+        out var applyMigrations) && applyMigrations;
+
+static bool ShouldSeedDemoData(
+    IWebHostEnvironment environment,
+    IConfiguration configuration) =>
+    environment.IsDevelopment() ||
+    bool.TryParse(
+        configuration["DemoData:SeedOnStartup"],
+        out var seedDemoData) && seedDemoData;
+
+static void ValidateDeploymentConfiguration(
+    IWebHostEnvironment environment,
+    IConfiguration configuration)
+{
+    if (environment.IsDevelopment() || environment.IsEnvironment("Testing"))
+    {
+        return;
+    }
+
+    Require(
+        configuration.GetConnectionString("TodoApp"),
+        "ConnectionStrings:TodoApp");
+    Require(
+        configuration["Authentication:Authority"],
+        "Authentication:Authority");
+    Require(
+        configuration["Authentication:Audience"],
+        "Authentication:Audience");
+
+    var origins = configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>() ?? [];
+    if (origins.Length == 0)
+    {
+        throw new InvalidOperationException(
+            "Cors:AllowedOrigins must contain the deployed frontend origin.");
+    }
+
+    if (bool.TryParse(
+            configuration["Email:Smtp:Enabled"],
+            out var smtpEnabled) &&
+        smtpEnabled)
+    {
+        Require(
+            configuration["Email:Smtp:Host"],
+            "Email:Smtp:Host");
+        Require(
+            configuration["Email:Smtp:FromAddress"],
+            "Email:Smtp:FromAddress");
+    }
+
+    static void Require(string? value, string key)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(
+                $"{key} is required outside Development and Testing.");
+        }
     }
 }
 
