@@ -11,7 +11,11 @@ button:disabled { cursor: not-allowed; }
 .sidebar nav { display: grid; gap: 4px; }
 .sidebar nav button { color: #aeb8c5; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
 .sidebar nav button.active, .sidebar nav button:hover { background: #293442; color: white; }
-.sidebar-logout { margin-top: auto; border: 0; border-radius: 6px; background: #2a3543; color: #f3c7c2; display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; }
+.session-card { margin-top: auto; border: 1px solid #34404e; border-radius: 8px; background: #202a36; color: #f7f9fb; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px; text-align: left; transition: background-color .16s ease, border-color .16s ease, transform .16s ease; }
+.session-card:hover { background: #293442; border-color: #465365; transform: translateY(-1px); }
+.session-card small, .session-card em { display: block; color: #8f9aa7; font-size: 11px; font-style: normal; }
+.session-card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; margin: 1px 0; }
+.sidebar-logout { margin-top: 10px; border: 0; border-radius: 6px; background: #2a3543; color: #f3c7c2; display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; }
 .sidebar-logout:hover { background: #3a4656; color: white; }
 .sidebar-foot { margin-top: 10px; border: 0; border-top: 1px solid #34404e; background: transparent; color: #f7f9fb; text-align: left; padding: 18px 8px 0; display: flex; gap: 10px; align-items: center; }
 .sidebar-foot:hover { color: white; }

@@ -422,6 +422,14 @@ export default function App() {
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
         </nav>
+        <button className="session-card" onClick={() => openView('profile')}>
+          <span className="avatar">{initials(profile.displayName)}</span>
+          <div>
+            <small>Signed in</small>
+            <strong>{profile.email}</strong>
+            <em>{workspace?.role ?? 'Member'}</em>
+          </div>
+        </button>
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
