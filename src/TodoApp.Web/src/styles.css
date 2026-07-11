@@ -60,8 +60,10 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .donut-chart { width: 136px; height: 136px; transform: rotate(-90deg); }
 .donut-track, .donut-segment { fill: none; stroke-width: 14; }
 .donut-track { stroke: #edf1f4; }
-.donut-segment { transition: stroke-dasharray .2s ease, stroke-width .18s ease, opacity .18s ease; }
+.donut-segment { cursor: pointer; outline: none; transition: stroke-dasharray .2s ease, stroke-width .18s ease, opacity .18s ease; }
+.donut-segment:hover, .donut-segment:focus-visible { stroke-width: 18; opacity: 1; }
 .analytics-card:hover .donut-segment { stroke-width: 16; opacity: .92; }
+.analytics-card:hover .donut-segment:hover, .analytics-card:hover .donut-segment:focus-visible { stroke-width: 18; opacity: 1; }
 .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .donut-center strong, .progress-card > strong { display: block; font-size: 28px; line-height: 1; color: #17202b; }
 .donut-center span { color: #73808d; font-size: 12px; font-weight: 800; text-transform: uppercase; }
