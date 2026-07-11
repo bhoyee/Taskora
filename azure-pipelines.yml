@@ -70,6 +70,23 @@ stages:
               projects: TodoApp.sln
               arguments: --configuration $(buildConfiguration) --no-restore
 
+          - script: dotnet tool restore
+            displayName: Restore repository tools
+
+          - script: >-
+              mkdir -p $(Build.ArtifactStagingDirectory)/database &&
+              dotnet tool run dotnet-ef migrations script
+              --idempotent
+              --configuration $(buildConfiguration)
+              --no-build
+              --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj
+              --startup-project src/TodoApp.Api/TodoApp.Api.csproj
+              --output $(Build.ArtifactStagingDirectory)/database/migrations.sql
+            displayName: Generate database migration script
+            env:
+              Database__Provider: SqlServer
+              ConnectionStrings__TodoApp: Server=tcp:placeholder.database.windows.net,1433;Initial Catalog=TodoApp;User ID=placeholder;Password=placeholder;Encrypt=True;TrustServerCertificate=False;
+
           - task: DotNetCoreCLI@2
             displayName: Run automated tests
             inputs:

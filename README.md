@@ -225,6 +225,7 @@ This repository includes `azure-pipelines.yml`. It does the following when code 
 - Builds the React frontend.
 - Restores NuGet packages.
 - Builds the .NET solution.
+- Generates an idempotent EF Core migration SQL script.
 - Runs backend tests and publishes coverage.
 - Publishes the app as a build artifact named `drop`.
 - Builds and publishes a Docker image artifact.
@@ -269,3 +270,79 @@ deployment manual, set Azure budget alerts, and use SQLite locally until Azure
 SQL is needed. Docker is optional for App Service ZIP deployment.
 Follow the [Azure setup checklist](docs/AZURE_SETUP.md) when you are ready to
 deploy.
+
+## Production Readiness
+
+Before deploying, copy `.env.example` to `.env` for local development or set the
+same keys as App Service application settings in Azure. Do not commit `.env`;
+the repository ignores it.
+
+Required production settings:
+
+```text
+ConnectionStrings__TodoApp=Server=...;Database=...;...
+Database__Provider=SqlServer
+Database__ApplyMigrationsOnStartup=false
+DemoData__SeedOnStartup=false
+Authentication__Authority=https://your-token-issuer
+Authentication__Audience=todoapp-api
+Cors__AllowedOrigins__0=https://your-frontend-host
+App__PublicBaseUrl=https://your-frontend-host
+Email__Smtp__Enabled=true
+Email__Smtp__Host=smtp.example.com
+Email__Smtp__FromAddress=no-reply@example.com
+```
+
+The API validates those settings outside Development and Testing so deployment
+fails early instead of running with placeholder auth, missing CORS, or missing
+database configuration.
+
+### Demo Data
+
+Development automatically applies migrations and seeds a portfolio demo
+workspace. Production does not seed demo data unless you explicitly set:
+
+```text
+DemoData__SeedOnStartup=true
+Database__ApplyMigrationsOnStartup=true
+```
+
+Demo login for local/dev portfolio walkthroughs:
+
+```text
+jadesola@example.com
+Portfolio123!
+```
+
+Leave demo seeding disabled for a real production tenant.
+
+### Database Migration Flow
+
+CI generates an idempotent migration script at:
+
+```text
+database/migrations.sql
+```
+
+Recommended production flow:
+
+1. Run the Azure Pipeline.
+2. Download the build artifact.
+3. Review and apply `database/migrations.sql` to the production database.
+4. Deploy the App Service ZIP artifact.
+5. Smoke test `/health/live`, `/health/ready`, and `/health`.
+
+Startup migrations are available through
+`Database__ApplyMigrationsOnStartup=true`, but manual/scripted migration is safer
+for production because it gives you review and rollback control.
+
+### Security Checklist
+
+- `.env` is ignored and must not be committed.
+- Passwords are stored as PBKDF2 hashes.
+- JWT bearer tokens validate issuer, audience, and lifetime outside
+  Development/Testing.
+- CORS is restricted to configured frontend origins outside Development.
+- SMTP credentials are read from configuration/environment variables.
+- Health endpoints are available at `/health/live`, `/health/ready`, and
+  `/health`.
