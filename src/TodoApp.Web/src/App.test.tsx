@@ -525,6 +525,7 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /create/i }))
 
     expect(await screen.findByText('Workspace Client delivery created.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     expect(screen.getByLabelText(/^Project$/)).toHaveValue('project-2')
   })
 
@@ -534,6 +535,7 @@ describe('delivery workspace', () => {
     render(<App />)
     await screen.findByRole('region', { name: 'Dashboard analytics' })
 
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     await user.click(screen.getByRole('button', { name: /new project/i }))
     await user.type(screen.getByLabelText('Project name'), 'Client onboarding')
     await user.type(screen.getByLabelText('Description'), 'New project for onboarding work.')
@@ -550,6 +552,7 @@ describe('delivery workspace', () => {
     render(<App />)
     await screen.findByRole('region', { name: 'Dashboard analytics' })
 
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     expect(screen.getByText(/Delivery date:/)).toBeInTheDocument()
     expect(screen.getByText(/days left|overdue|Due today/, { selector: '.delivery-badge' })).toBeInTheDocument()
 
@@ -574,9 +577,10 @@ describe('delivery workspace', () => {
 
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: 'No project yet' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Dashboard analytics' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /^tasks$/i }))
+    expect(screen.getByRole('heading', { name: 'No project yet' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled()
   })
 

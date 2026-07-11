@@ -216,8 +216,12 @@ export default function App() {
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
+    window.addEventListener('popstate', syncViewFromHash)
     syncViewFromHash()
-    return () => window.removeEventListener('hashchange', syncViewFromHash)
+    return () => {
+      window.removeEventListener('hashchange', syncViewFromHash)
+      window.removeEventListener('popstate', syncViewFromHash)
+    }
   }, [])
   useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
   const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
@@ -264,7 +268,7 @@ export default function App() {
   }
   const openView = (next: View) => {
     setView(next)
-    window.location.hash = next
+    window.history.pushState(null, '', `#${next}`)
     setNavOpen(false)
   }
   const switchWorkspace = (workspaceId: string) => {
@@ -448,16 +452,6 @@ export default function App() {
             <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
             <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
           </section>
-
-          <ProjectBar
-            projects={projects}
-            selectedProjectId={project?.id ?? selectedProjectId}
-            workspaceRole={workspace?.role ?? null}
-            onSwitch={switchProject}
-            onCreate={createProject}
-            onUpdate={updateProject}
-            onArchive={archiveProject}
-          />
 
           <DashboardAnalytics dashboard={dashboard} />
           <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
