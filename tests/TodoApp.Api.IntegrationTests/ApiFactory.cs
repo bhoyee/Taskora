@@ -26,6 +26,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         });
     }
 
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        client.DefaultRequestHeaders.Add(
+            "X-User-Id",
+            "30000000-0000-0000-0000-000000000001");
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);

@@ -20,6 +20,8 @@ public sealed class TaskRepository(TodoAppDbContext context)
         CancellationToken cancellationToken) =>
         context.Tasks
             .Include("_dependencies")
+            .Include("_tags")
+            .Include("_notes")
             .SingleOrDefaultAsync(
                 task => task.Id == taskId,
                 cancellationToken);
@@ -35,6 +37,14 @@ public sealed class TaskRepository(TodoAppDbContext context)
         {
             query = query.Where(
                 task => task.ProjectId == criteria.ProjectId.Value);
+        }
+
+        if (criteria.WorkspaceId.HasValue)
+        {
+            query = query.Where(task =>
+                context.Projects.Any(project =>
+                    project.Id == task.ProjectId &&
+                    project.WorkspaceId == criteria.WorkspaceId.Value));
         }
 
         if (criteria.Status.HasValue)
@@ -60,6 +70,19 @@ public sealed class TaskRepository(TodoAppDbContext context)
                             "_dependencies")
                         .Any(dependency =>
                             dependency.Status != TaskItemStatus.Completed));
+        }
+
+        if (criteria.CategoryId.HasValue)
+        {
+            query = query.Where(
+                task => task.CategoryId == criteria.CategoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.Tag))
+        {
+            query = query.Where(task =>
+                EF.Property<ICollection<TaskTag>>(task, "_tags")
+                    .Any(tag => tag.Name == criteria.Tag));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.Search))
@@ -91,6 +114,8 @@ public sealed class TaskRepository(TodoAppDbContext context)
 
         var items = await query
             .Include("_dependencies")
+            .Include("_tags")
+            .Include("_notes")
             .Skip((criteria.PageNumber - 1) * criteria.PageSize)
             .Take(criteria.PageSize)
             .ToArrayAsync(cancellationToken);

@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import {
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  useDraggable, useDroppable, useSensor, useSensors,
+} from '@dnd-kit/core'
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, LayoutList, Menu, Pencil, Plus, Search, Settings2, X,
+  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
+  Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
+  Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
-import type { Dashboard, TaskItem, TaskStatus } from './api'
+import type {
+  AccountSession, Dashboard, DashboardBreakdownItem, ProjectCategory, ProjectDetails,
+  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember,
+} from './api'
 import './styles.css'
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -16,25 +26,180 @@ const statusLabels: Record<TaskStatus, string> = {
 const emptyDashboard: Dashboard = {
   projectCount: 0, activeTaskCount: 0, blockedTaskCount: 0,
   overdueTaskCount: 0, criticalTaskCount: 0,
+  statusBreakdown: [],
+  priorityBreakdown: [],
+  deadlineBreakdown: [],
+  projectProgress: { completedTasks: 0, totalTasks: 0, completionPercentage: 0 },
+  warnings: [],
 }
+
+type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile'
+type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
+
+const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile']
+
+function viewFromHash(hash: string): View {
+  const value = hash.replace('#', '').toLowerCase()
+  return views.includes(value as View) ? value as View : 'workspace'
+}
+
+interface UserProfile {
+  displayName: string
+  email: string
+}
+
+interface UserSettings {
+  defaultView: 'list' | 'board'
+  compactMode: boolean
+  emailDigest: boolean
+}
+
+const defaultProfile: UserProfile = {
+  displayName: 'Jadesola Aliu',
+  email: 'jadesola@example.com',
+}
+
+const defaultSettings: UserSettings = {
+  defaultView: 'list',
+  compactMode: false,
+  emailDigest: true,
+}
+
+const defaultAccount: AccountSession | null = null
+
+function readLocal<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key)
+    return value ? { ...fallback, ...JSON.parse(value) } : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
+  action: string
+  body?: object
+}>>>> = {
+  Backlog: { Ready: { action: 'ready' } },
+  Ready: { InProgress: { action: 'start' } },
+  InProgress: {
+    Blocked: {
+      action: 'block',
+      body: { reason: 'Moved to Blocked from the delivery board.' },
+    },
+    Completed: { action: 'complete' },
+  },
+  Blocked: { Ready: { action: 'unblock' } },
+  Completed: { Ready: { action: 'reopen' } },
+}
+
+const activityTypes = [
+  'All',
+  'TaskCreated',
+  'TaskRenamed',
+  'StatusChanged',
+  'DueDateChanged',
+  'AssignmentChanged',
+  'CategoryChanged',
+  'TagAdded',
+  'TagRemoved',
+  'NoteAdded',
+] as const
 
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [taskTotal, setTaskTotal] = useState(0)
   const [dashboard, setDashboard] = useState(emptyDashboard)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
+    localStorage.getItem('todoapp_workspace_id') ?? '')
+  const [projects, setProjects] = useState<ProjectDetails[]>([])
+  const [project, setProject] = useState<ProjectDetails | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState(() =>
+    localStorage.getItem('todoapp_project_id') ?? '')
+  const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
+  const [categories, setCategories] = useState<ProjectCategory[]>([])
   const [mode, setMode] = useState<'list' | 'board'>('list')
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
+  const [pageNumber, setPageNumber] = useState(1)
+  const [drilldown, setDrilldown] = useState<TaskDrilldown>('all')
+  const pageSize = 10
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
   const [navOpen, setNavOpen] = useState(false)
+  const [activity, setActivity] = useState<WorkspaceActivity[]>([])
+  const [activityTotal, setActivityTotal] = useState(0)
+  const [activityPageNumber, setActivityPageNumber] = useState(1)
+  const activityPageSize = 10
+  const [activityType, setActivityType] = useState<(typeof activityTypes)[number]>('All')
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    readLocal('todoapp_profile', defaultProfile))
+  const [settings, setSettings] = useState<UserSettings>(() =>
+    readLocal('todoapp_settings', defaultSettings))
+  const [account, setAccount] = useState<AccountSession | null>(() =>
+    readLocal('todoapp_account', defaultAccount))
+  const [loggedOut, setLoggedOut] = useState(() =>
+    localStorage.getItem('todoapp_logged_out') === 'true')
+  const [notice, setNotice] = useState('')
+  const inviteToken = inviteTokenFromPath()
 
   const load = async () => {
     try {
+      setLoading(true)
       setError('')
-      const [summary, page] = await Promise.all([api.dashboard(), api.tasks()])
+      const available = await api.workspaces()
+      setWorkspaces(available)
+      const selected = available.find((item) => item.id === selectedWorkspaceId) ?? available[0]
+      if (!selected) throw new Error('No workspace membership was found.')
+      if (selected.id !== selectedWorkspaceId) {
+        setSelectedWorkspaceId(selected.id)
+        localStorage.setItem('todoapp_workspace_id', selected.id)
+      }
+      const projects = await api.projects(selected.id)
+      const selectedProject = projects.find((item) => item.id === selectedProjectId) ??
+        projects[0] ??
+        null
+      if (selectedProject && selectedProject.id !== selectedProjectId) {
+        setSelectedProjectId(selectedProject.id)
+        localStorage.setItem('todoapp_project_id', selectedProject.id)
+      } else if (!selectedProject) {
+        setSelectedProjectId('')
+        localStorage.removeItem('todoapp_project_id')
+      }
+      const [summary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
+        api.dashboard(selected.id, selectedProject?.id),
+        selectedProject
+          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
+          : Promise.resolve({ items: [], totalCount: 0 }),
+        api.members(selected.id),
+        selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
+        api.workspaceActivity(selected.id, activityType, activityPageNumber, activityPageSize),
+      ])
+      const currentProfile = await api.me().catch(() => null)
+      if (currentProfile) {
+        const nextProfile = {
+          displayName: currentProfile.displayName,
+          email: currentProfile.email,
+        }
+        setProfile(nextProfile)
+        localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
+      }
+      setWorkspace(selected)
+      setProjects(projects)
+      setProject(selectedProject)
+      setMembers(workspaceMembers)
+      setInvitations(workspaceInvitations)
+      setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
       setTasks(page.items)
+      setTaskTotal(page.totalCount)
+      setActivity(activityPage.items)
+      setActivityTotal(activityPage.totalCount)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
@@ -42,67 +207,1499 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [])
-  const visible = useMemo(() => tasks.filter((task) =>
-    task.title.toLowerCase().includes(search.toLowerCase())), [tasks, search])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (view !== 'workspace' || loading) return undefined
+    const interval = window.setInterval(() => void load(), 15000)
+    return () => window.clearInterval(interval)
+  }, [view, loading, pageNumber, search, selectedWorkspaceId, selectedProjectId])
+  useEffect(() => {
+    const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
+    window.addEventListener('hashchange', syncViewFromHash)
+    window.addEventListener('popstate', syncViewFromHash)
+    syncViewFromHash()
+    return () => {
+      window.removeEventListener('hashchange', syncViewFromHash)
+      window.removeEventListener('popstate', syncViewFromHash)
+    }
+  }, [])
+  useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
+  const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
+  const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
+  const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
+  const logout = () => {
+    localStorage.removeItem('todoapp_access_token')
+    localStorage.removeItem('todoapp_account')
+    localStorage.setItem('todoapp_logged_out', 'true')
+    setAccount(null)
+    setLoggedOut(true)
+    setNotice('You have been logged out of the browser session.')
+    window.location.hash = 'workspace'
+    setNavOpen(false)
+  }
+  const resetSession = () => {
+    localStorage.removeItem('todoapp_access_token')
+    localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_workspace_id')
+    localStorage.removeItem('todoapp_logged_out')
+    setAccount(null)
+    setLoggedOut(false)
+    setSelectedWorkspaceId('')
+    setNotice('Local browser session reset.')
+    void load()
+  }
+  const authenticated = (session: AccountSession) => {
+    localStorage.setItem('todoapp_access_token', session.accessToken)
+    localStorage.setItem('todoapp_account', JSON.stringify(session))
+    localStorage.removeItem('todoapp_logged_out')
+    setAccount(session)
+    setLoggedOut(false)
+    setProfile((current) => {
+      const next = {
+        ...current,
+        displayName: session.displayName,
+        email: session.email,
+      }
+      localStorage.setItem('todoapp_profile', JSON.stringify(next))
+      return next
+    })
+    setNotice(`Signed in as ${session.displayName}.`)
+    void load()
+  }
+  const openView = (next: View) => {
+    setView(next)
+    window.history.pushState(null, '', `#${next}`)
+    setNavOpen(false)
+  }
+  const switchWorkspace = (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId)
+    localStorage.setItem('todoapp_workspace_id', workspaceId)
+    setSelectedProjectId('')
+    localStorage.removeItem('todoapp_project_id')
+    setPageNumber(1)
+    setDrilldown('all')
+  }
+  const switchProject = (projectId: string) => {
+    setSelectedProjectId(projectId)
+    localStorage.setItem('todoapp_project_id', projectId)
+    setPageNumber(1)
+    setDrilldown('all')
+  }
+  const createProject = async (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => {
+    if (!workspace) return
+    try {
+      setError('')
+      const created = await api.createWorkspaceProject(
+        workspace.id,
+        name,
+        description,
+        deliveryDate,
+      )
+      setProjects((items) => [...items, created]
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setProject(created)
+      setSelectedProjectId(created.id)
+      localStorage.setItem('todoapp_project_id', created.id)
+      setPageNumber(1)
+      setNotice(`Project ${created.name} created.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be created.')
+      throw reason
+    }
+  }
+  const updateProject = async (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => {
+    try {
+      setError('')
+      const updated = await api.updateProject(
+        projectId,
+        name,
+        description,
+        deliveryDate,
+      )
+      setProjects((items) => items.map((item) =>
+        item.id === updated.id ? updated : item)
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setProject(updated)
+      setCategories((items) => [
+        ...items.filter((category) => category.projectId !== updated.id),
+        ...updated.categories,
+      ].sort((left, right) => left.name.localeCompare(right.name)))
+      setNotice(`Project ${updated.name} updated.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be updated.')
+      throw reason
+    }
+  }
+  const archiveProject = async (projectId: string) => {
+    try {
+      setError('')
+      const archived = await api.archiveProject(projectId)
+      const remaining = projects.filter((item) => item.id !== projectId)
+      setProjects(remaining)
+      const next = remaining[0] ?? null
+      setProject(next)
+      setSelectedProjectId(next?.id ?? '')
+      if (next) {
+        localStorage.setItem('todoapp_project_id', next.id)
+      } else {
+        localStorage.removeItem('todoapp_project_id')
+      }
+      setPageNumber(1)
+      setNotice(`Project ${archived.name} archived.`)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be archived.')
+      throw reason
+    }
+  }
+  const createWorkspace = async (name: string) => {
+    try {
+      setError('')
+      const created = await api.createWorkspace(name)
+      setWorkspaces((items) => [...items.filter((item) => item.id !== created.id), created])
+    setWorkspace(created)
+    setProjects([])
+    setProject(null)
+    setTasks([])
+    setDashboard(emptyDashboard)
+    setSelectedWorkspaceId(created.id)
+    setSelectedProjectId('')
+    localStorage.setItem('todoapp_workspace_id', created.id)
+    localStorage.removeItem('todoapp_project_id')
+      setNotice(`Workspace ${created.name} created.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Workspace could not be created.')
+      throw reason
+    }
+  }
+  const moveTask = async (task: TaskItem, target: TaskStatus) => {
+    const transition = boardTransitions[task.status]?.[target]
+    if (!transition) return
+
+    try {
+      setError('')
+      await api.transition(task.id, transition.action, transition.body)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The task could not be moved.')
+      throw reason
+    }
+  }
+  const openTaskEditor = async (task: TaskItem) => {
+    setSelectedTask(task)
+    try {
+      setSelectedTask(await api.task(task.id))
+    } catch {
+      setSelectedTask(task)
+    }
+  }
+
+  if (inviteToken) {
+    return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
+  }
+
+  if (loggedOut || (!import.meta.env.DEV && !localStorage.getItem('todoapp_access_token'))) {
+    return <AuthPage onAuthenticated={authenticated} />
+  }
 
   return (
     <div className="app-shell">
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
         <nav aria-label="Primary navigation">
-          <a className="active" href="#workspace"><CircleGauge size={18} /> Workspace</a>
-          <a href="#activity"><Activity size={18} /> Activity</a>
-          <a href="#settings"><Settings2 size={18} /> Settings</a>
+          <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
+          <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
+          <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
+          <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
+          <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
         </nav>
-        <div className="sidebar-foot"><span className="avatar">JA</span><div><strong>Jadesola</strong><small>Portfolio owner</small></div></div>
+        <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
+        <button className="sidebar-foot" onClick={() => openView('profile')}>
+          <span className="avatar">{initials(profile.displayName)}</span>
+          <div><strong>{profile.displayName}</strong><small>{workspace?.role ?? 'Member'}</small></div>
+        </button>
       </aside>
 
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div><p className="eyebrow">Portfolio launch</p><h1>Delivery workspace</h1></div>
-          <button className="primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> New task</button>
+          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
+            onSwitch={switchWorkspace}
+            onCreate={createWorkspace}
+          />
+          {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
-        <section className="metrics" aria-label="Portfolio health">
-          <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} />
-          <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" />
-          <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
-          <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
-        </section>
+        {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
+        {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button><button onClick={resetSession}>Reset session</button></div>}
 
-        <section className="work-area">
-          <div className="toolbar">
-            <div className="search"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" /></div>
-            <div className="segmented" aria-label="View">
-              <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
-              <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+        {view === 'workspace' && <>
+          <section className="metrics" aria-label="Portfolio health">
+            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
+          </section>
+
+          <DashboardAnalytics dashboard={dashboard} />
+          <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
+
+          {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
+            {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+              <AlertTriangle size={18} />
+              <div>
+                <strong>{warning.title}</strong>
+                <span>{warning.message}{warning.dueDate ? ` Deadline: ${new Date(`${warning.dueDate}T00:00:00`).toLocaleDateString()}.` : ''}</span>
+              </div>
+            </article>)}
+          </section>}
+        </>}
+
+        {view === 'tasks' && <>
+          <ProjectBar
+            projects={projects}
+            selectedProjectId={project?.id ?? selectedProjectId}
+            workspaceRole={workspace?.role ?? null}
+            onSwitch={switchProject}
+            onCreate={createProject}
+            onUpdate={updateProject}
+            onArchive={archiveProject}
+          />
+          <section className="work-area">
+            <div className="toolbar">
+              <div className="search"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1) }} placeholder="Search tasks" aria-label="Search tasks" /></div>
+              <div className="segmented" aria-label="View">
+                <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
+                <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+              </div>
             </div>
-          </div>
+            {drilldown !== 'all' && <div className="task-filter-banner">
+              <span>Showing {drilldownLabels[drilldown].toLowerCase()} tasks on this page.</span>
+              <button onClick={() => setDrilldown('all')}>Clear filter</button>
+            </div>}
 
-          {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button></div>}
-          {loading ? <div className="loading">Loading workspace...</div> :
-            mode === 'list'
-              ? <TaskList tasks={visible} onEdit={setSelectedTask} />
-              : <Board tasks={visible} onEdit={setSelectedTask} />}
-        </section>
+            {loading ? <div className="loading">Loading workspace...</div> :
+              mode === 'list'
+                ? <TaskList tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} />
+                : <Board tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} onMove={moveTask} />}
+            {!loading && <Pagination
+              pageNumber={pageNumber}
+              pageSize={pageSize}
+              totalCount={filteredTaskTotal}
+              totalPages={totalPages}
+              onPageChange={setPageNumber}
+            />}
+          </section>
+        </>}
+        {view === 'activity' && <ActivityPage
+          activity={activity}
+          tasks={tasks}
+          loading={loading}
+          selectedType={activityType}
+          onTypeChange={(nextType) => {
+            setActivityType(nextType)
+            setActivityPageNumber(1)
+          }}
+          pageNumber={activityPageNumber}
+          pageSize={activityPageSize}
+          totalCount={activityTotal}
+          onPageChange={setActivityPageNumber}
+        />}
+        {view === 'settings' && <SettingsPage
+          settings={settings}
+          workspace={workspace}
+          members={members}
+          invitations={invitations}
+          currentUserId={account?.userId}
+          onMemberRemoved={async (userId) => {
+            if (!workspace) return
+            await api.removeMember(workspace.id, userId)
+            setNotice('Workspace member removed.')
+            await load()
+          }}
+          onRoleChanged={async (userId, role) => {
+            if (!workspace) return
+            await api.changeMemberRole(workspace.id, userId, role)
+            setNotice('Workspace role updated.')
+            await load()
+          }}
+          onInvited={async (fullName, email, role) => {
+            if (!workspace) return
+            const invitation = await api.inviteMember(workspace.id, fullName, email, role)
+            setNotice(`Invite link created for ${invitation.email}. They become a member after accepting it.`)
+            await load()
+          }}
+          onInvitationCancelled={async (invitationId) => {
+            if (!workspace) return
+            await api.cancelInvitation(workspace.id, invitationId)
+            setNotice('Workspace invitation cancelled.')
+            await load()
+          }}
+          onSave={(next) => {
+          setSettings(next)
+          localStorage.setItem('todoapp_settings', JSON.stringify(next))
+          setNotice('Settings saved.')
+        }} />}
+        {view === 'profile' && <ProfilePage
+          profile={profile}
+          account={account}
+          role={workspace?.role ?? null}
+          onSave={async (next) => {
+            const updated = await api.updateProfile(next.email)
+            const profileUpdate = {
+              displayName: updated.displayName,
+              email: updated.email,
+            }
+            setProfile(profileUpdate)
+            localStorage.setItem('todoapp_profile', JSON.stringify(profileUpdate))
+            setAccount((current) => {
+              if (!current) return current
+              const updatedAccount = { ...current, email: updated.email }
+              localStorage.setItem('todoapp_account', JSON.stringify(updatedAccount))
+              return updatedAccount
+            })
+            setNotice('Profile updated.')
+          }}
+          onPasswordChanged={async (currentPassword, newPassword) => {
+            await api.changePassword(currentPassword, newPassword)
+            setNotice('Password changed.')
+          }}
+          onLogout={logout}
+        />}
+        <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && <TaskDialog onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && <TaskEditor task={selectedTask} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
 
-function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
-  return <div className={`metric ${tone}`}><span className="metric-icon">{icon}</span><div><strong>{value}</strong><span>{label}</span></div></div>
+function viewTitle(view: View) {
+  return {
+    workspace: 'Delivery workspace',
+    tasks: 'Tasks',
+    activity: 'Activity timeline',
+    settings: 'Workspace settings',
+    profile: 'Profile',
+  }[view]
 }
 
-function TaskList({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskItem) => void }) {
+function initials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U'
+}
+
+function inviteTokenFromPath() {
+  const match = window.location.pathname.match(/^\/invite\/([^/]+)$/i)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    try {
+      const session = mode === 'login'
+        ? await api.login(String(data.get('email')), String(data.get('password')))
+        : await api.register(
+            String(data.get('displayName')),
+            String(data.get('email')),
+            String(data.get('password')),
+            String(data.get('workspaceName')),
+          )
+      onAuthenticated(session)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Account access failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-shell">
+    <section className="auth-panel">
+      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div>
+        <p className="eyebrow">Account access</p>
+        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+      </div>
+      <div className="segmented" aria-label="Account mode">
+        <button className={mode === 'login' ? 'selected' : ''} onClick={() => setMode('login')}><KeyRound size={16} /> Login</button>
+        <button className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}><UserRound size={16} /> Register</button>
+      </div>
+      <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        {mode === 'register' && <>
+          <label>Display name<input name="displayName" required maxLength={120} autoComplete="name" /></label>
+          <label>Workspace name<input name="workspaceName" required maxLength={160} defaultValue="Portfolio workspace" /></label>
+        </>}
+        <label>Email<input name="email" type="email" required autoComplete="email" /></label>
+        <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        {error && <p className="field-error">{error}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Register'}</button>
+      </form>
+    </section>
+  </main>
+}
+
+function InvitationPage({
+  token,
+  onAuthenticated,
+}: {
+  token: string
+  onAuthenticated: (session: AccountSession) => void
+}) {
+  const [invitation, setInvitation] = useState<WorkspaceInvitation | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [declined, setDeclined] = useState(false)
+
+  useEffect(() => {
+    api.invitation(token)
+      .then(setInvitation)
+      .catch((reason) => setError(
+        reason instanceof Error ? reason.message : 'Invitation could not be loaded.'))
+  }, [token])
+
+  const accept = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    try {
+      await api.acceptInvitation(
+        token,
+        String(data.get('displayName')),
+        String(data.get('password')),
+      )
+      const session = await api.login(
+        invitation?.email ?? String(data.get('email')),
+        String(data.get('password')),
+      )
+      window.history.replaceState(null, '', '/')
+      onAuthenticated(session)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be accepted.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const decline = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.declineInvitation(token)
+      setDeclined(true)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be declined.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-shell">
+    <section className="auth-panel">
+      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      {declined ? <>
+        <div><p className="eyebrow">Workspace invitation</p><h1>Invitation declined</h1></div>
+        <p className="muted">The workspace owner can send a new invitation later.</p>
+      </> : <>
+        <div>
+          <p className="eyebrow">Workspace invitation</p>
+          <h1>{invitation ? invitation.workspaceName : 'Loading invitation'}</h1>
+        </div>
+        {invitation && <p className="muted">{invitation.fullName} was invited as {invitation.role}. This invite expires {new Date(invitation.expiresAt).toLocaleDateString()}.</p>}
+        <form className="auth-form" onSubmit={(event) => void accept(event)}>
+          <label>Display name<input name="displayName" required maxLength={120} defaultValue={invitation?.fullName ?? ''} /></label>
+          <label>Email<input name="email" type="email" required readOnly value={invitation?.email ?? ''} /></label>
+          <label>Password<input name="password" type="password" required minLength={8} autoComplete="new-password" /></label>
+          {error && <p className="field-error">{error}</p>}
+          <footer className="invite-actions">
+            <button type="button" className="secondary" disabled={busy || !invitation} onClick={() => void decline()}>Decline</button>
+            <button className="primary" disabled={busy || !invitation}>{busy ? 'Working...' : 'Accept invitation'}</button>
+          </footer>
+        </form>
+      </>}
+    </section>
+  </main>
+}
+
+function WorkspaceSwitcher({
+  workspaces,
+  selectedWorkspaceId,
+  onSwitch,
+  onCreate,
+}: {
+  workspaces: Workspace[]
+  selectedWorkspaceId: string
+  onSwitch: (workspaceId: string) => void
+  onCreate: (name: string) => Promise<void>
+}) {
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  if (creating) {
+    return <form className="workspace-create" onSubmit={(event) => {
+      event.preventDefault()
+      if (!name.trim()) return
+      setBusy(true)
+      setError('')
+      onCreate(name.trim())
+        .then(() => {
+          setName('')
+          setCreating(false)
+        })
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Workspace could not be created.'))
+        .finally(() => setBusy(false))
+    }}>
+      <input aria-label="Workspace name" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} autoFocus />
+      <button className="primary" disabled={busy}><Plus size={16} /> {busy ? 'Creating...' : 'Create'}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => setCreating(false)}>Cancel</button>
+      {error && <p className="field-error">{error}</p>}
+    </form>
+  }
+
+  return <div className="workspace-switcher">
+    <label>
+      <span>Workspace</span>
+      <select value={selectedWorkspaceId} onChange={(event) => onSwitch(event.target.value)}>
+        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name} ({item.role})</option>)}
+      </select>
+      <ChevronDown />
+    </label>
+    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New workspace</button>
+  </div>
+}
+
+function ProjectBar({
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  onSwitch,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  onSwitch: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+}) {
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
+  const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
+
+  if (creating && canCreateProject) {
+    return <form className="project-create panel-page" onSubmit={(event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const data = new FormData(form)
+      setBusy(true)
+      setError('')
+      onCreate(
+        String(data.get('name')),
+        String(data.get('description')),
+        String(data.get('deliveryDate')),
+      )
+        .then(() => {
+          form.reset()
+          setCreating(false)
+        })
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Project could not be created.'))
+        .finally(() => setBusy(false))
+    }}>
+      <label>Project name<input name="name" required maxLength={160} autoFocus /></label>
+      <label>Description<input name="description" maxLength={500} /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required /></label>
+      {error && <p className="field-error">{error}</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setCreating(false)}>Cancel</button>
+        <button className="primary" disabled={busy}><FolderPlus size={16} /> {busy ? 'Creating...' : 'Create project'}</button>
+      </footer>
+    </form>
+  }
+
+  if (editing && selectedProject && canCreateProject) {
+    return <form className="project-create panel-page" onSubmit={(event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const data = new FormData(form)
+      setBusy(true)
+      setError('')
+      onUpdate(
+        selectedProject.id,
+        String(data.get('name')),
+        String(data.get('description')),
+        String(data.get('deliveryDate')),
+      )
+        .then(() => setEditing(false))
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Project could not be updated.'))
+        .finally(() => setBusy(false))
+    }}>
+      <label>Project name<input name="name" required maxLength={160} defaultValue={selectedProject.name} autoFocus /></label>
+      <label>Description<input name="description" maxLength={500} defaultValue={selectedProject.description ?? ''} /></label>
+      <label>Delivery date<input name="deliveryDate" type="date" required defaultValue={selectedProject.targetDate ?? ''} /></label>
+      {error && <p className="field-error">{error}</p>}
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+        <button className="primary" disabled={busy}><Save size={16} /> {busy ? 'Saving...' : 'Save project'}</button>
+      </footer>
+    </form>
+  }
+
+  return <section className="project-bar panel-page" aria-label="Projects">
+    <div>
+      <p className="eyebrow">Project</p>
+      <h2>{selectedProject?.name ?? 'No project yet'}</h2>
+      {selectedProject && <p className="project-delivery">
+        Delivery date: <strong>{selectedProject.targetDate ? formatDate(selectedProject.targetDate) : 'Not set'}</strong>
+        {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+      </p>}
+    </div>
+    {projects.length > 0 && <label>
+      <span>Project</span>
+      <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
+        {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+      </select>
+      <ChevronDown />
+    </label>}
+    {canCreateProject && <div className="project-actions">
+      <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
+      {selectedProject && <>
+        <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
+        <button className="secondary danger-action" disabled={busy} onClick={() => {
+          setBusy(true)
+          setError('')
+          onArchive(selectedProject.id)
+            .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
+            .finally(() => setBusy(false))
+        }}><Trash2 size={16} /> Archive</button>
+      </>}
+    </div>}
+    {error && <p className="field-error">{error}</p>}
+  </section>
+}
+
+function deliveryStatus(deliveryDate: string | null) {
+  if (!deliveryDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const delivery = new Date(`${deliveryDate}T00:00:00`)
+  const days = Math.ceil((delivery.getTime() - today.getTime()) / 86400000)
+  if (days < 0) return { label: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`, tone: 'critical' }
+  if (days === 0) return { label: 'Due today', tone: 'critical' }
+  if (days === 1) return { label: '1 day left', tone: 'warning' }
+  if (days <= 7) return { label: `${days} days left`, tone: 'warning' }
+  return { label: `${days} days left`, tone: 'healthy' }
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString()
+}
+
+const drilldownLabels: Record<TaskDrilldown, string> = {
+  all: 'All work',
+  active: 'Active work',
+  critical: 'Critical',
+  blocked: 'Blocked',
+  overdue: 'Overdue',
+}
+
+function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
+  if (drilldown === 'active') return tasks.filter((task) => task.status !== 'Completed')
+  if (drilldown === 'critical') return tasks.filter((task) => task.priorityBand === 'Critical')
+  if (drilldown === 'blocked') return tasks.filter((task) => task.status === 'Blocked' || task.isBlocked)
+  if (drilldown === 'overdue') return tasks.filter((task) => task.deadlineHealth === 'Overdue')
+  return tasks
+}
+
+function Metric({
+  label,
+  value,
+  icon,
+  tone = '',
+  selected = false,
+  onClick,
+}: {
+  label: string
+  value: number
+  icon: ReactNode
+  tone?: string
+  selected?: boolean
+  onClick?: () => void
+}) {
+  const className = `metric ${tone} ${onClick ? 'interactive' : ''} ${selected ? 'selected' : ''}`
+  const content = <>
+    <span className="metric-icon">{icon}</span>
+    <div><strong>{value}</strong><span>{label}</span></div>
+  </>
+  return onClick
+    ? <button className={className} onClick={onClick} aria-pressed={selected} type="button">{content}</button>
+    : <div className={className}>{content}</div>
+}
+
+const statusChartColors: Record<string, string> = {
+  Backlog: '#687483',
+  Ready: '#b7791f',
+  InProgress: '#2875a5',
+  Blocked: '#b23b30',
+  Completed: '#287258',
+}
+
+const priorityChartColors: Record<string, string> = {
+  Low: '#4d9b78',
+  Medium: '#4388c7',
+  High: '#e49625',
+  Critical: '#c33f35',
+}
+
+const deadlineChartColors: Record<string, string> = {
+  Overdue: '#c33f35',
+  'Due today': '#b7791f',
+  'Due in 7 days': '#4388c7',
+  Healthy: '#4d9b78',
+}
+
+function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
+  return <section className="analytics-grid" aria-label="Dashboard analytics">
+    <DonutChart title="Task status" items={dashboard.statusBreakdown} colors={statusChartColors} />
+    <BarChart title="Priority mix" items={dashboard.priorityBreakdown} colors={priorityChartColors} />
+    <BarChart title="Due date risk" items={dashboard.deadlineBreakdown} colors={deadlineChartColors} />
+    <ProgressChart
+      title="Project completion"
+      completed={dashboard.projectProgress.completedTasks}
+      total={dashboard.projectProgress.totalTasks}
+      percentage={dashboard.projectProgress.completionPercentage}
+    />
+  </section>
+}
+
+function ProjectGovernance({
+  dashboard,
+  project,
+  tasks,
+}: {
+  dashboard: Dashboard
+  project: ProjectDetails | null
+  tasks: TaskItem[]
+}) {
+  const delivery = project ? deliveryStatus(project.targetDate) : null
+  const completion = dashboard.projectProgress.completionPercentage
+  const openTasks = Math.max(0, dashboard.projectProgress.totalTasks - dashboard.projectProgress.completedTasks)
+  const hasOverdue = dashboard.overdueTaskCount > 0
+  const hasBlocked = dashboard.blockedTaskCount > 0
+  const hasCritical = dashboard.criticalTaskCount > 0
+  const deliveryAtRisk = delivery?.tone === 'critical' || delivery?.tone === 'warning'
+  const riskCount = [hasOverdue, hasBlocked, hasCritical, deliveryAtRisk].filter(Boolean).length
+  const healthScore = Math.max(0, Math.min(100,
+    100 -
+    dashboard.overdueTaskCount * 18 -
+    dashboard.blockedTaskCount * 12 -
+    dashboard.criticalTaskCount * 6 -
+    (delivery?.tone === 'critical' ? 20 : delivery?.tone === 'warning' ? 10 : 0) +
+    Math.round(completion / 5),
+  ))
+  const healthTone = healthScore >= 80 ? 'healthy' : healthScore >= 55 ? 'warning' : 'critical'
+  const healthLabel = healthTone === 'healthy'
+    ? 'Healthy'
+    : healthTone === 'warning'
+      ? 'Needs attention'
+      : 'At risk'
+  const readiness = [
+    { label: 'Active project selected', ready: !!project },
+    { label: 'Delivery date confirmed', ready: !!project?.targetDate },
+    { label: 'No overdue tasks', ready: !hasOverdue },
+    { label: 'No blocked work', ready: !hasBlocked },
+    { label: 'Completion above 80%', ready: completion >= 80 || openTasks === 0 },
+    { label: 'No critical dashboard warnings', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
+  ]
+  const risks = buildRiskRegister(dashboard, delivery?.label, tasks)
+  const decisions = buildDecisionSuggestions(risks.length, completion, openTasks)
+
+  return <section className="governance-grid" aria-label="Project governance">
+    <article className={`governance-card health-card ${healthTone}`}>
+      <header><h2>Project health</h2><span>{healthLabel}</span></header>
+      <div className="health-score"><strong>{healthScore}</strong><small>/100</small></div>
+      <div className="progress-track governance-progress" aria-label={`Project health score ${healthScore} out of 100`}>
+        <i style={{ width: `${healthScore}%` }} />
+      </div>
+      <p>{project ? `${project.name} is ${completion}% complete with ${openTasks} open tasks.` : 'Create a project to start governance tracking.'}</p>
+      {delivery && <span className={`governance-delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Risk register</h2><span>{riskCount} signals</span></header>
+      <ul className="governance-list risk-list">
+        {risks.map((risk) => <li key={risk.title}>
+          <span className={`risk-dot ${risk.tone}`} />
+          <div><strong>{risk.title}</strong><p>{risk.detail}</p></div>
+        </li>)}
+      </ul>
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Decision log</h2><span>Suggested</span></header>
+      <ul className="governance-list decision-list">
+        {decisions.map((decision) => <li key={decision}>
+          <MessageSquare size={15} />
+          <span>{decision}</span>
+        </li>)}
+      </ul>
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Release readiness</h2><span>{readiness.filter((item) => item.ready).length}/{readiness.length}</span></header>
+      <ul className="readiness-list">
+        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.label}>
+          <CheckCircle2 size={16} />
+          <span>{item.label}</span>
+        </li>)}
+      </ul>
+    </article>
+  </section>
+}
+
+function buildRiskRegister(
+  dashboard: Dashboard,
+  deliveryLabel: string | undefined,
+  tasks: TaskItem[],
+) {
+  const risks: { title: string; detail: string; tone: 'healthy' | 'warning' | 'critical' }[] = []
+  if (dashboard.overdueTaskCount > 0) {
+    risks.push({
+      title: 'Deadline risk',
+      detail: `${dashboard.overdueTaskCount} overdue task${dashboard.overdueTaskCount === 1 ? '' : 's'} should be reviewed before delivery.`,
+      tone: 'critical',
+    })
+  }
+  if (dashboard.blockedTaskCount > 0) {
+    risks.push({
+      title: 'Dependency risk',
+      detail: `${dashboard.blockedTaskCount} blocked task${dashboard.blockedTaskCount === 1 ? '' : 's'} may need owner escalation.`,
+      tone: 'warning',
+    })
+  }
+  if (dashboard.criticalTaskCount > 0) {
+    risks.push({
+      title: 'Priority concentration',
+      detail: `${dashboard.criticalTaskCount} critical task${dashboard.criticalTaskCount === 1 ? '' : 's'} need focused delivery attention.`,
+      tone: 'warning',
+    })
+  }
+  if (deliveryLabel?.includes('left') || deliveryLabel === 'Due today') {
+    risks.push({
+      title: 'Delivery window',
+      detail: `Project delivery is ${deliveryLabel.toLowerCase()} with ${dashboard.activeTaskCount} active task${dashboard.activeTaskCount === 1 ? '' : 's'}.`,
+      tone: deliveryLabel === 'Due today' ? 'critical' : 'warning',
+    })
+  }
+  const unassigned = tasks.filter((task) => !task.assignedUserId).length
+  if (unassigned > 0) {
+    risks.push({
+      title: 'Ownership gap',
+      detail: `${unassigned} visible task${unassigned === 1 ? '' : 's'} do not have an assignee.`,
+      tone: 'warning',
+    })
+  }
+  if (!risks.length) {
+    risks.push({
+      title: 'No active risks',
+      detail: 'Current project signals are within the expected delivery range.',
+      tone: 'healthy',
+    })
+  }
+  return risks
+}
+
+function buildDecisionSuggestions(riskCount: number, completion: number, openTasks: number) {
+  if (riskCount === 0 && openTasks === 0) return ['Approve release closure and archive completed work.']
+  const decisions = ['Confirm the next delivery checkpoint with the workspace team.']
+  if (riskCount > 1) decisions.push('Escalate blockers and deadline risks in the next stand-up.')
+  if (completion >= 80) decisions.push('Start release readiness review and final validation.')
+  if (openTasks > 0) decisions.push('Assign owners to remaining open work before the next review.')
+  return decisions
+}
+
+function DonutChart({
+  title,
+  items,
+  colors,
+}: {
+  title: string
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  const [activeSegment, setActiveSegment] = useState<string | null>(null)
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  const radius = 42
+  const circumference = 2 * Math.PI * radius
+  let offset = 0
+
+  return <article className="analytics-card">
+    <header><h2>{title}</h2><span>{total} tasks</span></header>
+    <div className="donut-wrap">
+      <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={`${title}: ${total} tasks`}>
+        <circle cx="60" cy="60" r={radius} className="donut-track" />
+        {total > 0 && items.filter((item) => item.count > 0).map((item) => {
+          const length = item.count / total * circumference
+          const percentage = chartPercentage(item.count, total)
+          const detail = `${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${percentage}%)`
+          const segment = <circle
+            key={item.label}
+            cx="60"
+            cy="60"
+            r={radius}
+            className="donut-segment"
+            aria-label={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'}, ${percentage}% of ${title.toLowerCase()}`}
+            tabIndex={0}
+            onMouseEnter={() => setActiveSegment(detail)}
+            onFocus={() => setActiveSegment(detail)}
+            onMouseLeave={() => setActiveSegment(null)}
+            onBlur={() => setActiveSegment(null)}
+            stroke={colors[item.label] ?? '#73808d'}
+            strokeDasharray={`${length} ${circumference - length}`}
+            strokeDashoffset={-offset}
+          >
+            <title>{detail}</title>
+          </circle>
+          offset += length
+          return segment
+        })}
+      </svg>
+      {activeSegment && <div className="donut-tooltip" role="status">{activeSegment}</div>}
+      <div className="donut-center"><strong>{total ? Math.round((items.find((item) => item.label === 'Completed')?.count ?? 0) * 100 / total) : 0}%</strong><span>done</span></div>
+    </div>
+    <ChartLegend items={items} colors={colors} />
+  </article>
+}
+
+function BarChart({
+  title,
+  items,
+  colors,
+}: {
+  title: string
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  const max = Math.max(1, ...items.map((item) => item.count))
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  return <article className="analytics-card">
+    <header><h2>{title}</h2><span>{total} total</span></header>
+    <div className="bar-chart">
+      {items.map((item) => <div
+        className="bar-row chart-hover-target"
+        data-tooltip={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${chartPercentage(item.count, total)}%)`}
+        title={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${chartPercentage(item.count, total)}%)`}
+        key={item.label}
+      >
+        <span>{friendlyChartLabel(item.label)}</span>
+        <div className="bar-track"><i style={{
+          width: `${item.count / max * 100}%`,
+          backgroundColor: colors[item.label] ?? '#73808d',
+        }} /></div>
+        <strong>{item.count}</strong>
+      </div>)}
+    </div>
+  </article>
+}
+
+function ProgressChart({
+  title,
+  completed,
+  total,
+  percentage,
+}: {
+  title: string
+  completed: number
+  total: number
+  percentage: number
+}) {
+  const open = Math.max(0, total - completed)
+  return <article
+    className="analytics-card progress-card chart-hover-target"
+    data-tooltip={`${completed} completed, ${open} open, ${percentage}% complete`}
+    title={`${completed} completed, ${open} open, ${percentage}% complete`}
+  >
+    <header><h2>{title}</h2><span>{completed}/{total} tasks</span></header>
+    <strong>{percentage}%</strong>
+    <div className="progress-track" aria-label={`${title}: ${percentage}% complete`}>
+      <i style={{ width: `${percentage}%` }} />
+    </div>
+    <p>{total === 0 ? 'Create tasks to start tracking delivery progress.' : `${completed} completed and ${open} still open.`}</p>
+  </article>
+}
+
+function ChartLegend({
+  items,
+  colors,
+}: {
+  items: DashboardBreakdownItem[]
+  colors: Record<string, string>
+}) {
+  return <div className="chart-legend">
+    {items.map((item) => <span key={item.label}>
+      <i style={{ backgroundColor: colors[item.label] ?? '#73808d' }} />
+      {friendlyChartLabel(item.label)} <strong>{item.count}</strong>
+    </span>)}
+  </div>
+}
+
+function friendlyChartLabel(label: string) {
+  return label === 'InProgress' ? 'In progress' : label
+}
+
+function chartPercentage(count: number, total: number) {
+  return total > 0 ? Math.round(count * 100 / total) : 0
+}
+
+function ActivityPage({
+  activity,
+  tasks,
+  loading,
+  selectedType,
+  onTypeChange,
+  pageNumber,
+  pageSize,
+  totalCount,
+  onPageChange,
+}: {
+  activity: WorkspaceActivity[]
+  tasks: TaskItem[]
+  loading: boolean
+  selectedType: (typeof activityTypes)[number]
+  onTypeChange: (type: (typeof activityTypes)[number]) => void
+  pageNumber: number
+  pageSize: number
+  totalCount: number
+  onPageChange: (page: number) => void
+}) {
+  if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const controls = <ActivityControls
+    selectedType={selectedType}
+    onTypeChange={onTypeChange}
+  />
+
+  if (!activity.length) {
+    return <section className="panel-page activity-page">
+      {controls}
+      <div className="empty compact"><Activity /><h2>No recorded activity yet</h2><p>Move tasks across the board or edit work items to build the timeline.</p></div>
+      {!!tasks.length && <div className="activity-snapshot" aria-label="Current task snapshot">
+        <h2>Current task snapshot</h2>
+        {tasks.map((task) => <article className="activity-item" key={task.id}>
+          <span className="activity-icon"><CircleGauge /></span>
+          <div>
+            <strong>{task.title}</strong>
+            <p>{statusLabels[task.status]} - {task.deadlineHealth} - priority {task.priorityScore?.toFixed(1) ?? 'unscored'}</p>
+            <small>{task.dueDate ? `Due ${task.dueDate}` : 'No due date'}</small>
+          </div>
+        </article>)}
+      </div>}
+    </section>
+  }
+
+  return <section className="panel-page activity-page" aria-label="Activity timeline">
+    {controls}
+    <div className="activity-timeline">
+      {activity.map((item) => <article className="activity-item" key={item.sequence}>
+      <span className="activity-icon">{activityIcon(item.action)}</span>
+      <div>
+        <strong>{item.taskTitle}</strong>
+        <p>{activityMessage(item)}</p>
+        <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
+      </div>
+    </article>)}
+    </div>
+    <Pagination
+      pageNumber={pageNumber}
+      pageSize={pageSize}
+      totalCount={totalCount}
+      totalPages={totalPages}
+      itemLabel="activity"
+      onPageChange={onPageChange}
+    />
+  </section>
+}
+
+function ActivityControls({
+  selectedType,
+  onTypeChange,
+}: {
+  selectedType: (typeof activityTypes)[number]
+  onTypeChange: (type: (typeof activityTypes)[number]) => void
+}) {
+  return <div className="activity-toolbar">
+    <div>
+      <p className="eyebrow">Audit trail</p>
+      <h2>Workspace activity</h2>
+    </div>
+    <label>
+      <span>Filter</span>
+      <select
+        value={selectedType}
+        onChange={(event) => onTypeChange(event.target.value as (typeof activityTypes)[number])}
+      >
+        {activityTypes.map((type) =>
+          <option value={type} key={type}>{activityTypeLabel(type)}</option>)}
+      </select>
+      <ChevronDown />
+    </label>
+  </div>
+}
+
+function activityMessage(item: WorkspaceActivity) {
+  const previous = item.previousValue || 'none'
+  const current = item.currentValue || 'none'
+  switch (item.action) {
+    case 'TaskCreated':
+      return `${item.actor} created this task.`
+    case 'TaskRenamed':
+      return `${item.actor} renamed the task from ${previous} to ${current}.`
+    case 'StatusChanged':
+      return `${item.actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
+    case 'DueDateChanged':
+      return `${item.actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
+    case 'EffortChanged':
+      return `${item.actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
+    case 'AssignmentChanged':
+      return `${item.actor} changed the assignee from ${previous} to ${current}.`
+    case 'CategoryChanged':
+      return `${item.actor} changed the category from ${previous} to ${current}.`
+    case 'TagAdded':
+      return `${item.actor} added tag #${current}.`
+    case 'TagRemoved':
+      return `${item.actor} removed tag #${previous}.`
+    case 'NoteAdded':
+      return `${item.actor} added a note: ${current}`
+    default:
+      return `${item.actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
+  }
+}
+
+function activityIcon(action: string) {
+  switch (action) {
+    case 'TaskCreated':
+      return <Plus />
+    case 'StatusChanged':
+      return <Activity />
+    case 'TagAdded':
+    case 'TagRemoved':
+      return <Tags />
+    case 'NoteAdded':
+      return <MessageSquare />
+    case 'AssignmentChanged':
+      return <UserPlus />
+    default:
+      return <CircleGauge />
+  }
+}
+
+function activityTypeLabel(type: string) {
+  return type === 'All'
+    ? 'All activity'
+    : type.replace(/([A-Z])/g, ' $1').trim()
+}
+
+function formatActivityValue(value: string) {
+  if (!value) return 'none'
+  const date = new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+}
+
+function activityLabel(item: Pick<WorkspaceActivity, 'action'>) {
+  return item.action
+    .replace(/([A-Z])/g, ' $1')
+    .trim()
+    .toLowerCase()
+}
+
+function Pagination({
+  pageNumber,
+  pageSize,
+  totalCount,
+  totalPages,
+  itemLabel = 'task',
+  onPageChange,
+}: {
+  pageNumber: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+  itemLabel?: string
+  onPageChange: (page: number) => void
+}) {
+  if (totalCount <= pageSize) {
+    return <footer className="pagination"><span>{totalCount} {itemLabel}{totalCount === 1 ? '' : 's'}</span></footer>
+  }
+
+  const start = (pageNumber - 1) * pageSize + 1
+  const end = Math.min(pageNumber * pageSize, totalCount)
+
+  return <footer className="pagination" aria-label={`${itemLabel} pagination`}>
+    <span>Showing {start}-{end} of {totalCount}</span>
+    <div>
+      <button className="secondary" disabled={pageNumber === 1} onClick={() => onPageChange(pageNumber - 1)}>Previous</button>
+      <strong>Page {pageNumber} of {totalPages}</strong>
+      <button className="secondary" disabled={pageNumber === totalPages} onClick={() => onPageChange(pageNumber + 1)}>Next</button>
+    </div>
+  </footer>
+}
+
+function SettingsPage({
+  settings,
+  workspace,
+  members,
+  invitations,
+  currentUserId,
+  onMemberRemoved,
+  onRoleChanged,
+  onInvited,
+  onInvitationCancelled,
+  onSave,
+}: {
+  settings: UserSettings
+  workspace: Workspace | null
+  members: WorkspaceMember[]
+  invitations: WorkspaceInvitation[]
+  currentUserId?: string
+  onMemberRemoved: (userId: string) => Promise<void>
+  onRoleChanged: (userId: string, role: 'Manager' | 'Member') => Promise<void>
+  onInvited: (fullName: string, email: string, role: 'Manager' | 'Member') => Promise<void>
+  onInvitationCancelled: (invitationId: string) => Promise<void>
+  onSave: (settings: UserSettings) => void
+}) {
+  const [draft, setDraft] = useState(settings)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => setDraft(settings), [settings])
+  const canManage = workspace?.role === 'Owner'
+
+  const invite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    setBusy(true)
+    setError('')
+    const data = new FormData(form)
+    try {
+      await onInvited(
+        String(data.get('fullName')),
+        String(data.get('email')),
+        String(data.get('role')) as 'Manager' | 'Member',
+      )
+      form.reset()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Invitation could not be created.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="settings-grid">
+    <form className="panel-page settings-form" onSubmit={(event) => {
+      event.preventDefault()
+      onSave(draft)
+    }}>
+      <div className="settings-section">
+        <div>
+          <h2>Workspace preferences</h2>
+          <p>Choose the default view and notification behaviour for this browser session.</p>
+        </div>
+        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">List</option><option value="board">Board</option></select><ChevronDown /></label>
+      </div>
+      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
+      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
+      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
+    </form>
+
+    <section className="panel-page member-admin">
+      <div className="settings-section compact-heading">
+        <div>
+          <h2>Members</h2>
+          <p>{workspace ? `${workspace.name} access and roles.` : 'Workspace access and roles.'}</p>
+        </div>
+      </div>
+      <div className="member-list">
+        {members.map((member) => <article className="member-row" key={member.userId}>
+          <span className="avatar">{initials(member.displayName)}</span>
+          <div><strong>{member.displayName}</strong><small>{member.email}</small></div>
+          {canManage && member.role !== 'Owner'
+            ? <label className="role-select" aria-label={`${member.displayName} role`}>
+                <select value={member.role} disabled={busy} onChange={(event) => {
+                  setBusy(true)
+                  onRoleChanged(
+                    member.userId,
+                    event.target.value as 'Manager' | 'Member',
+                  ).finally(() => setBusy(false))
+                }}>
+                  <option value="Member">Member</option>
+                  <option value="Manager">Manager</option>
+                </select>
+                <ChevronDown />
+              </label>
+            : <span className={`role-pill ${member.role.toLowerCase()}`}>{member.role}</span>}
+          {canManage && member.role !== 'Owner' && member.userId !== currentUserId &&
+            <button className="icon-button danger-action" disabled={busy} onClick={() => {
+              setBusy(true)
+              onMemberRemoved(member.userId).finally(() => setBusy(false))
+            }} aria-label={`Remove ${member.displayName}`} title="Remove member"><Trash2 /></button>}
+        </article>)}
+      </div>
+      {!canManage && <p className="muted">Only the workspace owner can invite or remove members.</p>}
+    </section>
+
+    {canManage && <section className="panel-page invite-admin">
+      <div className="settings-section compact-heading">
+        <div>
+          <h2>Invite people</h2>
+          <p>Create one-time invitation links. Invitees appear as members only after they accept.</p>
+        </div>
+      </div>
+      <form className="invite-form" onSubmit={(event) => void invite(event)}>
+        <label>Full name<input name="fullName" required maxLength={120} /></label>
+        <label>Email<input name="email" type="email" required maxLength={180} /></label>
+        <label>Role<select name="role" defaultValue="Member"><option value="Member">Member</option><option value="Manager">Manager</option></select><ChevronDown /></label>
+        {error && <p className="field-error">{error}</p>}
+        <footer><button className="primary" disabled={busy}><UserPlus size={16} /> Send invite</button></footer>
+      </form>
+      <div className="invitation-list">
+        {!!invitations.length && <h3>Pending invitations</h3>}
+        {invitations.map((invitation) => <article className="invitation-row" key={invitation.id}>
+          <div><strong>{invitation.fullName}</strong><small>{invitation.email} - {invitation.status}</small></div>
+          {invitation.inviteLink
+            ? <a href={invitation.inviteLink}>{invitation.inviteLink}</a>
+            : <code>No active link</code>}
+          {invitation.status === 'Pending' && <button className="secondary" disabled={busy} onClick={() => {
+            setBusy(true)
+            onInvitationCancelled(invitation.id).finally(() => setBusy(false))
+          }}>Cancel</button>}
+        </article>)}
+        {!invitations.length && <p className="muted">No pending invitations for this workspace.</p>}
+      </div>
+    </section>}
+  </section>
+}
+
+function ProfilePage({
+  profile,
+  account,
+  role,
+  onSave,
+  onPasswordChanged,
+  onLogout,
+}: {
+  profile: UserProfile
+  account: AccountSession | null
+  role: Workspace['role'] | null
+  onSave: (profile: UserProfile) => Promise<void>
+  onPasswordChanged: (
+    currentPassword: string,
+    newPassword: string,
+  ) => Promise<void>
+  onLogout: () => void
+}) {
+  const [draft, setDraft] = useState(profile)
+  const [password, setPassword] = useState({ current: '', next: '', confirm: '' })
+  const [passwordError, setPasswordError] = useState('')
+  const [profileError, setProfileError] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+  useEffect(() => setDraft(profile), [profile])
+
+  return <section className="profile-grid">
+    <form className="panel-page profile-card" onSubmit={(event) => {
+      event.preventDefault()
+      setSavingProfile(true)
+      setProfileError('')
+      Promise.resolve(onSave(draft))
+        .catch((reason) => setProfileError(
+          reason instanceof Error ? reason.message : 'Profile could not be updated.'))
+        .finally(() => setSavingProfile(false))
+    }}>
+      <div className="profile-heading"><span className="avatar large">{initials(draft.displayName)}</span><div><h2>Personal details</h2><p>{account ? `Signed in as ${account.email}.` : 'Using the development workspace session.'}</p></div></div>
+      <label>Full name<input value={draft.displayName} readOnly /></label>
+      <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} required maxLength={180} /></label>
+      <label>Workspace role<input value={role ?? 'Member'} readOnly /></label>
+      {profileError && <p className="field-error">{profileError}</p>}
+      <footer><button className="primary" disabled={savingProfile}><Save size={16} /> {savingProfile ? 'Saving...' : 'Save profile'}</button></footer>
+    </form>
+
+    <form className="panel-page profile-card" onSubmit={(event) => {
+      event.preventDefault()
+      setPasswordError('')
+      if (password.next.length < 8) {
+        setPasswordError('Use at least 8 characters.')
+        return
+      }
+      if (password.next !== password.confirm) {
+        setPasswordError('New password and confirmation must match.')
+        return
+      }
+      setSavingPassword(true)
+      onPasswordChanged(password.current, password.next)
+        .then(() => setPassword({ current: '', next: '', confirm: '' }))
+        .catch((reason) => setPasswordError(
+          reason instanceof Error ? reason.message : 'Password could not be changed.'))
+        .finally(() => setSavingPassword(false))
+    }}>
+      <div className="profile-heading"><span className="metric-icon"><ShieldCheck /></span><div><h2>Password</h2><p>Change the password used for this account.</p></div></div>
+      <label>Current password<input type="password" value={password.current} required onChange={(event) => setPassword({ ...password, current: event.target.value })} autoComplete="current-password" /></label>
+      <label>New password<input type="password" value={password.next} required onChange={(event) => setPassword({ ...password, next: event.target.value })} autoComplete="new-password" /></label>
+      <label>Confirm password<input type="password" value={password.confirm} required onChange={(event) => setPassword({ ...password, confirm: event.target.value })} autoComplete="new-password" /></label>
+      {passwordError && <p className="field-error">{passwordError}</p>}
+      <footer><button className="secondary" type="button" onClick={onLogout}><LogOut size={16} /> Logout</button><button className="primary" disabled={savingPassword}>{savingPassword ? 'Changing...' : 'Change password'}</button></footer>
+    </form>
+  </section>
+}
+
+function TaskList({ tasks, categories, onEdit }: { tasks: TaskItem[]; categories: ProjectCategory[]; onEdit: (task: TaskItem) => void }) {
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
@@ -111,11 +1708,161 @@ function TaskList({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskIte
   </div>
 }
 
-function Board({ tasks, onEdit }: { tasks: TaskItem[]; onEdit: (task: TaskItem) => void }) {
+function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName?: string }) {
+  if (!categoryName && !task.tags.length) return null
+  return <span className="metadata-line">
+    {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
+    {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
+  </span>
+}
+
+function Board({
+  tasks,
+  categories,
+  onEdit,
+  onMove,
+}: {
+  tasks: TaskItem[]
+  categories: ProjectCategory[]
+  onEdit: (task: TaskItem) => void
+  onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
+}) {
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
-  return <div className="board">{columns.map((status) => <section className="board-column" key={status}><header><span>{statusLabels[status]}</span><small>{tasks.filter((task) => task.status === status).length}</small></header>
-    {tasks.filter((task) => task.status === status).map((task) => <article className="board-task" key={task.id} tabIndex={0} role="button" onClick={() => onEdit(task)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); onEdit(task) } }} aria-label={`Edit ${task.title}`}><strong>{task.title}</strong><div><span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.deadlineHealth}</span><b>{task.priorityScore?.toFixed(1) ?? '—'}</b></div></article>)}
-  </section>)}</div>
+  const [activeTask, setActiveTask] = useState<TaskItem | null>(null)
+  const [moving, setMoving] = useState(false)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  )
+  const validTargets = activeTask
+    ? new Set(Object.keys(boardTransitions[activeTask.status] ?? {}))
+    : new Set<string>()
+
+  const finishDrag = async ({ active, over }: DragEndEvent) => {
+    const task = active.data.current?.task as TaskItem | undefined
+    const target = over?.id as TaskStatus | undefined
+    setActiveTask(null)
+    if (!task || !target || !boardTransitions[task.status]?.[target]) return
+
+    setMoving(true)
+    try {
+      await onMove(task, target)
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  return <DndContext
+    sensors={sensors}
+    onDragStart={({ active }: DragStartEvent) =>
+      setActiveTask(active.data.current?.task as TaskItem)}
+    onDragCancel={() => setActiveTask(null)}
+    onDragEnd={(event) => void finishDrag(event)}
+  >
+    <div className={`board ${moving ? 'moving' : ''}`}>
+      {columns.map((status) => <BoardColumn
+        key={status}
+        status={status}
+        categories={categories}
+        tasks={tasks.filter((task) => task.status === status)}
+        onEdit={onEdit}
+        dragActive={activeTask !== null}
+        validTarget={validTargets.has(status)}
+      />)}
+    </div>
+    <DragOverlay>
+      {activeTask ? <BoardCard task={activeTask} categories={categories} onEdit={onEdit} overlay /> : null}
+    </DragOverlay>
+  </DndContext>
+}
+
+function BoardColumn({
+  status,
+  tasks,
+  categories,
+  onEdit,
+  dragActive,
+  validTarget,
+}: {
+  status: TaskStatus
+  tasks: TaskItem[]
+  categories: ProjectCategory[]
+  onEdit: (task: TaskItem) => void
+  dragActive: boolean
+  validTarget: boolean
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: status,
+    disabled: dragActive && !validTarget,
+  })
+
+  return <section
+    ref={setNodeRef}
+    className={`board-column ${status.toLowerCase()} ${dragActive ? 'drag-active' : ''} ${validTarget ? 'valid-target' : ''} ${isOver ? 'drag-over' : ''}`}
+    aria-label={`${statusLabels[status]} tasks`}
+  >
+    <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
+    <div className="board-column-body">
+      {tasks.map((task) =>
+        <BoardCard task={task} categories={categories} onEdit={onEdit} key={task.id} />)}
+      {!tasks.length && <span className="column-empty">No tasks</span>}
+    </div>
+  </section>
+}
+
+function BoardCard({
+  task,
+  categories,
+  onEdit,
+  overlay = false,
+}: {
+  task: TaskItem
+  categories?: ProjectCategory[]
+  onEdit: (task: TaskItem) => void
+  overlay?: boolean
+}) {
+  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
+    id: task.id,
+    data: { task },
+    disabled: overlay,
+  })
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined
+
+  return <article
+    ref={setNodeRef}
+    style={style}
+    className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''}`}
+    {...attributes}
+    {...listeners}
+  >
+    <div className="board-task-heading">
+      <GripVertical aria-hidden="true" />
+      <strong>{task.title}</strong>
+      <button
+        className="icon-button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onEdit(task)
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        aria-label={`Edit ${task.title}`}
+        title="Edit task"
+      ><Pencil /></button>
+    </div>
+    <div className="board-task-meta">
+      <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>
+        {task.deadlineHealth}
+      </span>
+      <b>{task.priorityScore?.toFixed(1) ?? '—'}</b>
+    </div>
+    <TaskMetadataLine
+      task={task}
+      categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+    />
+  </article>
 }
 
 const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[]>> = {
@@ -126,8 +1873,11 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
-function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [categoryDraft, setCategoryDraft] = useState('')
+  const [tagDraft, setTagDraft] = useState('')
+  const [noteDraft, setNoteDraft] = useState('')
   const explanation = task.priorityExplanation
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
@@ -141,6 +1891,26 @@ function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () =>
       Number(data.get('riskReduction')),
       effort,
     )
+    const assignee = String(data.get('assignedUserId') ?? '')
+    if (assignee) await api.assign(task.id, assignee)
+    else if (task.assignedUserId) await api.unassign(task.id)
+    const categoryId = String(data.get('categoryId') ?? '')
+    await api.updateCategory(task.id, categoryId || null)
+    if (tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
+    if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
+    onSaved()
+  }
+  const createCategory = async () => {
+    if (!categoryDraft.trim()) return
+    setSaving(true)
+    const category = await api.createCategory(projectId, categoryDraft.trim())
+    onCategoryCreated(category)
+    setCategoryDraft('')
+    setSaving(false)
+  }
+  const removeTag = async (tag: string) => {
+    setSaving(true)
+    await api.removeTag(task.id, tag)
     onSaved()
   }
   const transition = async (action: string) => {
@@ -152,6 +1922,15 @@ function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () =>
     <form onSubmit={(event) => void submit(event)}>
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{[1, 2, 3, 5, 8, 13].map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
+      <fieldset><legend>Metadata</legend><div className="metadata-editor">
+        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
+        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={40} placeholder="client, urgent, research" /></label>
+        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
+        <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
+        {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
+      </div></fieldset>
       <fieldset><legend>Priority inputs</legend><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} /></label>
@@ -162,15 +1941,30 @@ function TaskEditor({ task, onClose, onSaved }: { task: TaskItem; onClose: () =>
   </dialog></div>
 }
 
-function TaskDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [categoryDraft, setCategoryDraft] = useState('')
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
     const data = new FormData(event.currentTarget)
-    await api.createTask(String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+    const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+    const categoryId = String(data.get('categoryId') ?? '')
+    const tag = String(data.get('tag') ?? '').trim()
+    const note = String(data.get('note') ?? '').trim()
+    if (categoryId) await api.updateCategory(task.id, categoryId)
+    if (tag) await api.addTag(task.id, tag)
+    if (note) await api.addNote(task.id, note)
     onCreated()
   }
+  const createCategory = async () => {
+    if (!categoryDraft.trim()) return
+    setSaving(true)
+    const category = await api.createCategory(projectId, categoryDraft.trim())
+    onCategoryCreated(category)
+    setCategoryDraft('')
+    setSaving(false)
+  }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
   </dialog></div>
 }

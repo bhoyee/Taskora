@@ -12,6 +12,8 @@ public sealed class CreateTaskHandlerTests
         Guid.Parse("03b24f74-fbd0-4cbd-bf83-7b9a172c151c");
     private static readonly Guid TaskId =
         Guid.Parse("7dd36a63-22f1-4b39-bc53-4c955f580ad6");
+    private static readonly Guid UserId =
+        Guid.Parse("81d74ae7-9399-4daa-baf4-aeaee96dcb58");
     private static readonly DateTimeOffset Now =
         new(2026, 7, 4, 10, 0, 0, TimeSpan.Zero);
 
@@ -41,6 +43,7 @@ public sealed class CreateTaskHandlerTests
         Assert.Equal(5, result.Value.Effort);
         Assert.NotNull(tasks.AddedTask);
         Assert.Equal(ProjectId, tasks.AddedTask.ProjectId);
+        Assert.Equal(UserId, tasks.AddedTask.CreatedByUserId);
         Assert.Equal(Now, tasks.AddedTask.CreatedAt);
         Assert.Equal(cancellation.Token, tasks.ReceivedCancellationToken);
         Assert.Equal(1, unitOfWork.SaveCount);
@@ -113,7 +116,8 @@ public sealed class CreateTaskHandlerTests
             tasks,
             unitOfWork,
             new StubIdentifierGenerator(TaskId),
-            new StubClock(Now));
+            new StubClock(Now),
+            new StubCurrentUser(UserId));
 
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
@@ -132,6 +136,12 @@ public sealed class CreateTaskHandlerTests
             Guid projectId,
             CancellationToken cancellationToken) =>
             Task.FromResult(project?.Id == projectId ? project : null);
+
+        public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Project>>(
+                project is null ? [] : [project]);
     }
 
     private sealed class RecordingTaskRepository : ITaskRepository
@@ -174,5 +184,12 @@ public sealed class CreateTaskHandlerTests
         : IIdentifierGenerator
     {
         public Guid NewId() => identifier;
+    }
+
+    private sealed class StubCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
     }
 }

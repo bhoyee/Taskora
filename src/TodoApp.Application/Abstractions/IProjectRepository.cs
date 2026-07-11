@@ -9,4 +9,8 @@ public interface IProjectRepository
     Task<Project?> GetByIdAsync(
         Guid projectId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+        Guid workspaceId,
+        CancellationToken cancellationToken);
 }

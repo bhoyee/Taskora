@@ -1,0 +1,76 @@
+# Milestone 8: Delivery And Operations
+
+## Status
+
+Complete
+
+## Objective
+
+Make every release repeatable, observable, and safe to validate after
+deployment.
+
+## User Stories
+
+- As a developer, I can prove a clean checkout builds and tests in CI.
+- As a reviewer, I can see test coverage and packaged release artifacts.
+- As an operator, I can deploy the same package that passed CI.
+- As an operator, I can run a smoke test against production health endpoints.
+- As a portfolio reviewer, I can understand the release process from the repo.
+
+## Technical Tasks
+
+- Publish backend test results and coverage from Azure Pipelines.
+- Build and publish the production web artifact.
+- Validate the Docker image during CI.
+- Package the deployable API artifact and Docker image artifact.
+- Add an operator runbook for configuration, release, rollback, and smoke tests.
+- Add a reusable smoke-test script for live and readiness endpoints.
+- Document environment variables and secret boundaries.
+- Document the low-cost Azure path and when Docker/Azure SQL are optional.
+- Keep operational navigation usable for activity, profile, settings, and logout
+  workflows.
+- Add an Azure setup checklist for App Service, optional Azure SQL, service
+  connection, pipeline variables, smoke tests, and cost guardrails.
+- Add a deployment and operations architecture diagram.
+
+## Acceptance Criteria
+
+- CI restores, builds, tests, and publishes the .NET solution.
+- CI restores, tests, and builds the React frontend.
+- CI publishes coverage data when tests complete.
+- CI validates that the Dockerfile can build from a clean checkout.
+- Deployment remains manually gated until Azure App Service details are set.
+- Smoke tests can be run locally or by the pipeline against a deployed base URL.
+- The app documents a portfolio-friendly Azure deployment path that avoids paid
+  resources until they are required.
+- Activity, settings, profile, password, and logout screens are reachable from
+  the application menu.
+- The deployment architecture and Azure setup path are documented in the
+  repository.
+
+## Required Tests
+
+- Existing .NET unit and integration tests.
+- Existing frontend component tests.
+- Docker build validation in CI.
+- Smoke test against `/health/live` and `/health/ready`.
+- Component and browser tests for operational navigation pages.
+- Documentation review for the runbook, Azure setup checklist, and milestone
+  completion notes.
+
+## Definition Of Done
+
+- A new developer can understand how releases are produced.
+- Azure deployment configuration is documented without committed secrets.
+- CI produces both application and Docker artifacts.
+- Production health can be checked after deployment.
+- The milestone branch is pushed and reviewed through a pull request.
+- Docker validation is documented as CI/production-environment work because it
+  was intentionally skipped on the local machine.
+
+## Expected Commits
+
+1. `docs: define delivery operations milestone`
+2. `ci: publish coverage and validate docker image`
+3. `ops: add deployment smoke test runbook`
+4. `docs: complete delivery and operations milestone`

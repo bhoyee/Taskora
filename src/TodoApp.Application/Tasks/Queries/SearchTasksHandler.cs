@@ -23,8 +23,13 @@ public sealed class SearchTasksHandler(
 
         var criteria = new TaskSearchCriteria(
             query.ProjectId,
+            query.WorkspaceId,
             query.Status,
             query.IsBlocked,
+            query.CategoryId,
+            string.IsNullOrWhiteSpace(query.Tag)
+                ? null
+                : query.Tag.Trim().TrimStart('#').ToLowerInvariant(),
             string.IsNullOrWhiteSpace(query.Search)
                 ? null
                 : query.Search.Trim(),

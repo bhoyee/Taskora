@@ -1,6 +1,8 @@
 @TodoApp_HostAddress = http://localhost:5080
 @projectId = 10000000-0000-0000-0000-000000000001
 @taskId = 20000000-0000-0000-0000-000000000002
+@workspaceId = 40000000-0000-0000-0000-000000000001
+@ownerId = 30000000-0000-0000-0000-000000000001
 
 GET {{TodoApp_HostAddress}}/health/live
 Accept: application/json
@@ -67,6 +69,19 @@ Accept: application/json
 
 GET {{TodoApp_HostAddress}}/api/v1/dashboard
 Accept: application/json
+X-User-Id: {{ownerId}}
+
+###
+
+GET {{TodoApp_HostAddress}}/api/v1/workspaces
+Accept: application/json
+X-User-Id: {{ownerId}}
+
+###
+
+GET {{TodoApp_HostAddress}}/api/v1/workspaces/{{workspaceId}}/members
+Accept: application/json
+X-User-Id: {{ownerId}}
 
 ###
 

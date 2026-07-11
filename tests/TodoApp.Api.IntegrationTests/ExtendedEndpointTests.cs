@@ -121,7 +121,11 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Extended {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Extended {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
         AssertSuccess(response);
         return (await response.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id")

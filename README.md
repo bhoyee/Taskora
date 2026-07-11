@@ -11,6 +11,8 @@ urgency, risk, effort, and task dependencies.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing strategy](docs/TESTING.md)
 - [Contribution workflow](docs/CONTRIBUTING.md)
+- [Operations runbook](docs/OPERATIONS.md)
+- [Azure setup checklist](docs/AZURE_SETUP.md)
 - [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
@@ -29,8 +31,10 @@ HTTP APIs, product intelligence, user experience, security, and operations.
 | 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
 | 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
 | 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
-| 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
-| 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+| 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
+| 8. Delivery and Operations | Complete | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+| 9. Task Metadata and Account Access | Complete | Categories, tags, notes, registration, login, metadata APIs, and React account access |
+| 10. Workspace Management and Invitations | Complete | Workspace creation, switching, secure invite links, accept/decline flow, and member administration |
 
 Each milestone has measurable acceptance criteria, required tests, a definition
 of done, and an expected commit sequence in the
@@ -70,10 +74,33 @@ The project uses a **modular monolith with domain-oriented boundaries**:
 `TodoApp.Api` is the composition root. HTTP contracts stay separate from
 domain entities and invoke application use cases backed by Infrastructure.
 
+## Delivery Architecture
+
+```mermaid
+flowchart LR
+    GitHub["GitHub"]
+    AzureDevOps["Azure DevOps"]
+    Pipeline["Azure Pipelines<br/>test, coverage, build, package"]
+    Artifact["Deployable ZIP<br/>optional Docker artifact"]
+    AppService["Azure App Service<br/>F1 Free for portfolio demo"]
+    Database[("SQLite local/demo<br/>or Azure SQL optional")]
+    Smoke["Smoke tests<br/>live + ready health"]
+    Budget["Azure budget alerts"]
+
+    GitHub --> Pipeline
+    AzureDevOps --> Pipeline
+    Pipeline --> Artifact
+    Artifact -->|manual deploy gate| AppService
+    AppService --> Database
+    AppService --> Smoke
+    Budget -. guardrail .-> AppService
+    Budget -. guardrail .-> Database
+```
+
 ## Current Development
 
-Milestones 1 through 6 are complete on feature branches. The current
-`feature/web-experience` branch includes:
+Milestones 1 through 9 are complete on feature branches. The current
+`feature/delivery-operations` branch includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -99,7 +126,19 @@ Milestones 1 through 6 are complete on feature branches. The current
 - Immutable activity history and project/portfolio intelligence dashboards.
 - Responsive React list and Kanban views with task editing and planning.
 - Component and desktop/mobile browser tests.
-- 68 domain, 34 application, 17 Infrastructure, and 12 API integration tests.
+- JWT authentication with development/test identity isolation.
+- Workspace roles, guarded membership, and task assignment.
+- Server-side security tests for unauthorized and forbidden access.
+- Interactive board drag and drop, task pagination, activity fallback, settings,
+  profile, password, and logout screens.
+- Project-owned task categories, task tags, and actor-attributed task notes.
+- Registration and login APIs with hashed account credentials and bearer-token
+  development authentication.
+- React login/register screen and task metadata controls for category, tags,
+  and notes.
+- Azure Pipeline coverage publishing, app packaging, optional Docker artifact,
+  deployment smoke-test hook, operations runbook, and Azure setup checklist.
+- 78 domain, 34 application, 18 Infrastructure, and 24 API integration tests.
 
 Run the complete build and test suite with:
 
@@ -177,13 +216,20 @@ Replace `YOUR-USERNAME` with your GitHub username.
 
 ## Azure DevOps CI Pipeline
 
-This repository includes `azure-pipelines.yml`. It does the following when code is pushed to `main`:
+This repository includes `azure-pipelines.yml`. It does the following when code is pushed to `main`, `dev`, or a feature branch:
 
 - Installs the .NET SDK.
+- Installs Node.js.
+- Restores frontend packages.
+- Runs frontend component tests.
+- Builds the React frontend.
 - Restores NuGet packages.
-- Builds the app.
+- Builds the .NET solution.
+- Runs backend tests and publishes coverage.
 - Publishes the app as a build artifact named `drop`.
+- Builds and publishes a Docker image artifact.
 - Optionally deploys the artifact to Azure App Service.
+- Optionally runs a deployment smoke test.
 
 To connect it in Azure DevOps:
 
@@ -211,6 +257,15 @@ Then update these variables in `azure-pipelines.yml`:
 ```yaml
 azureServiceConnection: YOUR-AZURE-SERVICE-CONNECTION
 webAppName: YOUR-AZURE-WEB-APP-NAME
+smokeTestBaseUrl: https://YOUR-AZURE-WEB-APP-NAME.azurewebsites.net
 ```
 
 When you manually run the pipeline, set `Deploy to Azure App Service` to `true`.
+See the [operations runbook](docs/OPERATIONS.md) for release, smoke-test, and
+rollback steps.
+
+For a low-cost portfolio deployment, start with App Service F1 Free, keep
+deployment manual, set Azure budget alerts, and use SQLite locally until Azure
+SQL is needed. Docker is optional for App Service ZIP deployment.
+Follow the [Azure setup checklist](docs/AZURE_SETUP.md) when you are ready to
+deploy.

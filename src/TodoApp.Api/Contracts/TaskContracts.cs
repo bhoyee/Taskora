@@ -19,3 +19,5 @@ public sealed record UpdatePlanningFactorsRequest(
     int Effort);
 
 public sealed record AddDependencyRequest(Guid DependencyId);
+
+public sealed record AssignTaskRequest(Guid UserId);

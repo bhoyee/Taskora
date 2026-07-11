@@ -32,6 +32,126 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskDependencies", (string)null);
                 });
 
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.UserProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("UserProfiles", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.Workspace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Workspaces", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.WorkspaceInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvitedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvitedByUserId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "Email", "Status");
+
+                    b.ToTable("WorkspaceInvitations", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.WorkspaceMembership", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("WorkspaceId", "UserId");
+
+                    b.HasIndex("UserId", "WorkspaceId");
+
+                    b.ToTable("WorkspaceMemberships", (string)null);
+                });
+
             modelBuilder.Entity("TodoApp.Domain.Projects.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -57,11 +177,37 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("TargetDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
 
+                    b.HasIndex("WorkspaceId");
+
                     b.ToTable("Projects", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Projects.ProjectCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ProjectCategories", (string)null);
                 });
 
             modelBuilder.Entity("TodoApp.Domain.Tasks.TaskItem", b =>
@@ -70,8 +216,14 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("AssignedUserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("BlockedReason")
                         .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CategoryId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
@@ -83,6 +235,9 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
 
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("TEXT");
@@ -103,6 +258,10 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignedUserId");
+
+                    b.HasIndex("CategoryId");
+
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("DueDate");
@@ -110,6 +269,48 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProjectId", "Status");
 
                     b.ToTable("Tasks", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Tasks.TaskNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId", "CreatedAt");
+
+                    b.ToTable("TaskNotes", (string)null);
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Tasks.TaskTag", b =>
+                {
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TaskId", "Name");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("TaskTags", (string)null);
                 });
 
             modelBuilder.Entity("TodoApp.Infrastructure.Persistence.TaskActivity", b =>
@@ -151,6 +352,22 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskActivities", (string)null);
                 });
 
+            modelBuilder.Entity("TodoApp.Infrastructure.Persistence.UserCredential", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserCredentials", (string)null);
+                });
+
             modelBuilder.Entity("TaskDependencies", b =>
                 {
                     b.HasOne("TodoApp.Domain.Tasks.TaskItem", null)
@@ -162,6 +379,54 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.HasOne("TodoApp.Domain.Tasks.TaskItem", null)
                         .WithMany()
                         .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.Workspace", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Collaboration.UserProfile", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.WorkspaceInvitation", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Collaboration.UserProfile", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TodoApp.Domain.Collaboration.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.WorkspaceMembership", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Collaboration.UserProfile", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TodoApp.Domain.Collaboration.Workspace", null)
+                        .WithMany("_memberships")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Projects.ProjectCategory", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Projects.Project", null)
+                        .WithMany("_categories")
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -242,6 +507,24 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                     b.Navigation("_priority");
                 });
 
+            modelBuilder.Entity("TodoApp.Domain.Tasks.TaskNote", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Tasks.TaskItem", null)
+                        .WithMany("_notes")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Tasks.TaskTag", b =>
+                {
+                    b.HasOne("TodoApp.Domain.Tasks.TaskItem", null)
+                        .WithMany("_tags")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TodoApp.Infrastructure.Persistence.TaskActivity", b =>
                 {
                     b.HasOne("TodoApp.Domain.Tasks.TaskItem", null)
@@ -249,6 +532,23 @@ namespace TodoApp.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Collaboration.Workspace", b =>
+                {
+                    b.Navigation("_memberships");
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Projects.Project", b =>
+                {
+                    b.Navigation("_categories");
+                });
+
+            modelBuilder.Entity("TodoApp.Domain.Tasks.TaskItem", b =>
+                {
+                    b.Navigation("_notes");
+
+                    b.Navigation("_tags");
                 });
 #pragma warning restore 612, 618
         }

@@ -5,7 +5,13 @@ namespace TodoApp.Domain.Projects;
 
 public sealed class Project
 {
-    private Project(Guid id, string name, string? description)
+    private readonly List<ProjectCategory> _categories = [];
+
+    private Project(
+        Guid id,
+        string name,
+        string? description,
+        Guid workspaceId)
     {
         if (id == Guid.Empty)
         {
@@ -14,6 +20,7 @@ public sealed class Project
         }
 
         Id = id;
+        WorkspaceId = workspaceId;
         Name = NormalizeName(name);
         Description = NormalizeDescription(description);
     }
@@ -21,6 +28,8 @@ public sealed class Project
     public Guid Id { get; }
 
     public string Name { get; private set; }
+
+    public Guid WorkspaceId { get; private set; }
 
     public string? Description { get; private set; }
 
@@ -30,11 +39,15 @@ public sealed class Project
 
     public DueDate? TargetDate { get; private set; }
 
+    public IReadOnlyCollection<ProjectCategory> Categories =>
+        _categories.AsReadOnly();
+
     public static Project Create(
         Guid id,
         string name,
-        string? description = null) =>
-        new(id, name, description);
+        string? description = null,
+        Guid? workspaceId = null) =>
+        new(id, name, description, workspaceId ?? Guid.Empty);
 
     public void Rename(string name)
     {
@@ -59,6 +72,36 @@ public sealed class Project
         EnsureActive();
         TargetDate = targetDate;
     }
+
+    public ProjectCategory AddCategory(Guid id, string name)
+    {
+        EnsureActive();
+        var category = new ProjectCategory(id, Id, name);
+        if (_categories.Any(existing =>
+                existing.Name.Equals(
+                    category.Name,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DomainRuleException(
+                "The project category already exists.");
+        }
+
+        _categories.Add(category);
+        return category;
+    }
+
+    public void RenameCategory(Guid categoryId, string name)
+    {
+        EnsureActive();
+        GetCategory(categoryId).Rename(name);
+    }
+
+    public bool HasCategory(Guid categoryId) =>
+        _categories.Any(category => category.Id == categoryId);
+
+    private ProjectCategory GetCategory(Guid categoryId) =>
+        _categories.SingleOrDefault(category => category.Id == categoryId) ??
+        throw new DomainRuleException("The project category was not found.");
 
     public void EnsureCanAcceptTasks()
     {

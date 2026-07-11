@@ -7,6 +7,8 @@ public sealed class TaskItem
 {
     private readonly List<TaskItem> _dependencies = [];
     private readonly List<IDomainEvent> _domainEvents = [];
+    private readonly List<TaskNote> _notes = [];
+    private readonly List<TaskTag> _tags = [];
     private PlanningFactors? _planningFactors;
     private PriorityScore? _priority;
 
@@ -53,6 +55,12 @@ public sealed class TaskItem
 
     public DateTimeOffset? CompletedAt { get; private set; }
 
+    public Guid? AssignedUserId { get; private set; }
+
+    public Guid? CreatedByUserId { get; private set; }
+
+    public Guid? CategoryId { get; private set; }
+
     public DueDate? DueDate { get; private set; }
 
     public EffortEstimate? EffortEstimate { get; private set; }
@@ -88,6 +96,10 @@ public sealed class TaskItem
 
     public IReadOnlyCollection<IDomainEvent> DomainEvents =>
         _domainEvents.AsReadOnly();
+
+    public IReadOnlyCollection<TaskNote> Notes => _notes.AsReadOnly();
+
+    public IReadOnlyCollection<TaskTag> Tags => _tags.AsReadOnly();
 
     public static TaskItem Create(
         Guid id,
@@ -198,6 +210,71 @@ public sealed class TaskItem
     public void Estimate(EffortEstimate effortEstimate)
     {
         EffortEstimate = effortEstimate;
+    }
+
+    public void Assign(Guid userId)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Assigned user identifier is required.");
+        }
+
+        AssignedUserId = userId;
+    }
+
+    public void Unassign() => AssignedUserId = null;
+
+    public void RecordCreator(Guid userId)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Task creator identifier is required.");
+        }
+
+        CreatedByUserId = userId;
+    }
+
+    public void AssignCategory(Guid? categoryId)
+    {
+        if (categoryId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Category identifier is required.");
+        }
+
+        CategoryId = categoryId;
+    }
+
+    public void AddTag(string name)
+    {
+        var normalized = TaskTag.NormalizeName(name);
+        if (_tags.Any(tag => tag.Name == normalized))
+        {
+            throw new DomainRuleException("The task tag already exists.");
+        }
+
+        _tags.Add(new TaskTag(Id, normalized));
+    }
+
+    public void RemoveTag(string name)
+    {
+        var normalized = TaskTag.NormalizeName(name);
+        var tag = _tags.SingleOrDefault(tag => tag.Name == normalized) ??
+            throw new DomainRuleException("The task tag was not found.");
+        _tags.Remove(tag);
+    }
+
+    public TaskNote AddNote(
+        Guid noteId,
+        Guid authorId,
+        string body,
+        DateTimeOffset createdAt)
+    {
+        var note = new TaskNote(noteId, Id, authorId, body, createdAt);
+        _notes.Add(note);
+        return note;
     }
 
     public void Block(string reason)

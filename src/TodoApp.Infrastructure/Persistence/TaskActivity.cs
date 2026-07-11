@@ -41,10 +41,24 @@ public sealed class TaskActivity
         string previousValue,
         string currentValue,
         DateTimeOffset occurredAt) =>
+        Record(
+            taskId,
+            "StatusChanged",
+            previousValue,
+            currentValue,
+            occurredAt);
+
+    public static TaskActivity Record(
+        Guid taskId,
+        string activityType,
+        string previousValue,
+        string currentValue,
+        DateTimeOffset occurredAt,
+        string actor = "system") =>
         new(
             taskId,
-            "system",
-            "StatusChanged",
+            actor,
+            activityType,
             previousValue,
             currentValue,
             occurredAt);

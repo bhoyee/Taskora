@@ -5,6 +5,10 @@ namespace TodoApp.Domain.Collaboration;
 
 public sealed class UserProfile
 {
+    private UserProfile()
+    {
+    }
+
     private UserProfile(Guid id, string displayName, string email)
     {
         if (id == Guid.Empty)
@@ -26,15 +30,20 @@ public sealed class UserProfile
 
     public Guid Id { get; }
 
-    public string DisplayName { get; private set; }
+    public string DisplayName { get; private set; } = string.Empty;
 
-    public string Email { get; private set; }
+    public string Email { get; private set; } = string.Empty;
 
     public static UserProfile Create(
         Guid id,
         string displayName,
         string email) =>
         new(id, displayName, email);
+
+    public void UpdateEmail(string email)
+    {
+        Email = NormalizeEmail(email);
+    }
 
     private static string NormalizeEmail(string email)
     {

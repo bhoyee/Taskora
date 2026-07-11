@@ -107,7 +107,11 @@ public sealed class OperationalContractTests(ApiFactory factory)
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/projects",
-            new { name = $"Operations {Guid.NewGuid():N}" });
+            new
+            {
+                name = $"Operations {Guid.NewGuid():N}",
+                targetDate = "2026-08-01"
+            });
         var project = await response.Content
             .ReadFromJsonAsync<JsonElement>();
         return project.GetProperty("id").GetGuid();
