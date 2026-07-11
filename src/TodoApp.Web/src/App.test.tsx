@@ -409,6 +409,8 @@ describe('delivery workspace', () => {
     expect(screen.getByText('Critical', { selector: '.metric span' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Task status' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Project completion' })).toBeInTheDocument()
+    expect(screen.getByTitle('Critical: 2 tasks (67%)')).toBeInTheDocument()
+    expect(screen.getByTitle('1 completed, 3 open, 25% complete')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Project governance' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Risk register' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Release readiness' })).toBeInTheDocument()

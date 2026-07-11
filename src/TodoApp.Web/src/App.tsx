@@ -1182,16 +1182,20 @@ function DonutChart({
         <circle cx="60" cy="60" r={radius} className="donut-track" />
         {total > 0 && items.filter((item) => item.count > 0).map((item) => {
           const length = item.count / total * circumference
+          const percentage = chartPercentage(item.count, total)
           const segment = <circle
             key={item.label}
             cx="60"
             cy="60"
             r={radius}
             className="donut-segment"
+            aria-label={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'}, ${percentage}% of ${title.toLowerCase()}`}
             stroke={colors[item.label] ?? '#73808d'}
             strokeDasharray={`${length} ${circumference - length}`}
             strokeDashoffset={-offset}
-          />
+          >
+            <title>{`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${percentage}%)`}</title>
+          </circle>
           offset += length
           return segment
         })}
@@ -1212,10 +1216,16 @@ function BarChart({
   colors: Record<string, string>
 }) {
   const max = Math.max(1, ...items.map((item) => item.count))
+  const total = items.reduce((sum, item) => sum + item.count, 0)
   return <article className="analytics-card">
-    <header><h2>{title}</h2><span>{items.reduce((sum, item) => sum + item.count, 0)} total</span></header>
+    <header><h2>{title}</h2><span>{total} total</span></header>
     <div className="bar-chart">
-      {items.map((item) => <div className="bar-row" key={item.label}>
+      {items.map((item) => <div
+        className="bar-row chart-hover-target"
+        data-tooltip={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${chartPercentage(item.count, total)}%)`}
+        title={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${chartPercentage(item.count, total)}%)`}
+        key={item.label}
+      >
         <span>{friendlyChartLabel(item.label)}</span>
         <div className="bar-track"><i style={{
           width: `${item.count / max * 100}%`,
@@ -1238,13 +1248,18 @@ function ProgressChart({
   total: number
   percentage: number
 }) {
-  return <article className="analytics-card progress-card">
+  const open = Math.max(0, total - completed)
+  return <article
+    className="analytics-card progress-card chart-hover-target"
+    data-tooltip={`${completed} completed, ${open} open, ${percentage}% complete`}
+    title={`${completed} completed, ${open} open, ${percentage}% complete`}
+  >
     <header><h2>{title}</h2><span>{completed}/{total} tasks</span></header>
     <strong>{percentage}%</strong>
     <div className="progress-track" aria-label={`${title}: ${percentage}% complete`}>
       <i style={{ width: `${percentage}%` }} />
     </div>
-    <p>{total === 0 ? 'Create tasks to start tracking delivery progress.' : `${completed} completed and ${Math.max(0, total - completed)} still open.`}</p>
+    <p>{total === 0 ? 'Create tasks to start tracking delivery progress.' : `${completed} completed and ${open} still open.`}</p>
   </article>
 }
 
@@ -1265,6 +1280,10 @@ function ChartLegend({
 
 function friendlyChartLabel(label: string) {
   return label === 'InProgress' ? 'In progress' : label
+}
+
+function chartPercentage(count: number, total: number) {
+  return total > 0 ? Math.round(count * 100 / total) : 0
 }
 
 function ActivityPage({

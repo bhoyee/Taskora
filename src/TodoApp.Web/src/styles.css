@@ -73,6 +73,12 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .bar-row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 24px; gap: 8px; align-items: center; }
 .bar-row span { color: #596675; font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-row strong { font-size: 12px; text-align: right; }
+.chart-hover-target { position: relative; }
+.chart-hover-target::after { content: attr(data-tooltip); position: absolute; left: 50%; bottom: calc(100% + 9px); z-index: 4; width: max-content; max-width: min(240px, 70vw); transform: translate(-50%, 4px); pointer-events: none; opacity: 0; border: 1px solid #243142; border-radius: 6px; background: #18202b; color: white; padding: 7px 9px; box-shadow: 0 12px 28px #18202b33; font-size: 12px; font-weight: 800; line-height: 1.35; white-space: normal; transition: opacity .16s ease, transform .16s ease; }
+.chart-hover-target::before { content: ""; position: absolute; left: 50%; bottom: calc(100% + 3px); z-index: 5; width: 10px; height: 10px; transform: translate(-50%, 4px) rotate(45deg); pointer-events: none; opacity: 0; background: #18202b; transition: opacity .16s ease, transform .16s ease; }
+.chart-hover-target:hover::after, .chart-hover-target:hover::before, .chart-hover-target:focus-within::after, .chart-hover-target:focus-within::before { opacity: 1; transform: translate(-50%, 0) rotate(0); }
+.chart-hover-target:hover::before, .chart-hover-target:focus-within::before { transform: translate(-50%, 0) rotate(45deg); }
+.bar-row.chart-hover-target:hover .bar-track { box-shadow: 0 0 0 3px #147d6812; }
 .bar-track, .progress-track { height: 9px; border-radius: 999px; background: #edf1f4; overflow: hidden; }
 .bar-track i, .progress-track i { display: block; height: 100%; min-width: 2px; border-radius: inherit; transition: width .2s ease, filter .18s ease, opacity .18s ease; }
 .analytics-card:hover .bar-track i, .analytics-card:hover .progress-track i { filter: saturate(1.18); opacity: .94; }
