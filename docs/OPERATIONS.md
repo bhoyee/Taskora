@@ -71,11 +71,24 @@ the Docker build step so container readiness can be validated later.
 | `Database__Provider` | `Sqlite` for local or `SqlServer` for Azure SQL | No |
 | `Authentication__Authority` | JWT issuer authority | No |
 | `Authentication__Audience` | Expected JWT audience | No |
+| `App__PublicBaseUrl` | Public frontend URL used in email links | No |
+| `Email__Smtp__Enabled` | Enables real SMTP email delivery when `true` | No |
+| `Email__Smtp__Host` | SMTP server hostname | No |
+| `Email__Smtp__Port` | SMTP server port, usually `587` | No |
+| `Email__Smtp__UseSsl` | Enables SSL/TLS for SMTP | No |
+| `Email__Smtp__Username` | SMTP username | Yes |
+| `Email__Smtp__Password` | SMTP password or app password | Yes |
+| `Email__Smtp__FromAddress` | Sender email address | No |
+| `Email__Smtp__FromName` | Sender display name | No |
 | `ASPNETCORE_ENVIRONMENT` | Runtime environment name | No |
 | `ASPNETCORE_URLS` | Container listen address | No |
 
 Secrets must be stored in Azure DevOps variable groups, Azure App Service
 configuration, or Azure Key Vault. They must not be committed to the repository.
+
+For local development, copy `.env.example` to `.env` at the repository root and
+fill in the SMTP values. The API loads `.env` at startup, and `.env` is ignored
+by git.
 
 ## Cost-Conscious Azure Hosting
 

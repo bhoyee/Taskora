@@ -53,8 +53,35 @@ public static class DependencyInjection
             PortfolioDashboardReadRepository>();
         services.AddScoped<IDueDateNotificationReadRepository,
             DueDateNotificationReadRepository>();
-        services.AddScoped<INotificationEmailSender,
-            LoggingNotificationEmailSender>();
+        var smtpOptions = ReadSmtpOptions(configuration);
+        services.Configure<SmtpEmailOptions>(options =>
+        {
+            options.Enabled = smtpOptions.Enabled;
+            options.Host = smtpOptions.Host;
+            options.Port = smtpOptions.Port;
+            options.UseSsl = smtpOptions.UseSsl;
+            options.Username = smtpOptions.Username;
+            options.Password = smtpOptions.Password;
+            options.FromAddress = smtpOptions.FromAddress;
+            options.FromName = smtpOptions.FromName;
+        });
+        var applicationUrlOptions = ReadApplicationUrlOptions(configuration);
+        services.Configure<ApplicationUrlOptions>(options =>
+        {
+            options.PublicBaseUrl = applicationUrlOptions.PublicBaseUrl;
+        });
+        services.AddSingleton<IApplicationLinkBuilder, ApplicationLinkBuilder>();
+        if (smtpOptions.Enabled)
+        {
+            services.AddScoped<INotificationEmailSender,
+                SmtpNotificationEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<INotificationEmailSender,
+                LoggingNotificationEmailSender>();
+        }
+
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IAccountRepository, AccountRepository>();
@@ -68,4 +95,37 @@ public static class DependencyInjection
 
         return services;
     }
+
+    private static SmtpEmailOptions ReadSmtpOptions(
+        IConfiguration configuration) =>
+        new()
+        {
+            Enabled = ReadBool(configuration["Email:Smtp:Enabled"]),
+            Host = configuration["Email:Smtp:Host"] ?? string.Empty,
+            Port = ReadInt(configuration["Email:Smtp:Port"], 587),
+            UseSsl = ReadBool(configuration["Email:Smtp:UseSsl"], true),
+            Username = configuration["Email:Smtp:Username"] ?? string.Empty,
+            Password = configuration["Email:Smtp:Password"] ?? string.Empty,
+            FromAddress = configuration["Email:Smtp:FromAddress"] ?? string.Empty,
+            FromName = string.IsNullOrWhiteSpace(
+                configuration["Email:Smtp:FromName"])
+                ? "Todo Intelligence"
+                : configuration["Email:Smtp:FromName"]!
+        };
+
+    private static ApplicationUrlOptions ReadApplicationUrlOptions(
+        IConfiguration configuration) =>
+        new()
+        {
+            PublicBaseUrl = string.IsNullOrWhiteSpace(
+                configuration["App:PublicBaseUrl"])
+                ? "http://localhost:5173"
+                : configuration["App:PublicBaseUrl"]!
+        };
+
+    private static bool ReadBool(string? value, bool defaultValue = false) =>
+        bool.TryParse(value, out var result) ? result : defaultValue;
+
+    private static int ReadInt(string? value, int defaultValue) =>
+        int.TryParse(value, out var result) ? result : defaultValue;
 }

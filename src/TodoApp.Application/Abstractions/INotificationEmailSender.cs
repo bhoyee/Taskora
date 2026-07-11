@@ -11,3 +11,8 @@ public sealed record NotificationEmailMessage(
     IReadOnlyCollection<string> Recipients,
     string Subject,
     string Body);
+
+public interface IApplicationLinkBuilder
+{
+    string BuildInvitationLink(string token);
+}

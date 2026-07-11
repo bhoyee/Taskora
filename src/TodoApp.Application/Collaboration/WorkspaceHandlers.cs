@@ -234,7 +234,9 @@ public sealed class InviteWorkspaceMemberHandler(
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers,
     IClock clock,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    INotificationEmailSender emailSender,
+    IApplicationLinkBuilder links)
 {
     public async Task<Result<WorkspaceInvitationDto>> HandleAsync(
         InviteWorkspaceMemberCommand command,
@@ -266,6 +268,9 @@ public sealed class InviteWorkspaceMemberHandler(
 
             await invitations.AddAsync(invitation, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            await emailSender.SendAsync(
+                BuildInvitationMessage(invitation, access.Value.Name),
+                cancellationToken);
 
             return Result<WorkspaceInvitationDto>.Success(
                 ToInvitationDto(invitation, access.Value.Name, includeLink: true));
@@ -339,6 +344,29 @@ public sealed class InviteWorkspaceMemberHandler(
                 "invitation.conflict",
                 description,
                 ErrorType.Conflict));
+
+    private NotificationEmailMessage BuildInvitationMessage(
+        WorkspaceInvitation invitation,
+        string workspaceName)
+    {
+        var inviteLink = links.BuildInvitationLink(invitation.Token);
+        return new NotificationEmailMessage(
+            [invitation.Email],
+            $"Workspace invitation: Join {workspaceName}",
+            $"""
+            Hello {invitation.FullName},
+
+            You have been invited to join the {workspaceName} workspace in Todo Intelligence.
+
+            Role: {invitation.Role}
+            Invitation expires: {invitation.ExpiresAt:yyyy-MM-dd}
+
+            Accept or decline the invitation here:
+            {inviteLink}
+
+            If you were not expecting this invitation, you can ignore this message.
+            """);
+    }
 }
 
 public sealed class GetWorkspaceInvitationsHandler(
