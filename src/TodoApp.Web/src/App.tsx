@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, ProjectCategory, ProjectDetails,
+  AccountSession, Dashboard, DashboardBreakdownItem, OperationsSummary, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember,
 } from './api'
 import './styles.css'
@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile'
+type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile']
+const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -143,6 +143,7 @@ export default function App() {
     readLocal('todoapp_settings', defaultSettings))
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
+  const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
@@ -189,6 +190,7 @@ export default function App() {
         setProfile(nextProfile)
         localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
       }
+      const operationsSummary = await api.operationsSummary().catch(() => null)
       setWorkspace(selected)
       setProjects(projects)
       setProject(selectedProject)
@@ -200,6 +202,7 @@ export default function App() {
       setTaskTotal(page.totalCount)
       setActivity(activityPage.items)
       setActivityTotal(activityPage.totalCount)
+      setOperations(operationsSummary)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
@@ -232,6 +235,7 @@ export default function App() {
     localStorage.removeItem('todoapp_account')
     localStorage.setItem('todoapp_logged_out', 'true')
     setAccount(null)
+    setOperations(null)
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
     window.location.hash = 'workspace'
@@ -243,6 +247,7 @@ export default function App() {
     localStorage.removeItem('todoapp_workspace_id')
     localStorage.removeItem('todoapp_logged_out')
     setAccount(null)
+    setOperations(null)
     setLoggedOut(false)
     setSelectedWorkspaceId('')
     setNotice('Local browser session reset.')
@@ -421,15 +426,8 @@ export default function App() {
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
+          {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
-        <button className="session-card" onClick={() => openView('profile')}>
-          <span className="avatar">{initials(profile.displayName)}</span>
-          <div>
-            <small>Signed in</small>
-            <strong>{profile.email}</strong>
-            <em>{workspace?.role ?? 'Member'}</em>
-          </div>
-        </button>
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
@@ -586,6 +584,7 @@ export default function App() {
           }}
           onLogout={logout}
         />}
+        {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
@@ -601,6 +600,7 @@ function viewTitle(view: View) {
     activity: 'Activity timeline',
     settings: 'Workspace settings',
     profile: 'Profile',
+    operations: 'Operations',
   }[view]
 }
 
@@ -1395,6 +1395,54 @@ function ActivityControls({
       <ChevronDown />
     </label>
   </div>
+}
+
+function OperationsPage({ summary }: { summary: OperationsSummary }) {
+  return <section className="panel-page operations-page" aria-label="Operations health and logs">
+    <div className="activity-toolbar">
+      <div>
+        <p className="eyebrow">Super admin</p>
+        <h2>Health and logs</h2>
+      </div>
+      <span className={`status ${summary.overallHealth.toLowerCase()}`}>{summary.overallHealth}</span>
+    </div>
+
+    <div className="operations-grid">
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><ShieldCheck /></span>
+          <div>
+            <h2>Health checks</h2>
+            <p>Current API readiness checks generated {new Date(summary.generatedAt).toLocaleString()}.</p>
+          </div>
+        </div>
+        <div className="health-check-list">
+          {summary.healthChecks.map((check) => <article className="health-check-row" key={check.name}>
+            <span className={`health-dot ${check.status.toLowerCase()}`} />
+            <div>
+              <strong>{check.name}</strong>
+              <p>{check.description ?? `${check.status} in ${Math.round(check.durationMilliseconds)}ms`}</p>
+            </div>
+            <span>{Math.round(check.durationMilliseconds)}ms</span>
+          </article>)}
+        </div>
+      </article>
+
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><Activity /></span>
+          <div>
+            <h2>Log settings</h2>
+            <p>{summary.logging.message}</p>
+          </div>
+        </div>
+        <div className="log-summary">
+          <span><strong>Default</strong>{summary.logging.defaultLevel}</span>
+          <span><strong>ASP.NET Core</strong>{summary.logging.aspNetCoreLevel}</span>
+        </div>
+      </article>
+    </div>
+  </section>
 }
 
 function activityMessage(item: WorkspaceActivity) {

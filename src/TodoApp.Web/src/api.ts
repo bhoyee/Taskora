@@ -156,6 +156,27 @@ export interface WorkspaceActivity extends TaskActivity {
   projectName: string
 }
 
+export interface OperationsSummary {
+  isSuperAdmin: boolean
+  generatedAt: string
+  overallHealth: string
+  healthChecks: OperationHealthCheck[]
+  logging: LoggingSummary
+}
+
+export interface OperationHealthCheck {
+  name: string
+  status: string
+  description: string | null
+  durationMilliseconds: number
+}
+
+export interface LoggingSummary {
+  defaultLevel: string
+  aspNetCoreLevel: string
+  message: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   const identityHeaders: Record<string, string> = accessToken
@@ -396,6 +417,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  operationsSummary: () =>
+    request<OperationsSummary>('/api/v1/operations/summary'),
   register: (
     displayName: string,
     email: string,

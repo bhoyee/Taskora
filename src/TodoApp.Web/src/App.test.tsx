@@ -259,6 +259,17 @@ function mockMemberWorkspaceWithoutProjectsApi() {
 
 function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
   if (url.includes('/account/me')) return accountProfile
+  if (url.includes('/operations/summary')) return {
+    isSuperAdmin: false,
+    generatedAt: '2026-07-11T12:00:00Z',
+    overallHealth: 'Healthy',
+    healthChecks: [],
+    logging: {
+      defaultLevel: 'Information',
+      aspNetCoreLevel: 'Warning',
+      message: 'Application logs are emitted through ASP.NET Core ILogger providers.',
+    },
+  }
   if (url.includes('/account/profile')) return {
     ...accountProfile,
     email: 'jadesola.portfolio@example.com',
@@ -456,6 +467,7 @@ describe('delivery workspace', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('region', { name: 'Dashboard analytics' })
+    expect(screen.queryByRole('button', { name: /operations/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /activity/i }))
     expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
@@ -484,6 +496,40 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /change password/i }))
     expect(screen.getByText('Password changed.')).toBeInTheDocument()
   }, 20000)
+
+  it('shows operations health page only when the API marks the user as super admin', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/operations/summary')) {
+        return jsonResponse({
+          isSuperAdmin: true,
+          generatedAt: '2026-07-11T12:00:00Z',
+          overallHealth: 'Healthy',
+          healthChecks: [{
+            name: 'database',
+            status: 'Healthy',
+            description: null,
+            durationMilliseconds: 12.4,
+          }],
+          logging: {
+            defaultLevel: 'Information',
+            aspNetCoreLevel: 'Warning',
+            message: 'Use Azure App Service Log Stream or Application Insights in production.',
+          },
+        })
+      }
+      return jsonResponse(mockResponseFor(url, taskPage, activity))
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
+
+    await user.click(screen.getByRole('button', { name: /operations/i }))
+
+    expect(screen.getByRole('heading', { name: 'Health and logs' })).toBeInTheDocument()
+    expect(screen.getByText('database')).toBeInTheDocument()
+    expect(screen.getByText('Use Azure App Service Log Stream or Application Insights in production.')).toBeInTheDocument()
+  })
 
   it('shows activity fallback, paginates tasks, and logs out from the menu', async () => {
     mockPagedApi()
