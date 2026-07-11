@@ -183,6 +183,13 @@ public sealed class MappingTests
             activity =>
             {
                 Assert.Equal(task.Id, activity.TaskId);
+                Assert.Equal("TaskCreated", activity.ActivityType);
+                Assert.Equal(string.Empty, activity.PreviousValue);
+                Assert.Equal("Publish case study", activity.CurrentValue);
+            },
+            activity =>
+            {
+                Assert.Equal(task.Id, activity.TaskId);
                 Assert.Equal("StatusChanged", activity.ActivityType);
                 Assert.Equal("Backlog", activity.PreviousValue);
                 Assert.Equal("Ready", activity.CurrentValue);

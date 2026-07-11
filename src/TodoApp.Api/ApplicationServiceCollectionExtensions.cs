@@ -48,6 +48,7 @@ internal static class ApplicationServiceCollectionExtensions
 
         services.AddScoped<CreateTaskHandler>();
         services.AddScoped<GetTaskActivityHandler>();
+        services.AddScoped<GetWorkspaceActivityHandler>();
         services.AddScoped<AssignTaskHandler>();
         services.AddScoped<UnassignTaskHandler>();
         services.AddScoped<GetTaskByIdHandler>();

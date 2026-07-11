@@ -175,6 +175,9 @@ const members = [{
 const activity = [{
   sequence: 1,
   taskId: 'task-1',
+  taskTitle: 'Ship portfolio',
+  projectId: '10000000-0000-0000-0000-000000000001',
+  projectName: 'Portfolio launch',
   actor: 'Jadesola Aliu',
   action: 'StatusChanged',
   previousValue: 'Ready',
@@ -236,6 +239,9 @@ function mockMemberWorkspaceWithoutProjectsApi() {
           role: 'Member',
         }])
       }
+      if (url.includes('/workspaces/workspace-member/activity')) {
+        return jsonResponse(emptyActivityPage())
+      }
       if (url.includes('/dashboard')) {
         return jsonResponse({
           projectCount: 0,
@@ -258,6 +264,13 @@ function mockResponseFor(url: string, page = taskPage, activityItems = activity)
     email: 'jadesola.portfolio@example.com',
   }
   if (url.includes('/account/password')) return true
+  if (url.includes('/workspaces/workspace-1/activity')) return {
+    items: activityItems,
+    totalCount: activityItems.length,
+    pageNumber: 1,
+    pageSize: 10,
+    totalPages: activityItems.length ? 1 : 0,
+  }
   if (url.includes('/activity')) return activityItems
   if (url.includes('/workspaces/workspace-1/invitations')) return []
   if (url.includes('/workspaces/workspace-1/projects')) return [projectDetails]
@@ -353,6 +366,10 @@ function mockWorkspaceManagementApi() {
         return jsonResponse({ totalCount: 0, items: [] })
       }
 
+      if (url.includes('/workspaces/workspace-2/activity')) {
+        return jsonResponse(emptyActivityPage())
+      }
+
       return jsonResponse(mockResponseFor(url, taskPage, activity))
     })
 }
@@ -362,6 +379,16 @@ function jsonResponse(value: unknown) {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function emptyActivityPage() {
+  return {
+    items: [],
+    totalCount: 0,
+    pageNumber: 1,
+    pageSize: 10,
+    totalPages: 0,
+  }
 }
 
 afterEach(() => {
@@ -421,7 +448,9 @@ describe('delivery workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /activity/i }))
     expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
-    expect(screen.getByText(/changed status changed/i)).toBeInTheDocument()
+    expect(screen.getByText(/moved the task from Ready to In progress/i)).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Filter'), 'StatusChanged')
+    expect(screen.getByText('Status Changed')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /settings/i }))
     expect(screen.getByRole('heading', { name: 'Workspace settings' })).toBeInTheDocument()

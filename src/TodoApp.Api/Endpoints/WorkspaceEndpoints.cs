@@ -1,6 +1,7 @@
 using TodoApp.Api.Contracts;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Projects;
+using TodoApp.Application.Tasks.Activity;
 
 namespace TodoApp.Api.Endpoints;
 
@@ -39,6 +40,20 @@ internal static class WorkspaceEndpoints
             CancellationToken cancellationToken) =>
             ApiResult.From(await handler.HandleAsync(
                 new ListWorkspaceProjectsQuery(workspaceId),
+                cancellationToken)));
+        group.MapGet("/{workspaceId:guid}/activity", async (
+            Guid workspaceId,
+            string? type,
+            int pageNumber,
+            int pageSize,
+            GetWorkspaceActivityHandler handler,
+            CancellationToken cancellationToken) =>
+            ApiResult.From(await handler.HandleAsync(
+                new GetWorkspaceActivityQuery(
+                    workspaceId,
+                    type,
+                    pageNumber == 0 ? 1 : pageNumber,
+                    pageSize == 0 ? 20 : pageSize),
                 cancellationToken)));
         group.MapPost("/{workspaceId:guid}/projects", async (
             Guid workspaceId,
