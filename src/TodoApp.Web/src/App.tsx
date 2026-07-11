@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'activity' | 'settings' | 'profile'
+type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'activity', 'settings', 'profile']
+const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -413,6 +413,7 @@ export default function App() {
         <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
+          <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
@@ -434,7 +435,7 @@ export default function App() {
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
-          {view === 'workspace' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
+          {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -442,10 +443,10 @@ export default function App() {
 
         {view === 'workspace' && <>
           <section className="metrics" aria-label="Portfolio health">
-            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1) }} />
-            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1) }} />
-            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1) }} />
-            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1) }} />
+            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
           </section>
 
           <DashboardAnalytics dashboard={dashboard} />
@@ -470,7 +471,18 @@ export default function App() {
             onUpdate={updateProject}
             onArchive={archiveProject}
           />
+        </>}
 
+        {view === 'tasks' && <>
+          <ProjectBar
+            projects={projects}
+            selectedProjectId={project?.id ?? selectedProjectId}
+            workspaceRole={workspace?.role ?? null}
+            onSwitch={switchProject}
+            onCreate={createProject}
+            onUpdate={updateProject}
+            onArchive={archiveProject}
+          />
           <section className="work-area">
             <div className="toolbar">
               <div className="search"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1) }} placeholder="Search tasks" aria-label="Search tasks" /></div>
@@ -583,6 +595,7 @@ export default function App() {
 function viewTitle(view: View) {
   return {
     workspace: 'Delivery workspace',
+    tasks: 'Tasks',
     activity: 'Activity timeline',
     settings: 'Workspace settings',
     profile: 'Profile',

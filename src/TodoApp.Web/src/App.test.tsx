@@ -405,11 +405,8 @@ describe('delivery workspace', () => {
 
     render(<App />)
 
-    expect(await screen.findByText('Ship portfolio')).toBeInTheDocument()
-    expect(screen.getByText('12.5')).toBeInTheDocument()
-    expect(screen.getByText(/Value 15/)).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Dashboard analytics' })).toBeInTheDocument()
     expect(screen.getByText('Critical', { selector: '.metric span' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Dashboard analytics' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Task status' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Project completion' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Project governance' })).toBeInTheDocument()
@@ -419,14 +416,17 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /critical/i }))
     expect(screen.getByText('Showing critical tasks on this page.')).toBeInTheDocument()
     expect(screen.getByText('Ship portfolio')).toBeInTheDocument()
+    expect(screen.getByText('12.5')).toBeInTheDocument()
+    expect(screen.getByText(/Value 15/)).toBeInTheDocument()
   })
 
   it('switches to the board and opens task creation', async () => {
     mockApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     await user.click(screen.getByRole('button', { name: /board/i }))
     expect(screen.getByRole('region', { name: 'In progress tasks' })).toBeInTheDocument()
 
@@ -439,8 +439,9 @@ describe('delivery workspace', () => {
     mockApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     await user.click(screen.getByRole('button', { name: 'Edit Ship portfolio' }))
 
     expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument()
@@ -452,7 +453,7 @@ describe('delivery workspace', () => {
     mockApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     await user.click(screen.getByRole('button', { name: /activity/i }))
     expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument()
@@ -486,13 +487,13 @@ describe('delivery workspace', () => {
     mockPagedApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     await user.click(screen.getByRole('button', { name: /activity/i }))
     expect(screen.getByText('No recorded activity yet')).toBeInTheDocument()
     expect(screen.getByText('Current task snapshot')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /^workspace$/i }))
+    await user.click(screen.getByRole('button', { name: /^tasks$/i }))
     expect(screen.getByText('Showing 1-10 of 11')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /next/i }))
     expect(await screen.findByText('Review deployment runbook')).toBeInTheDocument()
@@ -517,7 +518,7 @@ describe('delivery workspace', () => {
     mockWorkspaceManagementApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     await user.click(screen.getByRole('button', { name: /^new workspace$/i }))
     await user.type(screen.getByLabelText('Workspace name'), 'Client delivery')
@@ -531,7 +532,7 @@ describe('delivery workspace', () => {
     mockWorkspaceManagementApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     await user.click(screen.getByRole('button', { name: /new project/i }))
     await user.type(screen.getByLabelText('Project name'), 'Client onboarding')
@@ -547,7 +548,7 @@ describe('delivery workspace', () => {
     mockWorkspaceManagementApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     expect(screen.getByText(/Delivery date:/)).toBeInTheDocument()
     expect(screen.getByText(/days left|overdue|Due today/, { selector: '.delivery-badge' })).toBeInTheDocument()
@@ -575,6 +576,7 @@ describe('delivery workspace', () => {
 
     expect(await screen.findByRole('heading', { name: 'No project yet' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: /^tasks$/i }))
     expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled()
   })
 
@@ -582,7 +584,7 @@ describe('delivery workspace', () => {
     mockWorkspaceManagementApi()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByText('Ship portfolio')
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
 
     await user.click(screen.getByRole('button', { name: /settings/i }))
     await user.type(screen.getByLabelText('Full name'), 'Ada Lovelace')
