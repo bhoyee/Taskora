@@ -449,6 +449,16 @@ export default function App() {
             <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
           </section>
 
+          <ProjectBar
+            projects={projects}
+            selectedProjectId={project?.id ?? selectedProjectId}
+            workspaceRole={workspace?.role ?? null}
+            onSwitch={switchProject}
+            onCreate={createProject}
+            onUpdate={updateProject}
+            onArchive={archiveProject}
+          />
+
           <DashboardAnalytics dashboard={dashboard} />
           <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
 
@@ -461,16 +471,6 @@ export default function App() {
               </div>
             </article>)}
           </section>}
-
-          <ProjectBar
-            projects={projects}
-            selectedProjectId={project?.id ?? selectedProjectId}
-            workspaceRole={workspace?.role ?? null}
-            onSwitch={switchProject}
-            onCreate={createProject}
-            onUpdate={updateProject}
-            onArchive={archiveProject}
-          />
         </>}
 
         {view === 'tasks' && <>
