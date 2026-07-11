@@ -287,6 +287,7 @@ DemoData__SeedOnStartup=false
 Authentication__Authority=https://your-token-issuer
 Authentication__Audience=todoapp-api
 Cors__AllowedOrigins__0=https://your-frontend-host
+Administration__SuperAdminEmails__0=you@example.com
 App__PublicBaseUrl=https://your-frontend-host
 Email__Smtp__Enabled=true
 Email__Smtp__Host=smtp.example.com
@@ -346,3 +347,5 @@ for production because it gives you review and rollback control.
 - SMTP credentials are read from configuration/environment variables.
 - Health endpoints are available at `/health/live`, `/health/ready`, and
   `/health`.
+- The Operations page is only visible and callable when the signed-in user's
+  email is listed under `Administration__SuperAdminEmails`.

@@ -21,7 +21,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 {
                     ["ConnectionStrings:TodoApp"] =
                         $"Data Source={_databasePath}",
-                    ["Database:Provider"] = "Sqlite"
+                    ["Database:Provider"] = "Sqlite",
+                    ["Administration:SuperAdminEmails:0"] =
+                        "jadesola@example.com"
                 });
         });
     }

@@ -127,6 +127,31 @@ public sealed class SecurityContractTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Operations_WhenActorIsConfiguredSuperAdmin_ReturnsSummary()
+    {
+        using var client = CreateClient(OwnerId);
+
+        var response = await client.GetAsync("/api/v1/operations/summary");
+        var summary = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(summary.GetProperty("isSuperAdmin").GetBoolean());
+        Assert.Equal(
+            "Healthy",
+            summary.GetProperty("overallHealth").GetString());
+    }
+
+    [Fact]
+    public async Task Operations_WhenActorIsNotSuperAdmin_ReturnsForbidden()
+    {
+        using var client = CreateClient(MemberId);
+
+        var response = await client.GetAsync("/api/v1/operations/summary");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private HttpClient CreateClient(Guid userId)
     {
         var client = factory.CreateClient();
