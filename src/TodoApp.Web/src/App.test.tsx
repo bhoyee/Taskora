@@ -401,6 +401,7 @@ afterEach(() => {
 describe('delivery workspace', () => {
   it('shows portfolio health and explainable task priority', async () => {
     mockApi()
+    const user = userEvent.setup()
 
     render(<App />)
 
@@ -411,6 +412,13 @@ describe('delivery workspace', () => {
     expect(screen.getByRole('region', { name: 'Dashboard analytics' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Task status' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Project completion' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Project governance' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Risk register' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Release readiness' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /critical/i }))
+    expect(screen.getByText('Showing critical tasks on this page.')).toBeInTheDocument()
+    expect(screen.getByText('Ship portfolio')).toBeInTheDocument()
   })
 
   it('switches to the board and opens task creation', async () => {

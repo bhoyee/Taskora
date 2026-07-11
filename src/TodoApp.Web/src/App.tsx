@@ -34,6 +34,7 @@ const emptyDashboard: Dashboard = {
 }
 
 type View = 'workspace' | 'activity' | 'settings' | 'profile'
+type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
 const views: View[] = ['workspace', 'activity', 'settings', 'profile']
 
@@ -124,6 +125,7 @@ export default function App() {
   const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
+  const [drilldown, setDrilldown] = useState<TaskDrilldown>('all')
   const pageSize = 10
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -218,8 +220,9 @@ export default function App() {
     return () => window.removeEventListener('hashchange', syncViewFromHash)
   }, [])
   useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
-  const visible = useMemo(() => tasks, [tasks])
-  const totalPages = Math.max(1, Math.ceil(taskTotal / pageSize))
+  const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
+  const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
+  const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
@@ -270,11 +273,13 @@ export default function App() {
     setSelectedProjectId('')
     localStorage.removeItem('todoapp_project_id')
     setPageNumber(1)
+    setDrilldown('all')
   }
   const switchProject = (projectId: string) => {
     setSelectedProjectId(projectId)
     localStorage.setItem('todoapp_project_id', projectId)
     setPageNumber(1)
+    setDrilldown('all')
   }
   const createProject = async (
     name: string,
@@ -437,13 +442,14 @@ export default function App() {
 
         {view === 'workspace' && <>
           <section className="metrics" aria-label="Portfolio health">
-            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} />
-            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" />
-            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" />
-            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" />
+            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1) }} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1) }} />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1) }} />
+            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1) }} />
           </section>
 
           <DashboardAnalytics dashboard={dashboard} />
+          <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
 
           {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
             {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
@@ -473,6 +479,10 @@ export default function App() {
                 <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
               </div>
             </div>
+            {drilldown !== 'all' && <div className="task-filter-banner">
+              <span>Showing {drilldownLabels[drilldown].toLowerCase()} tasks on this page.</span>
+              <button onClick={() => setDrilldown('all')}>Clear filter</button>
+            </div>}
 
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
@@ -481,7 +491,7 @@ export default function App() {
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
-              totalCount={taskTotal}
+              totalCount={filteredTaskTotal}
               totalPages={totalPages}
               onPageChange={setPageNumber}
             />}
@@ -921,8 +931,45 @@ function formatDate(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString()
 }
 
-function Metric({ label, value, icon, tone = '' }: { label: string; value: number; icon: ReactNode; tone?: string }) {
-  return <div className={`metric ${tone}`}><span className="metric-icon">{icon}</span><div><strong>{value}</strong><span>{label}</span></div></div>
+const drilldownLabels: Record<TaskDrilldown, string> = {
+  all: 'All work',
+  active: 'Active work',
+  critical: 'Critical',
+  blocked: 'Blocked',
+  overdue: 'Overdue',
+}
+
+function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
+  if (drilldown === 'active') return tasks.filter((task) => task.status !== 'Completed')
+  if (drilldown === 'critical') return tasks.filter((task) => task.priorityBand === 'Critical')
+  if (drilldown === 'blocked') return tasks.filter((task) => task.status === 'Blocked' || task.isBlocked)
+  if (drilldown === 'overdue') return tasks.filter((task) => task.deadlineHealth === 'Overdue')
+  return tasks
+}
+
+function Metric({
+  label,
+  value,
+  icon,
+  tone = '',
+  selected = false,
+  onClick,
+}: {
+  label: string
+  value: number
+  icon: ReactNode
+  tone?: string
+  selected?: boolean
+  onClick?: () => void
+}) {
+  const className = `metric ${tone} ${onClick ? 'interactive' : ''} ${selected ? 'selected' : ''}`
+  const content = <>
+    <span className="metric-icon">{icon}</span>
+    <div><strong>{value}</strong><span>{label}</span></div>
+  </>
+  return onClick
+    ? <button className={className} onClick={onClick} aria-pressed={selected} type="button">{content}</button>
+    : <div className={className}>{content}</div>
 }
 
 const statusChartColors: Record<string, string> = {
@@ -959,6 +1006,152 @@ function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
       percentage={dashboard.projectProgress.completionPercentage}
     />
   </section>
+}
+
+function ProjectGovernance({
+  dashboard,
+  project,
+  tasks,
+}: {
+  dashboard: Dashboard
+  project: ProjectDetails | null
+  tasks: TaskItem[]
+}) {
+  const delivery = project ? deliveryStatus(project.targetDate) : null
+  const completion = dashboard.projectProgress.completionPercentage
+  const openTasks = Math.max(0, dashboard.projectProgress.totalTasks - dashboard.projectProgress.completedTasks)
+  const hasOverdue = dashboard.overdueTaskCount > 0
+  const hasBlocked = dashboard.blockedTaskCount > 0
+  const hasCritical = dashboard.criticalTaskCount > 0
+  const deliveryAtRisk = delivery?.tone === 'critical' || delivery?.tone === 'warning'
+  const riskCount = [hasOverdue, hasBlocked, hasCritical, deliveryAtRisk].filter(Boolean).length
+  const healthScore = Math.max(0, Math.min(100,
+    100 -
+    dashboard.overdueTaskCount * 18 -
+    dashboard.blockedTaskCount * 12 -
+    dashboard.criticalTaskCount * 6 -
+    (delivery?.tone === 'critical' ? 20 : delivery?.tone === 'warning' ? 10 : 0) +
+    Math.round(completion / 5),
+  ))
+  const healthTone = healthScore >= 80 ? 'healthy' : healthScore >= 55 ? 'warning' : 'critical'
+  const healthLabel = healthTone === 'healthy'
+    ? 'Healthy'
+    : healthTone === 'warning'
+      ? 'Needs attention'
+      : 'At risk'
+  const readiness = [
+    { label: 'Active project selected', ready: !!project },
+    { label: 'Delivery date confirmed', ready: !!project?.targetDate },
+    { label: 'No overdue tasks', ready: !hasOverdue },
+    { label: 'No blocked work', ready: !hasBlocked },
+    { label: 'Completion above 80%', ready: completion >= 80 || openTasks === 0 },
+    { label: 'No critical dashboard warnings', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
+  ]
+  const risks = buildRiskRegister(dashboard, delivery?.label, tasks)
+  const decisions = buildDecisionSuggestions(risks.length, completion, openTasks)
+
+  return <section className="governance-grid" aria-label="Project governance">
+    <article className={`governance-card health-card ${healthTone}`}>
+      <header><h2>Project health</h2><span>{healthLabel}</span></header>
+      <div className="health-score"><strong>{healthScore}</strong><small>/100</small></div>
+      <div className="progress-track governance-progress" aria-label={`Project health score ${healthScore} out of 100`}>
+        <i style={{ width: `${healthScore}%` }} />
+      </div>
+      <p>{project ? `${project.name} is ${completion}% complete with ${openTasks} open tasks.` : 'Create a project to start governance tracking.'}</p>
+      {delivery && <span className={`governance-delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Risk register</h2><span>{riskCount} signals</span></header>
+      <ul className="governance-list risk-list">
+        {risks.map((risk) => <li key={risk.title}>
+          <span className={`risk-dot ${risk.tone}`} />
+          <div><strong>{risk.title}</strong><p>{risk.detail}</p></div>
+        </li>)}
+      </ul>
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Decision log</h2><span>Suggested</span></header>
+      <ul className="governance-list decision-list">
+        {decisions.map((decision) => <li key={decision}>
+          <MessageSquare size={15} />
+          <span>{decision}</span>
+        </li>)}
+      </ul>
+    </article>
+
+    <article className="governance-card">
+      <header><h2>Release readiness</h2><span>{readiness.filter((item) => item.ready).length}/{readiness.length}</span></header>
+      <ul className="readiness-list">
+        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.label}>
+          <CheckCircle2 size={16} />
+          <span>{item.label}</span>
+        </li>)}
+      </ul>
+    </article>
+  </section>
+}
+
+function buildRiskRegister(
+  dashboard: Dashboard,
+  deliveryLabel: string | undefined,
+  tasks: TaskItem[],
+) {
+  const risks: { title: string; detail: string; tone: 'healthy' | 'warning' | 'critical' }[] = []
+  if (dashboard.overdueTaskCount > 0) {
+    risks.push({
+      title: 'Deadline risk',
+      detail: `${dashboard.overdueTaskCount} overdue task${dashboard.overdueTaskCount === 1 ? '' : 's'} should be reviewed before delivery.`,
+      tone: 'critical',
+    })
+  }
+  if (dashboard.blockedTaskCount > 0) {
+    risks.push({
+      title: 'Dependency risk',
+      detail: `${dashboard.blockedTaskCount} blocked task${dashboard.blockedTaskCount === 1 ? '' : 's'} may need owner escalation.`,
+      tone: 'warning',
+    })
+  }
+  if (dashboard.criticalTaskCount > 0) {
+    risks.push({
+      title: 'Priority concentration',
+      detail: `${dashboard.criticalTaskCount} critical task${dashboard.criticalTaskCount === 1 ? '' : 's'} need focused delivery attention.`,
+      tone: 'warning',
+    })
+  }
+  if (deliveryLabel?.includes('left') || deliveryLabel === 'Due today') {
+    risks.push({
+      title: 'Delivery window',
+      detail: `Project delivery is ${deliveryLabel.toLowerCase()} with ${dashboard.activeTaskCount} active task${dashboard.activeTaskCount === 1 ? '' : 's'}.`,
+      tone: deliveryLabel === 'Due today' ? 'critical' : 'warning',
+    })
+  }
+  const unassigned = tasks.filter((task) => !task.assignedUserId).length
+  if (unassigned > 0) {
+    risks.push({
+      title: 'Ownership gap',
+      detail: `${unassigned} visible task${unassigned === 1 ? '' : 's'} do not have an assignee.`,
+      tone: 'warning',
+    })
+  }
+  if (!risks.length) {
+    risks.push({
+      title: 'No active risks',
+      detail: 'Current project signals are within the expected delivery range.',
+      tone: 'healthy',
+    })
+  }
+  return risks
+}
+
+function buildDecisionSuggestions(riskCount: number, completion: number, openTasks: number) {
+  if (riskCount === 0 && openTasks === 0) return ['Approve release closure and archive completed work.']
+  const decisions = ['Confirm the next delivery checkpoint with the workspace team.']
+  if (riskCount > 1) decisions.push('Escalate blockers and deadline risks in the next stand-up.')
+  if (completion >= 80) decisions.push('Start release readiness review and final validation.')
+  if (openTasks > 0) decisions.push('Assign owners to remaining open work before the next review.')
+  return decisions
 }
 
 function DonutChart({
