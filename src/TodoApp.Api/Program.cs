@@ -14,7 +14,9 @@ using TodoApp.Infrastructure.Persistence.Seeding;
 LoadEnvironmentFile();
 
 var builder = WebApplication.CreateBuilder(args);
-var operationLogs = new InMemoryLogStore();
+var operationLogs = new InMemoryLogStore(
+    ReadPositiveInt(builder.Configuration["Operations:Logs:MaxEntries"], 200),
+    ReadPositiveInt(builder.Configuration["Operations:Logs:RetentionDays"], 30));
 builder.Services.AddSingleton(operationLogs);
 builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
 builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
@@ -278,6 +280,11 @@ static bool ShouldSeedDemoData(
 
 static bool ReadBool(string? value) =>
     bool.TryParse(value, out var result) && result;
+
+static int ReadPositiveInt(string? value, int defaultValue) =>
+    int.TryParse(value, out var result) && result > 0
+        ? result
+        : defaultValue;
 
 static void ValidateDeploymentConfiguration(
     IWebHostEnvironment environment,

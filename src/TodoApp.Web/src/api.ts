@@ -239,6 +239,8 @@ export interface OperationsRuntime {
   emailMode: string
   smtpEnabled: boolean
   reminderSchedulerEnabled: boolean
+  logRetentionDays: number
+  logMaxEntries: number
 }
 
 export interface ReminderScheduler {

@@ -72,7 +72,9 @@ internal static class OperationsEndpoints
                 corsOrigins,
                 smtpEnabled ? "SMTP" : "LogOnly",
                 smtpEnabled,
-                reminderSnapshot.Enabled),
+                reminderSnapshot.Enabled,
+                logs.RetentionDays,
+                logs.MaxEntries),
             new ReminderSchedulerResponse(
                 reminderSnapshot.Enabled,
                 reminderSnapshot.Status,
@@ -140,7 +142,9 @@ public sealed record OperationsRuntime(
     IReadOnlyCollection<string> CorsAllowedOrigins,
     string EmailMode,
     bool SmtpEnabled,
-    bool ReminderSchedulerEnabled);
+    bool ReminderSchedulerEnabled,
+    int LogRetentionDays,
+    int LogMaxEntries);
 
 public sealed record ReminderSchedulerResponse(
     bool Enabled,

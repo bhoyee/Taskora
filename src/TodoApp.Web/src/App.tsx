@@ -1748,6 +1748,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
           <span><strong>Email mode</strong>{summary.runtime.emailMode}</span>
           <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
           <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? `Every ${summary.reminderScheduler.intervalMinutes} min` : 'Disabled'}</span>
+          <span><strong>Log retention</strong>{`${summary.runtime.logRetentionDays} days / ${summary.runtime.logMaxEntries} entries`}</span>
         </div>
       </article>
 
