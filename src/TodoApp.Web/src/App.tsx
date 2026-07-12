@@ -2119,6 +2119,8 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
+const effortOptions = [1, 2, 3, 5, 8]
+
 function TaskEditor({ projectId, task, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -2167,7 +2169,7 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
-      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{[1, 2, 3, 5, 8, 13].map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
@@ -2204,7 +2206,15 @@ function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose
       if (tag && tag.replace(/^#/, '').trim().length < 2) {
         throw new Error('Tag names must be between 2 and 40 characters.')
       }
-      const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+      const effort = Number(data.get('effort'))
+      const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), effort)
+      await api.updatePlanning(
+        task.id,
+        Number(data.get('businessValue')),
+        Number(data.get('urgency')),
+        Number(data.get('riskReduction')),
+        effort,
+      )
       if (assignee) await api.assign(task.id, assignee)
       if (categoryId) await api.updateCategory(task.id, categoryId)
       if (tag) await api.addTag(task.id, tag)
@@ -2231,6 +2241,6 @@ function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose
     }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div><label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label><fieldset><legend>Priority inputs</legend><div className="planning-grid"><label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label><label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label><label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue="3" /></label></div></fieldset><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
   </dialog></div>
 }

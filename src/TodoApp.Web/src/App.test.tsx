@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -497,6 +497,12 @@ describe('delivery workspace', () => {
     await user.click(screen.getByRole('button', { name: /new task/i }))
     await waitFor(() =>
       expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument())
+    const dialog = screen.getByRole('dialog', { name: 'Create task' })
+    expect(within(dialog).getByLabelText('Business value')).toHaveValue(3)
+    expect(within(dialog).getByLabelText('Urgency')).toHaveValue(3)
+    expect(within(dialog).getByLabelText('Risk reduction')).toHaveValue(3)
+    const effort = within(dialog).getByLabelText('Effort') as HTMLSelectElement
+    expect(Array.from(effort.options).map((option) => option.value)).toEqual(['1', '2', '3', '5', '8'])
   })
 
   it('opens an existing task for planning and workflow changes', async () => {
