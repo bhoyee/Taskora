@@ -8,7 +8,7 @@ import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
   Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
-  Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
+  Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
@@ -75,6 +75,16 @@ function readLocal<T>(key: string, fallback: T): T {
     return value ? { ...fallback, ...JSON.parse(value) } : fallback
   } catch {
     return fallback
+  }
+}
+
+function readPinnedTasks(userId: string) {
+  if (!userId) return new Set<string>()
+  try {
+    const value = localStorage.getItem(`todoapp_pinned_tasks_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
   }
 }
 
@@ -153,6 +163,9 @@ export default function App() {
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+  const [quickNoteTask, setQuickNoteTask] = useState<TaskItem | null>(null)
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<Set<string>>(() =>
+    readPinnedTasks(localStorage.getItem('todoapp_current_user_id') ?? ''))
   const [navOpen, setNavOpen] = useState(false)
   const [activity, setActivity] = useState<WorkspaceActivity[]>([])
   const [activityTotal, setActivityTotal] = useState(0)
@@ -178,6 +191,10 @@ export default function App() {
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
   const inviteToken = inviteTokenFromPath()
+
+  useEffect(() => {
+    setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
+  }, [currentUserId, account?.userId])
 
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
@@ -474,6 +491,32 @@ export default function App() {
       setSelectedTask(task)
     }
   }
+  const openTaskNotes = async (task: TaskItem) => {
+    setQuickNoteTask(task)
+    try {
+      setQuickNoteTask(await api.task(task.id))
+    } catch {
+      setQuickNoteTask(task)
+    }
+  }
+  const refreshTaskNotes = async (taskId: string) => {
+    const task = await api.task(taskId)
+    setQuickNoteTask(task)
+    await load({ silent: true })
+  }
+  const togglePinnedTask = (taskId: string) => {
+    const userId = currentUserId || account?.userId || ''
+    if (!userId) return
+    setPinnedTaskIds((current) => {
+      const next = new Set(current)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      localStorage.setItem(
+        `todoapp_pinned_tasks_${userId}`,
+        JSON.stringify(Array.from(next)))
+      return next
+    })
+  }
   const deleteTask = async (task: TaskItem) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
 
@@ -584,7 +627,7 @@ export default function App() {
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onLockedMoveAttempt={(message) => setError(message)} />}
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -685,6 +728,7 @@ export default function App() {
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {quickNoteTask && <QuickNoteDialog task={quickNoteTask} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
 }
@@ -2035,18 +2079,24 @@ function Board({
   categories,
   members,
   currentUserId,
+  pinnedTaskIds,
   onEdit,
   onDelete,
   onMove,
+  onNote,
+  onTogglePin,
   onLockedMoveAttempt,
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
   members: WorkspaceMember[]
   currentUserId: string
+  pinnedTaskIds: Set<string>
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
   onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
   onLockedMoveAttempt: (message: string) => void
 }) {
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
@@ -2087,17 +2137,20 @@ function Board({
         status={status}
         categories={categories}
         members={members}
+        pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
         currentUserId={currentUserId}
         onEdit={onEdit}
         onDelete={onDelete}
+        onNote={onNote}
+        onTogglePin={onTogglePin}
         onLockedMoveAttempt={onLockedMoveAttempt}
         dragActive={activeTask !== null}
         validTarget={validTargets.has(status)}
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -2107,9 +2160,12 @@ function BoardColumn({
   tasks,
   categories,
   members,
+  pinnedTaskIds,
   currentUserId,
   onEdit,
   onDelete,
+  onNote,
+  onTogglePin,
   onLockedMoveAttempt,
   dragActive,
   validTarget,
@@ -2118,13 +2174,21 @@ function BoardColumn({
   tasks: TaskItem[]
   categories: ProjectCategory[]
   members: WorkspaceMember[]
+  pinnedTaskIds: Set<string>
   currentUserId: string
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
   onLockedMoveAttempt: (message: string) => void
   dragActive: boolean
   validTarget: boolean
 }) {
+  const orderedTasks = [...tasks].sort((left, right) => {
+    const leftPinned = pinnedTaskIds.has(left.id) ? 0 : 1
+    const rightPinned = pinnedTaskIds.has(right.id) ? 0 : 1
+    return leftPinned - rightPinned
+  })
   const { isOver, setNodeRef } = useDroppable({
     id: status,
     disabled: dragActive && !validTarget,
@@ -2137,8 +2201,8 @@ function BoardColumn({
   >
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
-      {tasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
+      {orderedTasks.map((task) =>
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2149,8 +2213,11 @@ function BoardCard({
   categories,
   members = [],
   currentUserId,
+  pinned = false,
   onEdit,
   onDelete,
+  onNote,
+  onTogglePin,
   onLockedMoveAttempt,
   overlay = false,
 }: {
@@ -2158,8 +2225,11 @@ function BoardCard({
   categories?: ProjectCategory[]
   members?: WorkspaceMember[]
   currentUserId?: string
+  pinned?: boolean
   onEdit: (task: TaskItem) => void
   onDelete?: (task: TaskItem) => void
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
   onLockedMoveAttempt?: (message: string) => void
   overlay?: boolean
 }) {
@@ -2185,7 +2255,7 @@ function BoardCard({
   return <article
     ref={setNodeRef}
     style={style}
-    className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
+    className={`board-task ${task.status.toLowerCase()} ${pinned ? 'pinned' : ''} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
     onPointerDown={() => {
       if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
     }}
@@ -2195,28 +2265,52 @@ function BoardCard({
     <div className="board-task-heading">
       <GripVertical aria-hidden="true" />
       <strong>{task.title}</strong>
-      <button
-        className="icon-button"
-        onClick={(event) => {
-          event.stopPropagation()
-          onEdit(task)
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        aria-label={`Edit ${task.title}`}
-        title="Edit task"
-      ><Pencil /></button>
-      {!overlay && onDelete && task.createdByUserId === currentUserId && <button
-        className="icon-button danger-action"
-        onClick={(event) => {
-          event.stopPropagation()
-          onDelete(task)
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        aria-label={`Delete ${task.title}`}
-        title="Delete task"
-      ><Trash2 /></button>}
+      <div className="board-task-actions">
+        <button
+          className={`pin-button ${pinned ? 'active' : ''}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onTogglePin(task.id)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={pinned ? `Unpin ${task.title}` : `Pin ${task.title}`}
+          title={pinned ? 'Unpin task' : 'Pin task'}
+        ><Pin /></button>
+        <button
+          className="icon-button note-action"
+          onClick={(event) => {
+            event.stopPropagation()
+            onNote(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Open notes for ${task.title}`}
+          title="Task notes"
+        ><MessageSquare /></button>
+        <button
+          className="icon-button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onEdit(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Edit ${task.title}`}
+          title="Edit task"
+        ><Pencil /></button>
+        {!overlay && onDelete && task.createdByUserId === currentUserId && <button
+          className="icon-button danger-action"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Delete ${task.title}`}
+          title="Delete task"
+        ><Trash2 /></button>}
+      </div>
     </div>
     <div className="board-task-meta">
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>
@@ -2258,6 +2352,47 @@ function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?:
     {unscored ? ' This task is currently unscored; the values shown are starter defaults until you save them.' : ''}
     {readOnly ? ' Only the task creator can change these priority inputs.' : ''}
   </p>
+}
+
+function QuickNoteDialog({ task, onClose, onSaved }: { task: TaskItem; onClose: () => void; onSaved: (taskId: string) => void }) {
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const notes = task.notes ?? []
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!body.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      await api.addNote(task.id, body.trim())
+      setBody('')
+      onSaved(task.id)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Note could not be added.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open aria-labelledby="quick-note-title" className="quick-note-dialog">
+      <header>
+        <div><p className="eyebrow">Task notes</p><h2 id="quick-note-title">{task.title}</h2></div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <form onSubmit={(event) => void submit(event)}>
+        {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+        <label>Add note<textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} rows={4} placeholder="Write a short update, blocker, or handover note." autoFocus /></label>
+        <footer className="editor-footer"><span /> <div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving || !body.trim()}>{saving ? 'Adding...' : 'Add note'}</button></div></footer>
+      </form>
+      <section className="quick-note-list" aria-label="Existing notes">
+        {notes.length
+          ? notes.map((note) => <article key={note.id}><MessageSquare size={16} /><div><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></div></article>)
+          : <div className="empty compact"><MessageSquare /><h2>No notes yet</h2><p>Add the first note for this task.</p></div>}
+      </section>
+    </dialog>
+  </div>
 }
 
 function TaskEditor({ projectId, task, currentUserId, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
