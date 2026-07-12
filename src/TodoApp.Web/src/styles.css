@@ -202,7 +202,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .task-row { padding: 14px 18px; border-top: 1px solid #edf0f2; transition: background-color .16s ease, box-shadow .16s ease; }.task-row:hover { background: #fafbfb; box-shadow: inset 4px 0 0 #147d68; }
 .task-name { display: flex; gap: 11px; min-width: 0; }.task-name strong, .task-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.task-name small { color: #7a8591; margin-top: 5px; font-size: 12px; }
 .metadata-line { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
-.task-row > .metadata-line { grid-column: 1 / -1; margin-left: 14px; }
+.task-row > .metadata-line { display: none; }
 .category-pill, .tag-chip { border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 11px; font-weight: 800; }
 .category-pill { background: #e6f0fb; color: #295f8f; }
 .tag-chip { background: #e6f5ee; color: #20664f; }

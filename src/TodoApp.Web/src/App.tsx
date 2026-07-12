@@ -2227,13 +2227,14 @@ function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose
         throw new Error('Tag names must be between 2 and 40 characters.')
       }
       const effort = Number(data.get('effort'))
-      const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), effort)
-      await api.updatePlanning(
-        task.id,
+      const task = await api.createTask(
+        projectId,
+        String(data.get('title')),
+        String(data.get('dueDate')),
+        effort,
         Number(data.get('businessValue')),
         Number(data.get('urgency')),
         Number(data.get('riskReduction')),
-        effort,
       )
       if (assignee) await api.assign(task.id, assignee)
       if (categoryId) await api.updateCategory(task.id, categoryId)

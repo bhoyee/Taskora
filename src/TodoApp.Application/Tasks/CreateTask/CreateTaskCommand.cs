@@ -4,4 +4,7 @@ public sealed record CreateTaskCommand(
     Guid ProjectId,
     string Title,
     DateOnly? DueDate = null,
-    int? Effort = null);
+    int? Effort = null,
+    int? BusinessValue = null,
+    int? Urgency = null,
+    int? RiskReduction = null);

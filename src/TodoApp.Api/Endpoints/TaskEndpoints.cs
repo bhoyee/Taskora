@@ -91,7 +91,10 @@ internal static class TaskEndpoints
                 projectId,
                 request.Title,
                 request.DueDate,
-                request.Effort),
+                request.Effort,
+                request.BusinessValue,
+                request.Urgency,
+                request.RiskReduction),
             cancellationToken);
 
         return result.IsSuccess

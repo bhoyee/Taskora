@@ -412,10 +412,25 @@ export const api = {
         pageSize: String(pageSize),
       })}`,
     ),
-  createTask: (projectId: string, title: string, dueDate: string, effort: number) =>
+  createTask: (
+    projectId: string,
+    title: string,
+    dueDate: string,
+    effort: number,
+    businessValue: number,
+    urgency: number,
+    riskReduction: number,
+  ) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {
       method: 'POST',
-      body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
+      body: JSON.stringify({
+        title,
+        dueDate: dueDate || null,
+        effort,
+        businessValue,
+        urgency,
+        riskReduction,
+      }),
     }),
   task: (id: string) => request<TaskItem>(`/api/v1/tasks/${id}`),
   updateTask: (id: string, title: string, dueDate: string, effort: number) =>

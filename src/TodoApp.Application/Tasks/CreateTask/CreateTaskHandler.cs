@@ -54,6 +54,19 @@ public sealed class CreateTaskHandler(
                 task.Estimate(EffortEstimate.Create(command.Effort.Value));
             }
 
+            if (command.BusinessValue.HasValue &&
+                command.Urgency.HasValue &&
+                command.RiskReduction.HasValue &&
+                command.Effort.HasValue)
+            {
+                task.SetPlanningFactors(
+                    PlanningFactors.Create(
+                        command.BusinessValue.Value,
+                        command.Urgency.Value,
+                        command.RiskReduction.Value,
+                        command.Effort.Value));
+            }
+
             await tasks.AddAsync(task, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
