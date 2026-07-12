@@ -12,6 +12,8 @@ public sealed class AssignTaskHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
+    IUserProfileRepository users,
+    INotificationEmailSender emailSender,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
@@ -27,7 +29,8 @@ public sealed class AssignTaskHandler(
             ? null
             : await workspaces.GetByIdAsync(
                 project.WorkspaceId, cancellationToken);
-        if (workspace is null ||
+        if (project is null ||
+            workspace is null ||
             !workspace.HasMember(currentUser.UserId) ||
             workspace.GetRole(currentUser.UserId) == WorkspaceRole.Member)
         {
@@ -44,6 +47,28 @@ public sealed class AssignTaskHandler(
 
         task.Assign(command.UserId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        var projectName = project.Name;
+        var assignee = await users.GetByIdsAsync([command.UserId], cancellationToken);
+        var user = assignee.SingleOrDefault();
+        if (user is not null)
+        {
+            await emailSender.SendAsync(
+                new NotificationEmailMessage(
+                    [user.Email],
+                    $"New task assigned: {task.Title}",
+                    $"""
+                    Hello {user.DisplayName},
+
+                    You have been assigned a task in {projectName}.
+
+                    Task: {task.Title}
+                    Due date: {(task.DueDate?.Value.ToString("yyyy-MM-dd") ?? "Not set")}
+
+                    Please sign in to Todo Intelligence to review the details.
+                    """),
+                cancellationToken);
+        }
+
         return Result<bool>.Success(true);
     }
 

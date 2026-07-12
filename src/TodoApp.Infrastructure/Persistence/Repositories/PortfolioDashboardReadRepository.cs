@@ -6,7 +6,8 @@ namespace TodoApp.Infrastructure.Persistence.Repositories;
 
 public sealed class PortfolioDashboardReadRepository(
     TodoAppDbContext context,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
     : IPortfolioDashboardReadRepository
 {
     public async Task<PortfolioDashboardSnapshot> GetAsync(
@@ -66,7 +67,8 @@ public sealed class PortfolioDashboardReadRepository(
                 task.ProjectId,
                 task.Title,
                 task.DueDate,
-                task.Status
+                task.Status,
+                task.AssignedUserId
             })
             .ToArrayAsync(cancellationToken);
         var taskAnalytics = await scopedTasks
@@ -170,6 +172,19 @@ public sealed class PortfolioDashboardReadRepository(
                 $"{project.Name} reaches its delivery date in 24 hours.",
                 ProjectId: project.Id,
                 DueDate: project.TargetDate!.Value));
+        var assignmentWarnings = dueTaskValues
+            .Where(task =>
+                currentUser.IsAuthenticated &&
+                task.AssignedUserId == currentUser.UserId &&
+                task.Status != TaskItemStatus.Completed)
+            .Select(task => new DashboardWarning(
+                "TaskAssigned",
+                "info",
+                "Task assigned to you",
+                $"{task.Title} is assigned to you.",
+                ProjectId: task.ProjectId,
+                TaskId: task.Id,
+                DueDate: task.DueDate?.Value));
 
         return new PortfolioDashboardSnapshot(
             projectCount,
@@ -181,6 +196,9 @@ public sealed class PortfolioDashboardReadRepository(
             priorityBreakdown,
             deadlineBreakdown,
             projectProgress,
-            taskWarnings.Concat(projectWarnings).ToArray());
+            taskWarnings
+                .Concat(projectWarnings)
+                .Concat(assignmentWarnings)
+                .ToArray());
     }
 }

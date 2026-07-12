@@ -639,7 +639,7 @@ export default function App() {
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
@@ -2187,7 +2187,7 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
   </dialog></div>
 }
 
-function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -2198,9 +2198,11 @@ function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreat
     try {
       const data = new FormData(event.currentTarget)
       const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+      const assignee = String(data.get('assignedUserId') ?? '')
       const categoryId = String(data.get('categoryId') ?? '')
       const tag = String(data.get('tag') ?? '').trim()
       const note = String(data.get('note') ?? '').trim()
+      if (assignee) await api.assign(task.id, assignee)
       if (categoryId) await api.updateCategory(task.id, categoryId)
       if (tag) await api.addTag(task.id, tag)
       if (note) await api.addNote(task.id, note)
@@ -2226,6 +2228,6 @@ function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreat
     }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
   </dialog></div>
 }

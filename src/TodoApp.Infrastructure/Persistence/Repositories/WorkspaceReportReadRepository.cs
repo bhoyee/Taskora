@@ -6,7 +6,8 @@ namespace TodoApp.Infrastructure.Persistence.Repositories;
 
 public sealed class WorkspaceReportReadRepository(
     TodoAppDbContext context,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
     : IWorkspaceReportReadRepository
 {
     public async Task<WorkspaceReportSnapshot> GetAsync(
@@ -144,7 +145,11 @@ public sealed class WorkspaceReportReadRepository(
             })
             .ToArray();
 
-        var notifications = BuildNotifications(projects, allTaskValues, today);
+        var notifications = BuildNotifications(
+            projects,
+            allTaskValues,
+            today,
+            currentUser.IsAuthenticated ? currentUser.UserId : null);
         return new WorkspaceReportSnapshot(
             workspaceId,
             from,
@@ -220,7 +225,8 @@ public sealed class WorkspaceReportReadRepository(
     private static DashboardWarning[] BuildNotifications(
         IEnumerable<ProjectReportValue> projects,
         IEnumerable<TaskReportValue> tasks,
-        DateOnly today)
+        DateOnly today,
+        Guid? currentUserId)
     {
         var tomorrow = today.AddDays(1);
         var twoDaysFromNow = today.AddDays(2);
@@ -260,9 +266,23 @@ public sealed class WorkspaceReportReadRepository(
                 $"{project.Name} reaches its delivery date in 24 hours.",
                 ProjectId: project.Id,
                 DueDate: project.DeliveryDate!.Value));
+        var assignmentWarnings = tasks
+            .Where(task =>
+                currentUserId.HasValue &&
+                task.AssignedUserId == currentUserId.Value &&
+                task.Status != TaskItemStatus.Completed)
+            .Select(task => new DashboardWarning(
+                "TaskAssigned",
+                "info",
+                "Task assigned to you",
+                $"{task.Title} is assigned to you.",
+                ProjectId: task.ProjectId,
+                TaskId: task.Id,
+                DueDate: task.DueDate));
 
         return taskWarnings
             .Concat(projectWarnings)
+            .Concat(assignmentWarnings)
             .OrderBy(warning => warning.DueDate)
             .ToArray();
     }
