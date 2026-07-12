@@ -94,7 +94,7 @@ public sealed class TaskLifecycleHandlerTests
     }
 
     [Fact]
-    public async Task Start_WhenTaskIsUnassigned_ReturnsConflict()
+    public async Task Start_WhenTaskIsUnassigned_AssignsCurrentUserAndStarts()
     {
         var task = CreateReadyTask();
         var unitOfWork = new RecordingUnitOfWork();
@@ -107,11 +107,11 @@ public sealed class TaskLifecycleHandlerTests
             new StartTaskCommand(task.Id),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ErrorType.Conflict, result.Error.Type);
-        Assert.Equal("task.assignment_required", result.Error.Code);
-        Assert.Equal(TaskItemStatus.Ready, task.Status);
-        Assert.Equal(0, unitOfWork.SaveCount);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TaskItemStatus.InProgress, result.Value);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Equal(UserId, task.AssignedUserId);
+        Assert.Equal(1, unitOfWork.SaveCount);
     }
 
     [Fact]

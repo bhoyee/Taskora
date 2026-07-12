@@ -6,6 +6,30 @@ namespace TodoApp.Application.Tasks.Lifecycle;
 
 internal static class AssignedTaskAuthorization
 {
+    public static Result<bool> EnsureCanStart(
+        TaskItem task,
+        ICurrentUser currentUser)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return Result<bool>.Failure(new ApplicationError(
+                "task.auth_required",
+                "Sign in before changing active task status.",
+                ErrorType.Unauthorized));
+        }
+
+        if (task.AssignedUserId is not null &&
+            task.AssignedUserId != currentUser.UserId)
+        {
+            return Result<bool>.Failure(new ApplicationError(
+                "task.assignee_required",
+                "This task is already assigned and is not available to pick up.",
+                ErrorType.Forbidden));
+        }
+
+        return Result<bool>.Success(true);
+    }
+
     public static Result<bool> EnsureAssignedWorker(
         TaskItem task,
         ICurrentUser currentUser)
@@ -30,7 +54,7 @@ internal static class AssignedTaskAuthorization
         {
             return Result<bool>.Failure(new ApplicationError(
                 "task.assignee_required",
-                "Only the assigned user can start, block, unblock, or complete this task.",
+                "Only the assigned user can block, unblock, or complete this task.",
                 ErrorType.Forbidden));
         }
 

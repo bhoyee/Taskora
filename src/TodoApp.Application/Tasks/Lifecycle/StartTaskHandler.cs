@@ -24,7 +24,7 @@ public sealed class StartTaskHandler(
                 TaskOperationErrors.TaskNotFound());
         }
 
-        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+        var authorization = AssignedTaskAuthorization.EnsureCanStart(
             task,
             currentUser);
         if (!authorization.IsSuccess)
@@ -34,6 +34,11 @@ public sealed class StartTaskHandler(
 
         try
         {
+            if (task.AssignedUserId is null)
+            {
+                task.Assign(currentUser.UserId);
+            }
+
             task.Start();
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return Result<TaskItemStatus>.Success(task.Status);

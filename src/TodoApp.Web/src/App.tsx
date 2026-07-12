@@ -100,7 +100,7 @@ function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) 
   const isAssignee = !!task.assignedUserId && task.assignedUserId === currentUserId
   const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
 
-  if (task.status === 'Ready' && target === 'InProgress') return isAssignee
+  if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
   if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
   if (task.status === 'Blocked' && target === 'Ready') return isAssignee
   if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
@@ -584,7 +584,7 @@ export default function App() {
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} />}
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -2038,6 +2038,7 @@ function Board({
   onEdit,
   onDelete,
   onMove,
+  onLockedMoveAttempt,
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
@@ -2046,6 +2047,7 @@ function Board({
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
   onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
+  onLockedMoveAttempt: (message: string) => void
 }) {
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
   const [activeTask, setActiveTask] = useState<TaskItem | null>(null)
@@ -2089,6 +2091,7 @@ function Board({
         currentUserId={currentUserId}
         onEdit={onEdit}
         onDelete={onDelete}
+        onLockedMoveAttempt={onLockedMoveAttempt}
         dragActive={activeTask !== null}
         validTarget={validTargets.has(status)}
       />)}
@@ -2107,6 +2110,7 @@ function BoardColumn({
   currentUserId,
   onEdit,
   onDelete,
+  onLockedMoveAttempt,
   dragActive,
   validTarget,
 }: {
@@ -2117,6 +2121,7 @@ function BoardColumn({
   currentUserId: string
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
+  onLockedMoveAttempt: (message: string) => void
   dragActive: boolean
   validTarget: boolean
 }) {
@@ -2133,7 +2138,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {tasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} key={task.id} />)}
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2146,6 +2151,7 @@ function BoardCard({
   currentUserId,
   onEdit,
   onDelete,
+  onLockedMoveAttempt,
   overlay = false,
 }: {
   task: TaskItem
@@ -2154,10 +2160,19 @@ function BoardCard({
   currentUserId?: string
   onEdit: (task: TaskItem) => void
   onDelete?: (task: TaskItem) => void
+  onLockedMoveAttempt?: (message: string) => void
   overlay?: boolean
 }) {
   const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId).length > 0
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
+  const lockedAssigneeName = task.assignedUserId
+    ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
+    : null
+  const lockedMessage = task.status === 'Ready' &&
+    !!task.assignedUserId &&
+    task.assignedUserId !== currentUserId
+      ? `Task already assigned to ${lockedAssigneeName}; it is not available to move.`
+      : ''
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: task.id,
     data: { task },
@@ -2171,6 +2186,9 @@ function BoardCard({
     ref={setNodeRef}
     style={style}
     className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
+    onPointerDown={() => {
+      if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
+    }}
     {...attributes}
     {...listeners}
   >
