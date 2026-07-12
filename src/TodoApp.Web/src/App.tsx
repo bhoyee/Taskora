@@ -157,9 +157,10 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const inviteToken = inviteTokenFromPath()
 
-  const load = async () => {
+  const load = async (options: { silent?: boolean } = {}) => {
+    const silent = options.silent === true
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError('')
       const available = await api.workspaces()
       setWorkspaces(available)
@@ -216,14 +217,14 @@ export default function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
     if (loading || loggedOut) return undefined
-    const interval = window.setInterval(() => void load(), 15000)
+    const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
   }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
