@@ -111,6 +111,7 @@ const workspaceReport = {
     id: 'task-1',
     projectId: '10000000-0000-0000-0000-000000000001',
     projectName: 'Portfolio launch',
+    createdByUserId: 'user-1',
     assignedUserId: null,
     title: 'Ship portfolio',
     status: 'InProgress',
@@ -128,6 +129,7 @@ const taskPage = {
   totalCount: 1,
   items: [{
     id: 'task-1',
+    createdByUserId: 'user-1',
     assignedUserId: null,
     categoryId: 'category-1',
     title: 'Ship portfolio',

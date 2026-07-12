@@ -9,6 +9,7 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.CreatedByUserId,
             task.AssignedUserId,
             task.Title,
             task.CategoryId,
@@ -25,6 +26,7 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.CreatedByUserId,
             task.AssignedUserId,
             task.Title,
             task.CategoryId,

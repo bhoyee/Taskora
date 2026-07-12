@@ -8,6 +8,8 @@ namespace TodoApp.Application.Tests.Tasks.Maintenance;
 public sealed class TaskMaintenanceHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
+    private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly Guid OtherUserId = Guid.NewGuid();
 
     [Fact]
     public async Task MoveToReady_WhenTaskIsInBacklog_ChangesStatus()
@@ -109,17 +111,40 @@ public sealed class TaskMaintenanceHandlerTests
     public async Task UpdatePlanningFactors_WhenValuesAreValid_RecalculatesPriority()
     {
         var task = CreateTask();
+        task.RecordCreator(UserId);
         var context = CreateContext(task);
 
         var result = await new UpdatePlanningFactorsHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new UpdatePlanningFactorsCommand(task.Id, 5, 4, 3, 2),
                 CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(14.5m, task.Priority.Value);
+    }
+
+    [Fact]
+    public async Task UpdatePlanningFactors_WhenUserIsNotCreator_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new UpdatePlanningFactorsHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new UpdatePlanningFactorsCommand(task.Id, 5, 4, 3, 2),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.planning_forbidden", result.Error.Code);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
     [Fact]
@@ -225,5 +250,12 @@ public sealed class TaskMaintenanceHandlerTests
             SaveCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class TestCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
     }
 }

@@ -14,6 +14,7 @@ export interface PriorityExplanation {
 
 export interface TaskItem {
   id: string
+  createdByUserId: string | null
   assignedUserId: string | null
   categoryId: string | null
   title: string

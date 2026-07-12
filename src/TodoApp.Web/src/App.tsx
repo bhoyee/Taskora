@@ -145,6 +145,8 @@ export default function App() {
     readLocal('todoapp_settings', defaultSettings))
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
+  const [currentUserId, setCurrentUserId] = useState(() =>
+    localStorage.getItem('todoapp_current_user_id') ?? '')
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
@@ -197,7 +199,9 @@ export default function App() {
           displayName: currentProfile.displayName,
           email: currentProfile.email,
         }
+        setCurrentUserId(currentProfile.userId)
         setProfile(nextProfile)
+        localStorage.setItem('todoapp_current_user_id', currentProfile.userId)
         localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
       }
       const operationsSummary = await api.operationsSummary().catch(() => null)
@@ -270,8 +274,10 @@ export default function App() {
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_current_user_id')
     localStorage.setItem('todoapp_logged_out', 'true')
     setAccount(null)
+    setCurrentUserId('')
     setOperations(null)
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
@@ -281,9 +287,11 @@ export default function App() {
   const resetSession = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_current_user_id')
     localStorage.removeItem('todoapp_workspace_id')
     localStorage.removeItem('todoapp_logged_out')
     setAccount(null)
+    setCurrentUserId('')
     setOperations(null)
     setLoggedOut(false)
     setSelectedWorkspaceId('')
@@ -293,8 +301,10 @@ export default function App() {
   const authenticated = (session: AccountSession) => {
     localStorage.setItem('todoapp_access_token', session.accessToken)
     localStorage.setItem('todoapp_account', JSON.stringify(session))
+    localStorage.setItem('todoapp_current_user_id', session.userId)
     localStorage.removeItem('todoapp_logged_out')
     setAccount(session)
+    setCurrentUserId(session.userId)
     setLoggedOut(false)
     setProfile((current) => {
       const next = {
@@ -580,7 +590,7 @@ export default function App() {
           workspace={workspace}
           members={members}
           invitations={invitations}
-          currentUserId={account?.userId}
+          currentUserId={currentUserId || account?.userId}
           onMemberRemoved={async (userId) => {
             if (!workspace) return
             await api.removeMember(workspace.id, userId)
@@ -640,7 +650,7 @@ export default function App() {
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
@@ -2121,24 +2131,34 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
 
 const effortOptions = [1, 2, 3, 5, 8]
 
-function TaskEditor({ projectId, task, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function PriorityInputGuide({ readOnly = false }: { readOnly?: boolean }) {
+  return <p className="field-help">
+    Use 1-5 scores: 1 is low impact or urgency, 3 is normal delivery value, and 5 is high business impact, urgent deadline pressure, or major risk reduction.
+    {readOnly ? ' Only the task creator can change these priority inputs.' : ''}
+  </p>
+}
+
+function TaskEditor({ projectId, task, currentUserId, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [noteDraft, setNoteDraft] = useState('')
   const explanation = task.priorityExplanation
+  const canEditPlanning = !!task.createdByUserId && task.createdByUserId === currentUserId
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
     const data = new FormData(event.currentTarget)
-    const effort = Number(data.get('effort'))
+    const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? 3
     await api.updateTask(task.id, String(data.get('title')), String(data.get('dueDate')), effort)
-    await api.updatePlanning(
-      task.id,
-      Number(data.get('businessValue')),
-      Number(data.get('urgency')),
-      Number(data.get('riskReduction')),
-      effort,
-    )
+    if (canEditPlanning) {
+      await api.updatePlanning(
+        task.id,
+        Number(data.get('businessValue')),
+        Number(data.get('urgency')),
+        Number(data.get('riskReduction')),
+        effort,
+      )
+    }
     const assignee = String(data.get('assignedUserId') ?? '')
     if (assignee) await api.assign(task.id, assignee)
     else if (task.assignedUserId) await api.unassign(task.id)
@@ -2169,7 +2189,7 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
-      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
@@ -2179,10 +2199,10 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
         <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
         {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
       </div></fieldset>
-      <fieldset><legend>Priority inputs</legend><div className="planning-grid">
-        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} /></label>
-        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} /></label>
-        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} /></label>
+      <fieldset><legend>Priority inputs</legend><PriorityInputGuide readOnly={!canEditPlanning} /><div className="planning-grid">
+        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} readOnly={!canEditPlanning} /></label>
+        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
+        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
       </div></fieldset>
       <footer className="editor-footer"><div>{nextActions[task.status]?.map(({ label, action }) => <button type="button" className="secondary" key={action} disabled={saving} onClick={() => void transition(action)}>{label}</button>)}</div><div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button></div></footer>
     </form>
@@ -2241,6 +2261,26 @@ function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose
     }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div><label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label><fieldset><legend>Priority inputs</legend><div className="planning-grid"><label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label><label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label><label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue="3" /></label></div></fieldset><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      <label>Task title<input name="title" required maxLength={240} autoFocus /></label>
+      <div className="form-grid">
+        <label>Due date<input name="dueDate" type="date" /></label>
+        <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
+      </div>
+      <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label>
+      <fieldset><legend>Priority inputs</legend><PriorityInputGuide /><div className="planning-grid">
+        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label>
+        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label>
+        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue="3" /></label>
+      </div></fieldset>
+      <fieldset><legend>Metadata</legend><div className="metadata-editor">
+        <label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
+        <label>Tag<input name="tag" maxLength={40} /></label>
+        <label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label>
+      </div></fieldset>
+      <footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer>
+    </form>
   </dialog></div>
 }

@@ -94,22 +94,47 @@ public sealed class ReopenTaskHandler(
 
 public sealed class UpdatePlanningFactorsHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         UpdatePlanningFactorsCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+
+        if (task is null)
+        {
+            return Result<TaskItemStatus>.Failure(
+                new ApplicationError(
+                    "task.not_found",
+                    "The task was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (!currentUser.IsAuthenticated ||
+            task.CreatedByUserId is null ||
+            task.CreatedByUserId != currentUser.UserId)
+        {
+            return Result<TaskItemStatus>.Failure(
+                new ApplicationError(
+                    "task.planning_forbidden",
+                    "Only the task creator can edit priority inputs.",
+                    ErrorType.Forbidden));
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.SetPlanningFactors(
+            item => item.SetPlanningFactors(
                 PlanningFactors.Create(
                     command.BusinessValue,
                     command.Urgency,
                     command.RiskReduction,
                     command.Effort)),
             cancellationToken);
+    }
 }
 
 public sealed class RemoveTaskDependencyHandler(

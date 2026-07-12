@@ -81,6 +81,7 @@ public sealed class CreateTaskHandler(
         new(
             task.Id,
             task.ProjectId,
+            task.CreatedByUserId,
             task.Title,
             task.Status,
             task.DueDate?.Value,
