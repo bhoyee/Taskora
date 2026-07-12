@@ -205,9 +205,11 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .task-name { display: flex; gap: 11px; min-width: 0; }.task-name strong, .task-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.task-name small { color: #7a8591; margin-top: 5px; font-size: 12px; }
 .metadata-line { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
 .task-row > .metadata-line { display: none; }
-.category-pill, .tag-chip { border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 11px; font-weight: 800; }
+.category-pill, .tag-chip, .assignee-pill { border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 11px; font-weight: 800; }
 .category-pill { background: #e6f0fb; color: #295f8f; }
 .tag-chip { background: #e6f5ee; color: #20664f; }
+.assignee-pill.assigned { background: #f1ecff; color: #5f3ea0; }
+.assignee-pill.unassigned { background: #f4f5f7; color: #65717e; }
 .tag-chip.removable { cursor: pointer; }
 .priority-line { width: 3px; border-radius: 3px; background: #b8c0c9; }.priority-line.critical { background: #c33f35; }.priority-line.high { background: #e49625; }.priority-line.medium { background: #4388c7; }.priority-line.low { background: #4d9b78; }
 .status, .deadline { font-size: 12px; font-weight: 700; }.status { width: fit-content; padding: 4px 7px; border-radius: 4px; background: #e8edf2; }.status.inprogress { background: #dcecf8; color: #28638e; }.status.blocked { background: #fbe4e1; color: #a6372e; }.status.completed { background: #def1e9; color: #287258; }
@@ -231,6 +233,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .board-task:active { cursor: grabbing; }
 .board-task:hover, .board-task:focus-visible { border-color: var(--column-accent); outline: 2px solid white; box-shadow: 0 0 0 2px var(--column-accent); }
 .board-task.dragging { opacity: .28; }
+.board-task.locked { cursor: default; opacity: .82; }
+.board-task.locked:hover { box-shadow: 0 1px 2px #18202b12; outline: 0; }
 .board-task.overlay { width: 230px; opacity: .96; box-shadow: 0 12px 28px #18202b35; transform: rotate(2deg); }
 .board-task-heading { display: grid; grid-template-columns: 16px minmax(0, 1fr) 28px; gap: 7px; align-items: start; }
 .board-task-heading > svg { width: 15px; height: 15px; color: #8a949e; margin-top: 1px; }

@@ -8,6 +8,8 @@ namespace TodoApp.Api.IntegrationTests;
 public sealed class ExtendedEndpointTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
+    private static readonly Guid DefaultUserId =
+        Guid.Parse("30000000-0000-0000-0000-000000000001");
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
@@ -72,6 +74,9 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             $"/api/v1/tasks/{taskId}/dependencies/{dependencyId}"));
 
         AssertSuccess(await PostAsync(taskId, "ready"));
+        AssertSuccess(await _client.PutAsJsonAsync(
+            $"/api/v1/tasks/{taskId}/assignment",
+            new { userId = DefaultUserId }));
         AssertSuccess(await PostAsync(taskId, "start"));
         AssertSuccess(await _client.PostAsJsonAsync(
             $"/api/v1/tasks/{taskId}/block",
@@ -85,7 +90,7 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             $"/api/v1/tasks/{taskId}/activity");
         Assert.True(activity.GetArrayLength() >= 6);
         Assert.Equal(
-            "system",
+            DefaultUserId.ToString(),
             activity[0].GetProperty("actor").GetString());
         Assert.Equal(
             "StatusChanged",
@@ -119,8 +124,16 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
 
     private async Task<Guid> CreateProjectAsync()
     {
+        var workspace = await _client.PostAsJsonAsync(
+            "/api/v1/workspaces",
+            new { name = $"Extended workspace {Guid.NewGuid():N}" });
+        AssertSuccess(workspace);
+        var workspaceId = (await workspace.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id")
+            .GetGuid();
+
         var response = await _client.PostAsJsonAsync(
-            "/api/v1/projects",
+            $"/api/v1/workspaces/{workspaceId}/projects",
             new
             {
                 name = $"Extended {Guid.NewGuid():N}",

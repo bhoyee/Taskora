@@ -8,14 +8,20 @@ namespace TodoApp.Application.Tests.Tasks.Lifecycle;
 public sealed class TaskLifecycleHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
+    private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly Guid OtherUserId = Guid.NewGuid();
 
     [Fact]
     public async Task Start_WhenTaskIsReady_StartsAndSavesTask()
     {
         var task = CreateReadyTask();
+        task.Assign(UserId);
         var repository = new InMemoryTaskRepository(task);
         var unitOfWork = new RecordingUnitOfWork();
-        var handler = new StartTaskHandler(repository, unitOfWork);
+        var handler = new StartTaskHandler(
+            repository,
+            unitOfWork,
+            new TestCurrentUser(UserId));
 
         var result = await handler.HandleAsync(
             new StartTaskCommand(task.Id),
@@ -32,7 +38,8 @@ public sealed class TaskLifecycleHandlerTests
     {
         var handler = new StartTaskHandler(
             new InMemoryTaskRepository(),
-            new RecordingUnitOfWork());
+            new RecordingUnitOfWork(),
+            new TestCurrentUser(UserId));
 
         var result = await handler.HandleAsync(
             new StartTaskCommand(Guid.NewGuid()),
@@ -47,10 +54,12 @@ public sealed class TaskLifecycleHandlerTests
     public async Task Start_WhenTaskIsInBacklog_ReturnsConflict()
     {
         var task = CreateTask();
+        task.Assign(UserId);
         var unitOfWork = new RecordingUnitOfWork();
         var handler = new StartTaskHandler(
             new InMemoryTaskRepository(task),
-            unitOfWork);
+            unitOfWork,
+            new TestCurrentUser(UserId));
 
         var result = await handler.HandleAsync(
             new StartTaskCommand(task.Id),
@@ -63,17 +72,62 @@ public sealed class TaskLifecycleHandlerTests
     }
 
     [Fact]
+    public async Task Start_WhenTaskIsAssignedToSomeoneElse_ReturnsForbidden()
+    {
+        var task = CreateReadyTask();
+        task.Assign(UserId);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new StartTaskHandler(
+            new InMemoryTaskRepository(task),
+            unitOfWork,
+            new TestCurrentUser(OtherUserId));
+
+        var result = await handler.HandleAsync(
+            new StartTaskCommand(task.Id),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.assignee_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.Ready, task.Status);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Start_WhenTaskIsUnassigned_ReturnsConflict()
+    {
+        var task = CreateReadyTask();
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new StartTaskHandler(
+            new InMemoryTaskRepository(task),
+            unitOfWork,
+            new TestCurrentUser(UserId));
+
+        var result = await handler.HandleAsync(
+            new StartTaskCommand(task.Id),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Conflict, result.Error.Type);
+        Assert.Equal("task.assignment_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.Ready, task.Status);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task Complete_WhenTaskIsInProgress_UsesClockAndSavesTask()
     {
         var completedAt =
             new DateTimeOffset(2026, 7, 1, 14, 30, 0, TimeSpan.Zero);
         var task = CreateReadyTask();
+        task.Assign(UserId);
         task.Start();
         var unitOfWork = new RecordingUnitOfWork();
         var handler = new CompleteTaskHandler(
             new InMemoryTaskRepository(task),
             unitOfWork,
-            new StubClock(completedAt));
+            new StubClock(completedAt),
+            new TestCurrentUser(UserId));
 
         var result = await handler.HandleAsync(
             new CompleteTaskCommand(task.Id),
@@ -178,5 +232,12 @@ public sealed class TaskLifecycleHandlerTests
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
+    }
+
+    private sealed class TestCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
     }
 }

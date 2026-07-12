@@ -9,7 +9,8 @@ using TodoApp.Domain.Tasks.Events;
 namespace TodoApp.Infrastructure.Persistence;
 
 public sealed class TodoAppDbContext(
-    DbContextOptions<TodoAppDbContext> options)
+    DbContextOptions<TodoAppDbContext> options,
+    ICurrentUser? currentUser = null)
     : DbContext(options), IUnitOfWork
 {
     public DbSet<Project> Projects => Set<Project>();
@@ -61,7 +62,11 @@ public sealed class TodoAppDbContext(
             .Where(task => task.DomainEvents.Count > 0)
             .ToArray();
         var occurredAt = DateTimeOffset.UtcNow;
-        var auditActivities = BuildTaskAuditActivities(occurredAt);
+        var actor = currentUser?.IsAuthenticated == true &&
+            currentUser.UserId != Guid.Empty
+                ? currentUser.UserId.ToString()
+                : "system";
+        var auditActivities = BuildTaskAuditActivities(occurredAt, actor);
 
         TaskActivities.AddRange(auditActivities);
 
@@ -76,7 +81,8 @@ public sealed class TodoAppDbContext(
                             statusChanged.TaskId,
                             statusChanged.PreviousStatus.ToString(),
                             statusChanged.CurrentStatus.ToString(),
-                            occurredAt));
+                            occurredAt,
+                            actor));
                 }
             }
         }
@@ -92,7 +98,8 @@ public sealed class TodoAppDbContext(
     }
 
     private IReadOnlyList<TaskActivity> BuildTaskAuditActivities(
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        string actor)
     {
         var activities = new List<TaskActivity>();
 
@@ -105,7 +112,8 @@ public sealed class TodoAppDbContext(
                     "TaskCreated",
                     string.Empty,
                     entry.Entity.Title,
-                    occurredAt));
+                    occurredAt,
+                    actor));
                 continue;
             }
 
@@ -119,31 +127,36 @@ public sealed class TodoAppDbContext(
                 entry,
                 nameof(TaskItem.Title),
                 "TaskRenamed",
-                occurredAt);
+                occurredAt,
+                actor);
             AddPropertyActivity(
                 activities,
                 entry,
                 nameof(TaskItem.DueDate),
                 "DueDateChanged",
-                occurredAt);
+                occurredAt,
+                actor);
             AddPropertyActivity(
                 activities,
                 entry,
                 nameof(TaskItem.EffortEstimate),
                 "EffortChanged",
-                occurredAt);
+                occurredAt,
+                actor);
             AddPropertyActivity(
                 activities,
                 entry,
                 nameof(TaskItem.AssignedUserId),
                 "AssignmentChanged",
-                occurredAt);
+                occurredAt,
+                actor);
             AddPropertyActivity(
                 activities,
                 entry,
                 nameof(TaskItem.CategoryId),
                 "CategoryChanged",
-                occurredAt);
+                occurredAt,
+                actor);
         }
 
         foreach (var entry in ChangeTracker.Entries<TaskTag>())
@@ -155,7 +168,8 @@ public sealed class TodoAppDbContext(
                     entry.State == EntityState.Added ? "TagAdded" : "TagRemoved",
                     entry.State == EntityState.Added ? string.Empty : entry.Entity.Name,
                     entry.State == EntityState.Added ? entry.Entity.Name : string.Empty,
-                    occurredAt));
+                    occurredAt,
+                    actor));
             }
         }
 
@@ -168,7 +182,8 @@ public sealed class TodoAppDbContext(
                     "NoteAdded",
                     string.Empty,
                     Truncate(entry.Entity.Body),
-                    occurredAt));
+                    occurredAt,
+                    actor));
             }
         }
 
@@ -180,7 +195,8 @@ public sealed class TodoAppDbContext(
         EntityEntry<TaskItem> entry,
         string propertyName,
         string activityType,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        string actor)
     {
         var property = entry.Property(propertyName);
         if (!property.IsModified)
@@ -200,7 +216,8 @@ public sealed class TodoAppDbContext(
             activityType,
             previousValue,
             currentValue,
-            occurredAt));
+            occurredAt,
+            actor));
     }
 
     private static string FormatAuditValue<TValue>(TValue value) =>

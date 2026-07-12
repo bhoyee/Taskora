@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Maintenance;
@@ -49,32 +50,66 @@ public sealed class UpdateTaskHandler(
 
 public sealed class BlockTaskHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         BlockTaskCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.Block(command.Reason),
+            item => item.Block(command.Reason),
             cancellationToken);
+    }
 }
 
 public sealed class UnblockTaskHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         UnblockTaskCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.Unblock(),
+            item => item.Unblock(),
             cancellationToken);
+    }
 }
 
 public sealed class ReopenTaskHandler(

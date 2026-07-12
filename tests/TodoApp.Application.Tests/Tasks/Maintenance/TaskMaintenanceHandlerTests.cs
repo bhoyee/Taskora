@@ -60,7 +60,8 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new BlockTaskHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new BlockTaskCommand(task.Id, "Waiting for design approval"),
                 CancellationToken.None);
@@ -79,13 +80,35 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new UnblockTaskHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new UnblockTaskCommand(task.Id),
                 CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(TaskItemStatus.Ready, task.Status);
+    }
+
+    [Fact]
+    public async Task Block_WhenCurrentUserIsNotAssignee_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateInProgressTask();
+        var context = CreateContext(task);
+
+        var result = await new BlockTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new BlockTaskCommand(task.Id, "Waiting for design approval"),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.assignee_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
     [Fact]
@@ -270,6 +293,7 @@ public sealed class TaskMaintenanceHandlerTests
     private static TaskItem CreateInProgressTask()
     {
         var task = CreateTask();
+        task.Assign(UserId);
         task.MoveToReady();
         task.Start();
         return task;

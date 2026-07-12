@@ -8,7 +8,8 @@ namespace TodoApp.Application.Tasks.Lifecycle;
 public sealed class CompleteTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
 {
     public async Task<Result<TaskItemStatus>> HandleAsync(
         CompleteTaskCommand command,
@@ -22,6 +23,14 @@ public sealed class CompleteTaskHandler(
         {
             return Result<TaskItemStatus>.Failure(
                 TaskOperationErrors.TaskNotFound());
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
         }
 
         try

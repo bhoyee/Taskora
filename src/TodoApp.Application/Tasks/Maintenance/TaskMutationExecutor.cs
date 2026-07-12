@@ -7,6 +7,13 @@ namespace TodoApp.Application.Tasks.Maintenance;
 
 internal static class TaskMutationExecutor
 {
+    public static Result<TaskItemStatus> NotFound() =>
+        Result<TaskItemStatus>.Failure(
+            new ApplicationError(
+                "task.not_found",
+                "The task was not found.",
+                ErrorType.NotFound));
+
     public static async Task<Result<TaskItemStatus>> ExecuteAsync(
         Guid taskId,
         ITaskRepository tasks,
@@ -18,11 +25,7 @@ internal static class TaskMutationExecutor
 
         if (task is null)
         {
-            return Result<TaskItemStatus>.Failure(
-                new ApplicationError(
-                    "task.not_found",
-                    "The task was not found.",
-                    ErrorType.NotFound));
+            return NotFound();
         }
 
         try

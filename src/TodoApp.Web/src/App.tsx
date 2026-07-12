@@ -95,6 +95,26 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   Completed: { Ready: { action: 'reopen' } },
 }
 
+function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) {
+  if (!boardTransitions[task.status]?.[target]) return false
+  const isAssignee = !!task.assignedUserId && task.assignedUserId === currentUserId
+  const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
+
+  if (task.status === 'Ready' && target === 'InProgress') return isAssignee
+  if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
+  if (task.status === 'Blocked' && target === 'Ready') return isAssignee
+  if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
+  if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
+
+  return false
+}
+
+function allowedTaskTargets(task: TaskItem, currentUserId: string) {
+  return Object.keys(boardTransitions[task.status] ?? {})
+    .filter((status): status is TaskStatus =>
+      canMoveTask(task, status as TaskStatus, currentUserId))
+}
+
 const activityTypes = [
   'All',
   'TaskCreated',
@@ -435,7 +455,7 @@ export default function App() {
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
-    if (!transition) return
+    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
 
     try {
       setError('')
@@ -563,8 +583,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
-                ? <TaskList tasks={visible} categories={categories} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} />}
+                ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -587,6 +607,8 @@ export default function App() {
           pageSize={activityPageSize}
           totalCount={activityTotal}
           onPageChange={setActivityPageNumber}
+          members={members}
+          currentUserId={currentUserId || account?.userId || ''}
         />}
         {view === 'reports' && <ReportsPage
           dashboard={dashboard}
@@ -1528,6 +1550,8 @@ function ActivityPage({
   pageSize,
   totalCount,
   onPageChange,
+  members,
+  currentUserId,
 }: {
   activity: WorkspaceActivity[]
   tasks: TaskItem[]
@@ -1538,6 +1562,8 @@ function ActivityPage({
   pageSize: number
   totalCount: number
   onPageChange: (page: number) => void
+  members: WorkspaceMember[]
+  currentUserId: string
 }) {
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -1571,7 +1597,7 @@ function ActivityPage({
       <span className="activity-icon">{activityIcon(item.action)}</span>
       <div>
         <strong>{item.taskTitle}</strong>
-        <p>{activityMessage(item)}</p>
+        <p>{activityMessage(item, members, currentUserId)}</p>
         <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
       </div>
     </article>)}
@@ -1661,33 +1687,41 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
   </section>
 }
 
-function activityMessage(item: WorkspaceActivity) {
+function activityMessage(item: WorkspaceActivity, members: WorkspaceMember[] = [], currentUserId = '') {
+  const actor = displayActor(item.actor, members, currentUserId)
   const previous = item.previousValue || 'none'
   const current = item.currentValue || 'none'
   switch (item.action) {
     case 'TaskCreated':
-      return `${item.actor} created this task.`
+      return `${actor} created this task.`
     case 'TaskRenamed':
-      return `${item.actor} renamed the task from ${previous} to ${current}.`
+      return `${actor} renamed the task from ${previous} to ${current}.`
     case 'StatusChanged':
-      return `${item.actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
+      return `${actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
     case 'DueDateChanged':
-      return `${item.actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
+      return `${actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
     case 'EffortChanged':
-      return `${item.actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
+      return `${actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
     case 'AssignmentChanged':
-      return `${item.actor} changed the assignee from ${previous} to ${current}.`
+      return `${actor} changed the assignee from ${displayActor(previous, members, currentUserId)} to ${displayActor(current, members, currentUserId)}.`
     case 'CategoryChanged':
-      return `${item.actor} changed the category from ${previous} to ${current}.`
+      return `${actor} changed the category from ${previous} to ${current}.`
     case 'TagAdded':
-      return `${item.actor} added tag #${current}.`
+      return `${actor} added tag #${current}.`
     case 'TagRemoved':
-      return `${item.actor} removed tag #${previous}.`
+      return `${actor} removed tag #${previous}.`
     case 'NoteAdded':
-      return `${item.actor} added a note: ${current}`
+      return `${actor} added a note: ${current}`
     default:
-      return `${item.actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
+      return `${actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
   }
+}
+
+function displayActor(value: string, members: WorkspaceMember[], currentUserId: string) {
+  if (!value || value === 'none') return 'none'
+  if (value === 'system') return 'System'
+  if (value === currentUserId) return 'You'
+  return members.find((member) => member.userId === value)?.displayName ?? value
 }
 
 function activityIcon(action: string) {
@@ -1965,13 +1999,14 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, categories, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
+  const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Created</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
-      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className="created-date">{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
@@ -1981,9 +2016,15 @@ function TaskList({ tasks, categories, currentUserId, onEdit, onDelete }: { task
   </div>
 }
 
-function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName?: string }) {
-  if (!categoryName && !task.tags.length) return null
+function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; assigneeName?: string; currentUserId?: string }) {
+  const assigneeLabel = task.assignedUserId
+    ? task.assignedUserId === currentUserId
+      ? 'Assigned to you'
+      : `Assigned to ${assigneeName ?? 'workspace member'}`
+    : 'Unassigned'
+  if (!categoryName && !task.tags.length && !assigneeLabel) return null
   return <span className="metadata-line">
+    <span className={`assignee-pill ${task.assignedUserId ? 'assigned' : 'unassigned'}`}>{assigneeLabel}</span>
     {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
     {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
   </span>
@@ -1992,6 +2033,7 @@ function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName
 function Board({
   tasks,
   categories,
+  members,
   currentUserId,
   onEdit,
   onDelete,
@@ -1999,6 +2041,7 @@ function Board({
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  members: WorkspaceMember[]
   currentUserId: string
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
@@ -2012,14 +2055,14 @@ function Board({
     useSensor(KeyboardSensor),
   )
   const validTargets = activeTask
-    ? new Set(Object.keys(boardTransitions[activeTask.status] ?? {}))
+    ? new Set(allowedTaskTargets(activeTask, currentUserId))
     : new Set<string>()
 
   const finishDrag = async ({ active, over }: DragEndEvent) => {
     const task = active.data.current?.task as TaskItem | undefined
     const target = over?.id as TaskStatus | undefined
     setActiveTask(null)
-    if (!task || !target || !boardTransitions[task.status]?.[target]) return
+    if (!task || !target || !canMoveTask(task, target, currentUserId)) return
 
     setMoving(true)
     try {
@@ -2041,6 +2084,7 @@ function Board({
         key={status}
         status={status}
         categories={categories}
+        members={members}
         tasks={tasks.filter((task) => task.status === status)}
         currentUserId={currentUserId}
         onEdit={onEdit}
@@ -2050,7 +2094,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} onEdit={onEdit} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -2059,6 +2103,7 @@ function BoardColumn({
   status,
   tasks,
   categories,
+  members,
   currentUserId,
   onEdit,
   onDelete,
@@ -2068,6 +2113,7 @@ function BoardColumn({
   status: TaskStatus
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  members: WorkspaceMember[]
   currentUserId: string
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
@@ -2087,7 +2133,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {tasks.map((task) =>
-        <BoardCard task={task} categories={categories} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} key={task.id} />)}
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2096,6 +2142,7 @@ function BoardColumn({
 function BoardCard({
   task,
   categories,
+  members = [],
   currentUserId,
   onEdit,
   onDelete,
@@ -2103,15 +2150,18 @@ function BoardCard({
 }: {
   task: TaskItem
   categories?: ProjectCategory[]
+  members?: WorkspaceMember[]
   currentUserId?: string
   onEdit: (task: TaskItem) => void
   onDelete?: (task: TaskItem) => void
   overlay?: boolean
 }) {
+  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId).length > 0
+  const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: task.id,
     data: { task },
-    disabled: overlay,
+    disabled: overlay || !hasMoveTargets,
   })
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -2120,7 +2170,7 @@ function BoardCard({
   return <article
     ref={setNodeRef}
     style={style}
-    className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''}`}
+    className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
     {...attributes}
     {...listeners}
   >
@@ -2159,6 +2209,8 @@ function BoardCard({
     <TaskMetadataLine
       task={task}
       categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+      assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined}
+      currentUserId={currentUserId}
     />
   </article>
 }
@@ -2169,6 +2221,15 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   InProgress: [{ label: 'Complete task', action: 'complete' }],
   Blocked: [{ label: 'Unblock task', action: 'unblock' }],
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
+}
+
+const actionTargets: Record<string, TaskStatus> = {
+  ready: 'Ready',
+  start: 'InProgress',
+  block: 'Blocked',
+  complete: 'Completed',
+  unblock: 'Ready',
+  reopen: 'Ready',
 }
 
 const effortOptions = [1, 2, 3, 5, 8]
@@ -2190,6 +2251,8 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   const explanation = task.priorityExplanation
   const canEditPlanning = !isMember && (!task.createdByUserId || task.createdByUserId === currentUserId)
   const isUnscored = !explanation
+  const availableActions = (nextActions[task.status] ?? [])
+    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId))
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSaving(true)
@@ -2240,8 +2303,14 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   }
   const transition = async (action: string) => {
     setSaving(true)
-    await api.transition(task.id, action)
-    onSaved()
+    setError('')
+    try {
+      await api.transition(task.id, action)
+      onSaved()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task status could not be changed.')
+      setSaving(false)
+    }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
@@ -2262,7 +2331,7 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
         <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
       </div></fieldset>
-      <footer className="editor-footer"><div>{nextActions[task.status]?.map(({ label, action }) => <button type="button" className="secondary" key={action} disabled={saving} onClick={() => void transition(action)}>{label}</button>)}</div><div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button></div></footer>
+      <footer className="editor-footer"><div>{availableActions.map(({ label, action }) => <button type="button" className="secondary" key={action} disabled={saving} onClick={() => void transition(action)}>{label}</button>)}</div><div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button></div></footer>
     </form>
   </dialog></div>
 }

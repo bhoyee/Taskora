@@ -7,7 +7,8 @@ namespace TodoApp.Application.Tasks.Lifecycle;
 
 public sealed class StartTaskHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
     public async Task<Result<TaskItemStatus>> HandleAsync(
         StartTaskCommand command,
@@ -21,6 +22,14 @@ public sealed class StartTaskHandler(
         {
             return Result<TaskItemStatus>.Failure(
                 TaskOperationErrors.TaskNotFound());
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
         }
 
         try
