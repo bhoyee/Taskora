@@ -728,7 +728,7 @@ export default function App() {
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
-      {quickNoteTask && <QuickNoteDialog task={quickNoteTask} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
+      {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
 }
@@ -2354,11 +2354,13 @@ function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?:
   </p>
 }
 
-function QuickNoteDialog({ task, onClose, onSaved }: { task: TaskItem; onClose: () => void; onSaved: (taskId: string) => void }) {
+function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; currentUserId: string; onClose: () => void; onSaved: (taskId: string) => void }) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const notes = task.notes ?? []
+  const noteAuthor = (authorId: string) =>
+    displayActor(authorId, members, currentUserId)
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!body.trim()) return
@@ -2388,7 +2390,7 @@ function QuickNoteDialog({ task, onClose, onSaved }: { task: TaskItem; onClose: 
       </form>
       <section className="quick-note-list" aria-label="Existing notes">
         {notes.length
-          ? notes.map((note) => <article key={note.id}><MessageSquare size={16} /><div><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></div></article>)
+          ? notes.map((note) => <article key={note.id}><MessageSquare size={16} /><div><p>{note.body}</p><small className="note-meta"><span className="note-author">{noteAuthor(note.authorId)}</span><span>{new Date(note.createdAt).toLocaleString()}</span></small></div></article>)
           : <div className="empty compact"><MessageSquare /><h2>No notes yet</h2><p>Add the first note for this task.</p></div>}
       </section>
     </dialog>

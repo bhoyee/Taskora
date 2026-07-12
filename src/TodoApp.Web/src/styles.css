@@ -256,7 +256,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .quick-note-list article { display: grid; grid-template-columns: 24px 1fr; gap: 9px; padding: 10px; border: 1px solid #e2e6ea; border-radius: 7px; background: #fafbfc; }
 .quick-note-list article svg { color: #426580; margin-top: 2px; }
 .quick-note-list p { margin: 0; color: #26313d; line-height: 1.45; }
-.quick-note-list small { display: block; margin-top: 5px; color: #71808f; font-size: 11px; font-weight: 700; }
+.quick-note-list small { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; color: #71808f; font-size: 10px; font-weight: 800; }
+.note-meta span { border-radius: 999px; background: #eef2f5; color: #6d7a87; padding: 2px 7px; }
+.note-meta .note-author { background: #e7f3ef; color: #196b55; }
 .assignee-field { display: block; position: relative; margin-top: 16px; }.assignee-field svg { position: absolute; right: 9px; bottom: 11px; width: 15px; pointer-events: none; }
 .panel-page { background: white; border: 1px solid #d7dce2; border-radius: 8px; padding: 18px; }
 .activity-page { display: grid; gap: 10px; }
