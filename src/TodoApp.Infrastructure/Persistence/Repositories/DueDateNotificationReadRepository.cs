@@ -78,8 +78,7 @@ public sealed class DueDateNotificationReadRepository(
             .AsNoTracking()
             .Where(project =>
                 project.ArchivedAt == null &&
-                project.TargetDate != null &&
-                project.TargetDate.Value == targetDate)
+                project.TargetDate != null)
             .Select(project => new
             {
                 project.Id,
@@ -88,7 +87,10 @@ public sealed class DueDateNotificationReadRepository(
                 project.WorkspaceId
             })
             .ToArrayAsync(cancellationToken);
-        var workspaceIds = projects
+        var dueProjects = projects
+            .Where(project => project.TargetDate!.Value == targetDate)
+            .ToArray();
+        var workspaceIds = dueProjects
             .Select(project => project.WorkspaceId)
             .Distinct()
             .ToArray();
@@ -109,7 +111,7 @@ public sealed class DueDateNotificationReadRepository(
                 })
             .ToArrayAsync(cancellationToken);
 
-        return projects
+        return dueProjects
             .Select(project => new ProjectTargetNotification(
                 project.Id,
                 project.Name,

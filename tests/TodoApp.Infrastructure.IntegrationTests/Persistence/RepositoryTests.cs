@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Tasks.Queries;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 using TodoApp.Infrastructure.Persistence;
@@ -217,6 +218,44 @@ public sealed class RepositoryTests
 
         await using var readContext = database.CreateContext();
         Assert.Equal(0, await readContext.Projects.CountAsync());
+    }
+
+    [Fact]
+    public async Task DueDateNotifications_ReturnsProjectTargetReminders()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var ownerId = Guid.NewGuid();
+        var workspace = Workspace.Create(
+            Guid.NewGuid(),
+            "Launch workspace",
+            ownerId);
+        var owner = UserProfile.Create(
+            ownerId,
+            "Launch Owner",
+            "owner@example.com");
+        var project = Project.Create(
+            Guid.NewGuid(),
+            "Portfolio launch",
+            workspaceId: workspace.Id);
+        project.SetTargetDate(
+            DueDate.Create(new DateOnly(2026, 7, 14)));
+
+        await using (var seedContext = database.CreateContext())
+        {
+            seedContext.AddRange(owner, workspace, project);
+            await seedContext.SaveChangesAsync();
+        }
+
+        await using var queryContext = database.CreateContext();
+        var reminders = await new DueDateNotificationReadRepository(queryContext)
+            .GetProjectTargetNotificationsAsync(
+                new DateOnly(2026, 7, 13),
+                CancellationToken.None);
+
+        var reminder = Assert.Single(reminders);
+        Assert.Equal(project.Id, reminder.ProjectId);
+        Assert.Equal(new DateOnly(2026, 7, 14), reminder.TargetDate);
+        Assert.Equal(["owner@example.com"], reminder.Recipients);
     }
 
     [Fact]
