@@ -1017,8 +1017,12 @@ function deliveryStatus(deliveryDate: string | null) {
   return { label: `${days} days left`, tone: 'healthy' }
 }
 
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString()
+function formatDate(value?: string | null) {
+  if (!value) return 'Not recorded'
+  const date = value.includes('T')
+    ? new Date(value)
+    : new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
 }
 
 const drilldownLabels: Record<TaskDrilldown, string> = {
