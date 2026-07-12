@@ -14,7 +14,7 @@ import {
 import { api } from './api'
 import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationsSummary, ProjectCategory, ProjectDetails,
-  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember,
+  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import './styles.css'
 
@@ -147,7 +147,8 @@ export default function App() {
     readLocal('todoapp_account', defaultAccount))
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [reportTasks, setReportTasks] = useState<TaskItem[]>([])
+  const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
+  const [report, setReport] = useState<WorkspaceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportFrom, setReportFrom] = useState(todayInput)
   const [reportTo, setReportTo] = useState(nextMonthInput)
@@ -179,8 +180,9 @@ export default function App() {
         setSelectedProjectId('')
         localStorage.removeItem('todoapp_project_id')
       }
-      const [summary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
+      const [summary, workspaceSummary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
         api.dashboard(selected.id, selectedProject?.id),
+        api.dashboard(selected.id),
         selectedProject
           ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
           : Promise.resolve({ items: [], totalCount: 0 }),
@@ -205,6 +207,7 @@ export default function App() {
       setInvitations(workspaceInvitations)
       setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
+      setNotifications(workspaceSummary.warnings)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
       setActivity(activityPage.items)
@@ -224,16 +227,19 @@ export default function App() {
     return () => window.clearInterval(interval)
   }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
-    if (view !== 'reports' || !workspace || !project) {
-      setReportTasks([])
+    if (view !== 'reports' || !workspace) {
+      setReport(null)
       return undefined
     }
 
     let cancelled = false
     setReportLoading(true)
-    api.tasks(workspace.id, '', 1, 100, project.id)
-      .then((page) => {
-        if (!cancelled) setReportTasks(page.items)
+    api.report(workspace.id, reportFrom, reportTo)
+      .then((nextReport) => {
+        if (!cancelled) {
+          setReport(nextReport)
+          setNotifications(nextReport.notifications)
+        }
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : 'Reports could not be loaded.')
@@ -245,7 +251,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [view, workspace?.id, project?.id])
+  }, [view, workspace?.id, reportFrom, reportTo])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -477,7 +483,7 @@ export default function App() {
             onCreate={createWorkspace}
           />
           <NotificationBell
-            warnings={dashboard.warnings}
+            warnings={notifications}
             open={notificationsOpen}
             onToggle={() => setNotificationsOpen((current) => !current)}
           />
@@ -561,9 +567,7 @@ export default function App() {
         />}
         {view === 'reports' && <ReportsPage
           dashboard={dashboard}
-          projects={projects}
-          selectedProject={project}
-          tasks={reportTasks}
+          report={report}
           loading={reportLoading}
           from={reportFrom}
           to={reportTo}
@@ -1116,9 +1120,7 @@ function NotificationBell({
 
 function ReportsPage({
   dashboard,
-  projects,
-  selectedProject,
-  tasks,
+  report,
   loading,
   from,
   to,
@@ -1126,9 +1128,7 @@ function ReportsPage({
   onToChange,
 }: {
   dashboard: Dashboard
-  projects: ProjectDetails[]
-  selectedProject: ProjectDetails | null
-  tasks: TaskItem[]
+  report: WorkspaceReport | null
   loading: boolean
   from: string
   to: string
@@ -1137,32 +1137,18 @@ function ReportsPage({
 }) {
   const [pageNumber, setPageNumber] = useState(1)
   const pageSize = 8
-  useEffect(() => setPageNumber(1), [from, to, selectedProject?.id])
+  useEffect(() => setPageNumber(1), [from, to])
 
-  const tasksInRange = useMemo(
-    () => tasks.filter((task) => task.dueDate && dateInRange(task.dueDate, from, to)),
-    [tasks, from, to],
-  )
-  const projectsInRange = useMemo(
-    () => projects.filter((project) =>
-      (project.targetDate && dateInRange(project.targetDate, from, to)) ||
-      (project.archivedAt && dateInRange(project.archivedAt.slice(0, 10), from, to))),
-    [projects, from, to],
-  )
-  const completedTasks = tasksInRange.filter((task) => task.status === 'Completed').length
-  const blockedTasks = tasksInRange.filter((task) => task.status === 'Blocked' || task.isBlocked).length
-  const criticalTasks = tasksInRange.filter((task) => task.priorityBand === 'Critical').length
-  const overdueTasks = tasksInRange.filter((task) => task.deadlineHealth === 'Overdue').length
-  const totalPages = Math.max(1, Math.ceil(tasksInRange.length / pageSize))
-  const pageTasks = tasksInRange.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
-  const statusBreakdown = buildTaskBreakdown(tasksInRange, ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed'], (task) => task.status)
-  const priorityBreakdown = buildTaskBreakdown(tasksInRange, ['Low', 'Medium', 'High', 'Critical'], (task) => task.priorityBand ?? 'Unscored')
+  const tasks = report?.tasks ?? []
+  const projects = report?.projects ?? []
+  const totalPages = Math.max(1, Math.ceil(tasks.length / pageSize))
+  const pageTasks = tasks.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
 
   return <section className="panel-page reports-page" aria-label="Reports">
     <div className="report-toolbar">
       <div>
         <h2>Workspace reports</h2>
-        <p>{selectedProject ? `${selectedProject.name} delivery activity for the selected date range.` : 'Create a project to start reporting.'}</p>
+        <p>Workspace-wide task and project delivery activity for the selected date range.</p>
       </div>
       <div className="date-range">
         <label><span>From</span><input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></label>
@@ -1171,34 +1157,36 @@ function ReportsPage({
     </div>
 
     <section className="report-metrics" aria-label="Report summary">
-      <Metric label="Tasks due in range" value={tasksInRange.length} icon={<Clock3 />} />
-      <Metric label="Completed" value={completedTasks} icon={<CheckCircle2 />} />
-      <Metric label="Blocked" value={blockedTasks} icon={<Columns3 />} tone="warn" />
-      <Metric label="Critical" value={criticalTasks} icon={<AlertTriangle />} tone="danger" />
+      <Metric label="Tasks in range" value={report?.totalTasks ?? 0} icon={<Clock3 />} />
+      <Metric label="Completed tasks" value={report?.completedTasks ?? 0} icon={<CheckCircle2 />} />
+      <Metric label="Closed projects" value={report?.archivedProjects ?? 0} icon={<FolderPlus />} />
+      <Metric label="Critical" value={report?.criticalTasks ?? 0} icon={<AlertTriangle />} tone="danger" />
     </section>
 
     <section className="report-grid">
-      <BarChart title="Report status" items={statusBreakdown} colors={statusChartColors} />
-      <BarChart title="Report priority" items={priorityBreakdown} colors={priorityChartColors} />
+      <BarChart title="Report status" items={report?.statusBreakdown ?? []} colors={statusChartColors} />
+      <BarChart title="Report priority" items={report?.priorityBreakdown ?? []} colors={priorityChartColors} />
       <article className="report-card">
-        <header><h2>Project delivery</h2><span>{projectsInRange.length} in range</span></header>
+        <header><h2>Project delivery</h2><span>{report?.projectsDeliveredInRange ?? 0} in range</span></header>
         <div className="report-project-list">
-          {projectsInRange.map((project) => {
-            const delivery = deliveryStatus(project.targetDate)
+          {projects.map((project) => {
+            const delivery = deliveryStatus(project.deliveryDate)
             return <article key={project.id}>
               <strong>{project.name}</strong>
-              <span>{project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+              <span>{project.deliveryDate ? formatDate(project.deliveryDate) : 'No delivery date'}</span>
               {delivery && <small className={`delivery-badge ${delivery.tone}`}>{delivery.label}</small>}
+              <span>{project.completedTasks}/{project.totalTasks} tasks complete, {project.completionPercentage}% done</span>
+              {project.isArchived && <small className="delivery-badge healthy">Closed project</small>}
             </article>
           })}
-          {!projectsInRange.length && <p className="muted">No project delivery or archive date falls inside this range.</p>}
+          {!projects.length && <p className="muted">No project delivery or archive date falls inside this range.</p>}
         </div>
       </article>
       <article className="report-card">
         <header><h2>Executive summary</h2><span>{dashboard.projectProgress.completionPercentage}% complete</span></header>
-        <p>{selectedProject
-          ? `${selectedProject.name} has ${dashboard.projectProgress.completedTasks} completed task${dashboard.projectProgress.completedTasks === 1 ? '' : 's'} out of ${dashboard.projectProgress.totalTasks}, with ${overdueTasks} overdue due-date signal${overdueTasks === 1 ? '' : 's'} in this report range.`
-          : 'Reports become richer after a project and tasks are created.'}</p>
+        <p>{report
+          ? `${report.completedTasks} completed task${report.completedTasks === 1 ? '' : 's'} across ${report.totalProjects} project${report.totalProjects === 1 ? '' : 's'}, with ${report.overdueTasks} overdue due-date signal${report.overdueTasks === 1 ? '' : 's'} and ${report.blockedTasks} blocked task${report.blockedTasks === 1 ? '' : 's'} in this report range.`
+          : 'Reports become richer after projects and tasks are created.'}</p>
       </article>
     </section>
 
@@ -1208,38 +1196,20 @@ function ReportsPage({
         ? pageTasks.map((task) => <article className="task-row report-row" key={task.id}>
           <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase() ?? 'low'}`} /><div><strong>{task.title}</strong><small>{task.tags.length ? task.tags.join(', ') : 'No tags'}</small></div></div>
           <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
-          <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? formatDate(task.dueDate) : 'No date'}</span>
+          <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? formatDate(task.dueDate) : task.completedAt ? `Done ${new Date(task.completedAt).toLocaleDateString()}` : 'No date'}</span>
           <span className="score"><strong>{task.priorityBand ?? 'Unscored'}</strong><small>{task.priorityScore ?? 0}</small></span>
+          <div className="metadata-line"><span className="category-pill">{task.projectName}</span></div>
         </article>)
-        : <div className="empty compact"><ChartBar /><h2>No report rows</h2><p>No task due dates match this range for the selected project.</p></div>}
+        : <div className="empty compact"><ChartBar /><h2>No report rows</h2><p>No task activity matches this range for the selected workspace.</p></div>}
       <Pagination
         pageNumber={pageNumber}
         pageSize={pageSize}
-        totalCount={tasksInRange.length}
+        totalCount={tasks.length}
         totalPages={totalPages}
         onPageChange={setPageNumber}
       />
     </section>
   </section>
-}
-
-function dateInRange(value: string, from: string, to: string) {
-  if (!from && !to) return true
-  const time = new Date(`${value}T00:00:00`).getTime()
-  const fromTime = from ? new Date(`${from}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY
-  const toTime = to ? new Date(`${to}T23:59:59`).getTime() : Number.POSITIVE_INFINITY
-  return time >= fromTime && time <= toTime
-}
-
-function buildTaskBreakdown(
-  tasks: TaskItem[],
-  labels: string[],
-  selector: (task: TaskItem) => string,
-) {
-  return labels.map((label) => ({
-    label,
-    count: tasks.filter((task) => selector(task) === label).length,
-  }))
 }
 
 function ProjectGovernance({

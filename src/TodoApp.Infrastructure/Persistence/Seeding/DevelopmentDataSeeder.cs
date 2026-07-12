@@ -23,6 +23,10 @@ public static class DevelopmentDataSeeder
 
     private static readonly Guid ProjectId =
         Guid.Parse("10000000-0000-0000-0000-000000000001");
+    private static readonly Guid SprintProjectId =
+        Guid.Parse("10000000-0000-0000-0000-000000000002");
+    private static readonly Guid ClosedProjectId =
+        Guid.Parse("10000000-0000-0000-0000-000000000003");
     private static readonly Guid OperationsCategoryId =
         Guid.Parse("50000000-0000-0000-0000-000000000001");
     private static readonly Guid ReleaseCategoryId =
@@ -176,7 +180,80 @@ public static class DevelopmentDataSeeder
         completed.Complete(DateTimeOffset.UtcNow.AddDays(-1));
         completed.AddTag("security");
 
-        context.AddRange(project, backlog, ready, blocked, inProgress, completed);
+        var sprintProject = Project.Create(
+            SprintProjectId,
+            "Client onboarding sprint",
+            "Short delivery project used by workspace-wide reports.",
+            WorkspaceId);
+        sprintProject.SetTargetDate(
+            DueDate.Create(DateOnly.FromDateTime(
+                DateTime.UtcNow.AddDays(1))));
+        var sprintTask = TaskItem.Create(
+            Guid.Parse("20000000-0000-0000-0000-000000000006"),
+            SprintProjectId,
+            "Confirm client welcome pack");
+        sprintTask.RecordCreator(ManagerId);
+        sprintTask.Assign(MemberId);
+        sprintTask.Schedule(DueDate.Create(DateOnly.FromDateTime(
+            DateTime.UtcNow.AddDays(1))));
+        sprintTask.Estimate(EffortEstimate.Create(2));
+        sprintTask.SetPlanningFactors(PlanningFactors.Create(4, 4, 2, 2));
+        sprintTask.MoveToReady();
+        sprintTask.Start();
+        sprintTask.AddTag("client");
+        sprintTask.AddTag("notification");
+
+        var closedProject = Project.Create(
+            ClosedProjectId,
+            "Discovery phase",
+            "Archived project used to demonstrate completed project reporting.",
+            WorkspaceId);
+        closedProject.SetTargetDate(
+            DueDate.Create(DateOnly.FromDateTime(
+                DateTime.UtcNow.AddDays(-7))));
+        var discoveryOne = TaskItem.Create(
+            Guid.Parse("20000000-0000-0000-0000-000000000007"),
+            ClosedProjectId,
+            "Interview stakeholders");
+        discoveryOne.RecordCreator(OwnerId);
+        discoveryOne.Assign(ManagerId);
+        discoveryOne.Schedule(DueDate.Create(DateOnly.FromDateTime(
+            DateTime.UtcNow.AddDays(-12))));
+        discoveryOne.Estimate(EffortEstimate.Create(3));
+        discoveryOne.SetPlanningFactors(PlanningFactors.Create(3, 3, 2, 2));
+        discoveryOne.MoveToReady();
+        discoveryOne.Start();
+        discoveryOne.Complete(DateTimeOffset.UtcNow.AddDays(-10));
+        discoveryOne.AddTag("discovery");
+
+        var discoveryTwo = TaskItem.Create(
+            Guid.Parse("20000000-0000-0000-0000-000000000008"),
+            ClosedProjectId,
+            "Publish discovery report");
+        discoveryTwo.RecordCreator(ManagerId);
+        discoveryTwo.Assign(OwnerId);
+        discoveryTwo.Schedule(DueDate.Create(DateOnly.FromDateTime(
+            DateTime.UtcNow.AddDays(-8))));
+        discoveryTwo.Estimate(EffortEstimate.Create(2));
+        discoveryTwo.SetPlanningFactors(PlanningFactors.Create(4, 3, 3, 2));
+        discoveryTwo.MoveToReady();
+        discoveryTwo.Start();
+        discoveryTwo.Complete(DateTimeOffset.UtcNow.AddDays(-6));
+        discoveryTwo.AddTag("report");
+        closedProject.Archive(DateTimeOffset.UtcNow.AddDays(-5));
+
+        context.AddRange(
+            project,
+            sprintProject,
+            closedProject,
+            backlog,
+            ready,
+            blocked,
+            inProgress,
+            completed,
+            sprintTask,
+            discoveryOne,
+            discoveryTwo);
         await context.SaveChangesAsync(cancellationToken);
     }
 

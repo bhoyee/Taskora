@@ -75,6 +75,61 @@ export interface DashboardWarning {
   dueDate: string | null
 }
 
+export interface WorkspaceReport {
+  workspaceId: string
+  from: string | null
+  to: string | null
+  totalProjects: number
+  activeProjects: number
+  archivedProjects: number
+  projectsDeliveredInRange: number
+  totalTasks: number
+  completedTasks: number
+  activeTasks: number
+  blockedTasks: number
+  criticalTasks: number
+  overdueTasks: number
+  statusBreakdown: DashboardBreakdownItem[]
+  priorityBreakdown: DashboardBreakdownItem[]
+  deadlineBreakdown: DashboardBreakdownItem[]
+  projects: WorkspaceReportProject[]
+  tasks: WorkspaceReportTask[]
+  notifications: DashboardWarning[]
+}
+
+export interface WorkspaceReportProject {
+  id: string
+  name: string
+  description: string | null
+  deliveryDate: string | null
+  isArchived: boolean
+  archivedAt: string | null
+  totalTasks: number
+  completedTasks: number
+  activeTasks: number
+  blockedTasks: number
+  overdueTasks: number
+  criticalTasks: number
+  completionPercentage: number
+}
+
+export interface WorkspaceReportTask {
+  id: string
+  projectId: string
+  projectName: string
+  assignedUserId: string | null
+  title: string
+  status: TaskStatus
+  isBlocked: boolean
+  dueDate: string | null
+  createdAt: string
+  completedAt: string | null
+  priorityScore: number | null
+  priorityBand: string | null
+  deadlineHealth: DeadlineHealth
+  tags: string[]
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -286,6 +341,19 @@ export const api = {
     request<Dashboard>(
       `/api/v1/dashboard?${new URLSearchParams({
         ...(workspaceId ? { workspaceId } : {}),
+        ...(projectId ? { projectId } : {}),
+      })}`,
+    ),
+  report: (
+    workspaceId: string,
+    from?: string,
+    to?: string,
+    projectId?: string,
+  ) =>
+    request<WorkspaceReport>(
+      `/api/v1/workspaces/${workspaceId}/reports?${new URLSearchParams({
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
         ...(projectId ? { projectId } : {}),
       })}`,
     ),

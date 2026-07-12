@@ -38,6 +38,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<DeclineWorkspaceInvitationHandler>();
         services.AddScoped<CancelWorkspaceInvitationHandler>();
         services.AddScoped<GetPortfolioDashboardHandler>();
+        services.AddScoped<GetWorkspaceReportHandler>();
         services.AddScoped<SendDueDateNotificationsHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();

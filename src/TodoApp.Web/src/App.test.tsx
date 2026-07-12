@@ -74,6 +74,56 @@ const dashboard = {
     dueDate: '2026-07-10',
   }],
 }
+const workspaceReport = {
+  workspaceId: 'workspace-1',
+  from: '2026-07-01',
+  to: '2026-07-31',
+  totalProjects: 2,
+  activeProjects: 1,
+  archivedProjects: 1,
+  projectsDeliveredInRange: 1,
+  totalTasks: 1,
+  completedTasks: 0,
+  activeTasks: 1,
+  blockedTasks: 0,
+  criticalTasks: 1,
+  overdueTasks: 0,
+  statusBreakdown: dashboardAnalytics.statusBreakdown,
+  priorityBreakdown: dashboardAnalytics.priorityBreakdown,
+  deadlineBreakdown: dashboardAnalytics.deadlineBreakdown,
+  notifications: dashboard.warnings,
+  projects: [{
+    id: '10000000-0000-0000-0000-000000000001',
+    name: 'Portfolio launch',
+    description: null,
+    deliveryDate: '2026-08-30',
+    isArchived: false,
+    archivedAt: null,
+    totalTasks: 4,
+    completedTasks: 1,
+    activeTasks: 3,
+    blockedTasks: 1,
+    overdueTasks: 1,
+    criticalTasks: 2,
+    completionPercentage: 25,
+  }],
+  tasks: [{
+    id: 'task-1',
+    projectId: '10000000-0000-0000-0000-000000000001',
+    projectName: 'Portfolio launch',
+    assignedUserId: null,
+    title: 'Ship portfolio',
+    status: 'InProgress',
+    isBlocked: false,
+    dueDate: '2026-07-10',
+    createdAt: '2026-07-06T09:00:00Z',
+    completedAt: null,
+    tags: ['portfolio'],
+    priorityScore: 12.5,
+    priorityBand: 'Critical',
+    deadlineHealth: 'AtRisk',
+  }],
+}
 const taskPage = {
   totalCount: 1,
   items: [{
@@ -284,6 +334,7 @@ function mockResponseFor(url: string, page = taskPage, activityItems = activity)
   }
   if (url.includes('/activity')) return activityItems
   if (url.includes('/workspaces/workspace-1/invitations')) return []
+  if (url.includes('/workspaces/workspace-1/reports')) return workspaceReport
   if (url.includes('/workspaces/workspace-1/projects')) return [projectDetails]
   if (url.includes('/workspaces/workspace-1/members')) return members
   if (url.endsWith('/workspaces')) return workspaces
@@ -509,14 +560,14 @@ describe('delivery workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /^reports$/i }))
     expect(screen.getByRole('heading', { name: 'Workspace reports' })).toBeInTheDocument()
-    expect(screen.getByText('Portfolio launch delivery activity for the selected date range.')).toBeInTheDocument()
+    expect(screen.getByText('Workspace-wide task and project delivery activity for the selected date range.')).toBeInTheDocument()
 
     await user.clear(screen.getByLabelText('From'))
     await user.type(screen.getByLabelText('From'), '2026-07-01')
     await user.clear(screen.getByLabelText('To'))
     await user.type(screen.getByLabelText('To'), '2026-07-31')
 
-    expect(screen.getByText('Tasks due in range')).toBeInTheDocument()
+    expect(screen.getByText('Tasks in range')).toBeInTheDocument()
     expect(screen.getByText('Report status')).toBeInTheDocument()
     expect(screen.getByText('Ship portfolio')).toBeInTheDocument()
     expect(screen.getByText('Showing 1-1 of 1')).toBeInTheDocument()
