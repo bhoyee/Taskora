@@ -1973,7 +1973,7 @@ function TaskList({ tasks, categories, currentUserId, onEdit, onDelete }: { task
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
       <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
-      <span>{formatDate(task.createdAt)}</span>
+      <span className="created-date">{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
       <div className="row-actions"><button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>{task.createdByUserId === currentUserId && <button className="icon-button danger-action" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`} title="Delete task"><Trash2 /></button>}</div>

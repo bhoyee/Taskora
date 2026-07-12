@@ -201,6 +201,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .table-head { padding: 10px 18px; background: #f6f7f8; color: #788390; text-transform: uppercase; font-size: 11px; font-weight: 700; }
 .task-row { padding: 14px 18px; border-top: 1px solid #edf0f2; transition: background-color .16s ease, box-shadow .16s ease; }.task-row:hover { background: #fafbfb; box-shadow: inset 4px 0 0 #147d68; }
 .row-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.created-date { color: #6f7b88; font-size: 11px; font-weight: 700; }
 .task-name { display: flex; gap: 11px; min-width: 0; }.task-name strong, .task-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.task-name small { color: #7a8591; margin-top: 5px; font-size: 12px; }
 .metadata-line { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
 .task-row > .metadata-line { display: none; }
