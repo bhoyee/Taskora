@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using TodoApp.Api;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Endpoints;
+using TodoApp.Api.Notifications;
 using TodoApp.Api.Security;
 using TodoApp.Infrastructure;
 using TodoApp.Infrastructure.Persistence;
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 var operationLogs = new InMemoryLogStore();
 builder.Services.AddSingleton(operationLogs);
 builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
+builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
 
 ValidateDeploymentConfiguration(
     builder.Environment,
@@ -118,18 +120,8 @@ builder.Services.AddHealthChecks()
                     "Authentication authority and audience are configured.");
         },
         tags: ["ready"])
-    .AddCheck(
+    .AddCheck<DueDateReminderHealthCheck>(
         "Due date reminder runner",
-        () =>
-        {
-            var schedulerEnabled = ReadBool(
-                builder.Configuration["Notifications:Scheduler:Enabled"]);
-            return schedulerEnabled
-                ? HealthCheckResult.Healthy(
-                    "Scheduled due-date reminder worker is configured.")
-                : HealthCheckResult.Degraded(
-                    "Manual reminder endpoint is available; no automatic scheduler is configured.");
-        },
         tags: ["ready"])
     .AddDbContextCheck<TodoAppDbContext>(
         "Database",
@@ -139,6 +131,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddTodoSecurity(
     builder.Environment,
     builder.Configuration);
+builder.Services.AddHostedService<DueDateReminderScheduler>();
 
 var app = builder.Build();
 

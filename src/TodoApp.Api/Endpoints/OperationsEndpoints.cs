@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TodoApp.Application.Abstractions;
 using TodoApp.Api.Diagnostics;
+using TodoApp.Api.Notifications;
 
 namespace TodoApp.Api.Endpoints;
 
@@ -28,6 +29,7 @@ internal static class OperationsEndpoints
         HealthCheckService healthChecks,
         InMemoryLogStore logs,
         IWebHostEnvironment environment,
+        DueDateReminderSchedulerStatus reminderStatus,
         CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(
@@ -56,8 +58,7 @@ internal static class OperationsEndpoints
             corsOrigins = ["http://localhost:5173"];
         }
         var smtpEnabled = ReadBool(configuration["Email:Smtp:Enabled"]);
-        var schedulerEnabled = ReadBool(
-            configuration["Notifications:Scheduler:Enabled"]);
+        var reminderSnapshot = reminderStatus.Snapshot;
 
         return Results.Ok(new OperationsSummaryResponse(
             true,
@@ -71,7 +72,18 @@ internal static class OperationsEndpoints
                 corsOrigins,
                 smtpEnabled ? "SMTP" : "LogOnly",
                 smtpEnabled,
-                schedulerEnabled),
+                reminderSnapshot.Enabled),
+            new ReminderSchedulerResponse(
+                reminderSnapshot.Enabled,
+                reminderSnapshot.Status,
+                reminderSnapshot.IntervalMinutes,
+                reminderSnapshot.LastRunStartedAt,
+                reminderSnapshot.LastRunCompletedAt,
+                reminderSnapshot.NextRunAt,
+                reminderSnapshot.LastTaskReminderCount,
+                reminderSnapshot.LastProjectReminderCount,
+                reminderSnapshot.LastEmailCount,
+                reminderSnapshot.LastError),
             logs.Recent(50)
                 .Select(entry => new OperationLogRecord(
                     entry.Timestamp,
@@ -112,6 +124,7 @@ public sealed record OperationsSummaryResponse(
     string OverallHealth,
     IReadOnlyCollection<OperationHealthCheck> HealthChecks,
     OperationsRuntime Runtime,
+    ReminderSchedulerResponse ReminderScheduler,
     IReadOnlyCollection<OperationLogRecord> RecentLogs);
 
 public sealed record OperationHealthCheck(
@@ -128,6 +141,18 @@ public sealed record OperationsRuntime(
     string EmailMode,
     bool SmtpEnabled,
     bool ReminderSchedulerEnabled);
+
+public sealed record ReminderSchedulerResponse(
+    bool Enabled,
+    string Status,
+    int IntervalMinutes,
+    DateTimeOffset? LastRunStartedAt,
+    DateTimeOffset? LastRunCompletedAt,
+    DateTimeOffset? NextRunAt,
+    int LastTaskReminderCount,
+    int LastProjectReminderCount,
+    int LastEmailCount,
+    string? LastError);
 
 public sealed record OperationLogRecord(
     DateTimeOffset Timestamp,

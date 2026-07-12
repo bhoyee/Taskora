@@ -220,6 +220,7 @@ export interface OperationsSummary {
   overallHealth: string
   healthChecks: OperationHealthCheck[]
   runtime: OperationsRuntime
+  reminderScheduler: ReminderScheduler
   recentLogs: OperationLogRecord[]
 }
 
@@ -238,6 +239,19 @@ export interface OperationsRuntime {
   emailMode: string
   smtpEnabled: boolean
   reminderSchedulerEnabled: boolean
+}
+
+export interface ReminderScheduler {
+  enabled: boolean
+  status: string
+  intervalMinutes: number
+  lastRunStartedAt: string | null
+  lastRunCompletedAt: string | null
+  nextRunAt: string | null
+  lastTaskReminderCount: number
+  lastProjectReminderCount: number
+  lastEmailCount: number
+  lastError: string | null
 }
 
 export interface OperationLogRecord {

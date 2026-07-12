@@ -1709,7 +1709,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
       <OperationCard title="API running" value={api?.status ?? 'Unknown'} detail={statusText(api)} icon={<Activity />} />
       <OperationCard title="Database" value={database?.status ?? 'Unknown'} detail={statusText(database)} icon={<CircleGauge />} />
       <OperationCard title="Email" value={email?.status ?? 'Unknown'} detail={statusText(email)} icon={<Bell />} />
-      <OperationCard title="Reminders" value={reminders?.status ?? 'Unknown'} detail={statusText(reminders)} icon={<Clock3 />} />
+      <OperationCard title="Reminders" value={summary.reminderScheduler.status} detail={statusText(reminders)} icon={<Clock3 />} />
     </div>
 
     <div className="operations-grid">
@@ -1747,7 +1747,27 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
           <span><strong>Frontend URL</strong>{summary.runtime.publicBaseUrl}</span>
           <span><strong>Email mode</strong>{summary.runtime.emailMode}</span>
           <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
-          <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? 'Enabled' : 'Manual endpoint only'}</span>
+          <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? `Every ${summary.reminderScheduler.intervalMinutes} min` : 'Disabled'}</span>
+        </div>
+      </article>
+
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><Clock3 /></span>
+          <div>
+            <h2>Automatic reminders</h2>
+            <p>Background task and project deadline reminders.</p>
+          </div>
+        </div>
+        <div className="log-summary">
+          <span><strong>Status</strong>{summary.reminderScheduler.status}</span>
+          <span><strong>Interval</strong>{summary.reminderScheduler.intervalMinutes ? `${summary.reminderScheduler.intervalMinutes} minutes` : 'Not configured'}</span>
+          <span><strong>Last run</strong>{summary.reminderScheduler.lastRunCompletedAt ? new Date(summary.reminderScheduler.lastRunCompletedAt).toLocaleString() : 'Not run yet'}</span>
+          <span><strong>Next run</strong>{summary.reminderScheduler.nextRunAt ? new Date(summary.reminderScheduler.nextRunAt).toLocaleString() : 'Pending'}</span>
+          <span><strong>Task reminders</strong>{summary.reminderScheduler.lastTaskReminderCount}</span>
+          <span><strong>Project reminders</strong>{summary.reminderScheduler.lastProjectReminderCount}</span>
+          <span><strong>Emails sent</strong>{summary.reminderScheduler.lastEmailCount}</span>
+          <span><strong>Last error</strong>{summary.reminderScheduler.lastError ?? 'None'}</span>
         </div>
       </article>
 
