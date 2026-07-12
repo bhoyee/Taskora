@@ -497,6 +497,31 @@ describe('delivery workspace', () => {
     expect(screen.getByText('Password changed.')).toBeInTheDocument()
   }, 20000)
 
+  it('opens reports and shows live in-app notifications', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('region', { name: 'Dashboard analytics' })
+
+    await user.click(screen.getByRole('button', { name: /notifications 1/i }))
+    expect(screen.getByRole('region', { name: 'In-app notifications' })).toBeInTheDocument()
+    expect(screen.getByText('Task deadline reminder')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^reports$/i }))
+    expect(screen.getByRole('heading', { name: 'Workspace reports' })).toBeInTheDocument()
+    expect(screen.getByText('Portfolio launch delivery activity for the selected date range.')).toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('From'))
+    await user.type(screen.getByLabelText('From'), '2026-07-01')
+    await user.clear(screen.getByLabelText('To'))
+    await user.type(screen.getByLabelText('To'), '2026-07-31')
+
+    expect(screen.getByText('Tasks due in range')).toBeInTheDocument()
+    expect(screen.getByText('Report status')).toBeInTheDocument()
+    expect(screen.getByText('Ship portfolio')).toBeInTheDocument()
+    expect(screen.getByText('Showing 1-1 of 1')).toBeInTheDocument()
+  }, 20000)
+
   it('shows operations health page only when the API marks the user as super admin', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input)

@@ -6,7 +6,7 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
+  Activity, AlertTriangle, Bell, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
   Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
   Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile' | 'operations'
+type View = 'workspace' | 'tasks' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile', 'operations']
+const views: View[] = ['workspace', 'tasks', 'reports', 'activity', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -66,6 +66,8 @@ const defaultSettings: UserSettings = {
 }
 
 const defaultAccount: AccountSession | null = null
+const todayInput = new Date().toISOString().slice(0, 10)
+const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -144,6 +146,11 @@ export default function App() {
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [reportTasks, setReportTasks] = useState<TaskItem[]>([])
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportFrom, setReportFrom] = useState(todayInput)
+  const [reportTo, setReportTo] = useState(nextMonthInput)
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
@@ -212,10 +219,33 @@ export default function App() {
 
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
-    if (view !== 'workspace' || loading) return undefined
+    if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load(), 15000)
     return () => window.clearInterval(interval)
-  }, [view, loading, pageNumber, search, selectedWorkspaceId, selectedProjectId])
+  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (view !== 'reports' || !workspace || !project) {
+      setReportTasks([])
+      return undefined
+    }
+
+    let cancelled = false
+    setReportLoading(true)
+    api.tasks(workspace.id, '', 1, 100, project.id)
+      .then((page) => {
+        if (!cancelled) setReportTasks(page.items)
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Reports could not be loaded.')
+      })
+      .finally(() => {
+        if (!cancelled) setReportLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [view, workspace?.id, project?.id])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -423,6 +453,7 @@ export default function App() {
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
+          <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
@@ -444,6 +475,11 @@ export default function App() {
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
+          />
+          <NotificationBell
+            warnings={dashboard.warnings}
+            open={notificationsOpen}
+            onToggle={() => setNotificationsOpen((current) => !current)}
           />
           {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
@@ -523,6 +559,17 @@ export default function App() {
           totalCount={activityTotal}
           onPageChange={setActivityPageNumber}
         />}
+        {view === 'reports' && <ReportsPage
+          dashboard={dashboard}
+          projects={projects}
+          selectedProject={project}
+          tasks={reportTasks}
+          loading={reportLoading}
+          from={reportFrom}
+          to={reportTo}
+          onFromChange={setReportFrom}
+          onToChange={setReportTo}
+        />}
         {view === 'settings' && <SettingsPage
           settings={settings}
           workspace={workspace}
@@ -597,6 +644,7 @@ function viewTitle(view: View) {
   return {
     workspace: 'Delivery workspace',
     tasks: 'Tasks',
+    reports: 'Reports',
     activity: 'Activity timeline',
     settings: 'Workspace settings',
     profile: 'Profile',
@@ -1021,6 +1069,177 @@ function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
       percentage={dashboard.projectProgress.completionPercentage}
     />
   </section>
+}
+
+function NotificationBell({
+  warnings,
+  open,
+  onToggle,
+}: {
+  warnings: Dashboard['warnings']
+  open: boolean
+  onToggle: () => void
+}) {
+  const criticalCount = warnings.filter((warning) => warning.severity === 'critical').length
+  return <div className="notification-center">
+    <button
+      className={`icon-button notification-button ${warnings.length ? 'has-alerts' : ''}`}
+      onClick={onToggle}
+      aria-label={`Notifications ${warnings.length}`}
+      aria-expanded={open}
+    >
+      <Bell />
+      {warnings.length > 0 && <span>{warnings.length}</span>}
+    </button>
+    {open && <section className="notification-panel" aria-label="In-app notifications">
+      <header>
+        <div>
+          <h2>Notifications</h2>
+          <p>{criticalCount ? `${criticalCount} critical reminder${criticalCount === 1 ? '' : 's'}` : 'Workspace reminders'}</p>
+        </div>
+      </header>
+      {warnings.length
+        ? <div className="notification-list">
+          {warnings.map((warning) => <article className={`notification-item ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{warning.title}</strong>
+              <p>{warning.message}</p>
+              {warning.dueDate && <small>{formatDate(warning.dueDate)}</small>}
+            </div>
+          </article>)}
+        </div>
+        : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
+    </section>}
+  </div>
+}
+
+function ReportsPage({
+  dashboard,
+  projects,
+  selectedProject,
+  tasks,
+  loading,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  dashboard: Dashboard
+  projects: ProjectDetails[]
+  selectedProject: ProjectDetails | null
+  tasks: TaskItem[]
+  loading: boolean
+  from: string
+  to: string
+  onFromChange: (value: string) => void
+  onToChange: (value: string) => void
+}) {
+  const [pageNumber, setPageNumber] = useState(1)
+  const pageSize = 8
+  useEffect(() => setPageNumber(1), [from, to, selectedProject?.id])
+
+  const tasksInRange = useMemo(
+    () => tasks.filter((task) => task.dueDate && dateInRange(task.dueDate, from, to)),
+    [tasks, from, to],
+  )
+  const projectsInRange = useMemo(
+    () => projects.filter((project) =>
+      (project.targetDate && dateInRange(project.targetDate, from, to)) ||
+      (project.archivedAt && dateInRange(project.archivedAt.slice(0, 10), from, to))),
+    [projects, from, to],
+  )
+  const completedTasks = tasksInRange.filter((task) => task.status === 'Completed').length
+  const blockedTasks = tasksInRange.filter((task) => task.status === 'Blocked' || task.isBlocked).length
+  const criticalTasks = tasksInRange.filter((task) => task.priorityBand === 'Critical').length
+  const overdueTasks = tasksInRange.filter((task) => task.deadlineHealth === 'Overdue').length
+  const totalPages = Math.max(1, Math.ceil(tasksInRange.length / pageSize))
+  const pageTasks = tasksInRange.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
+  const statusBreakdown = buildTaskBreakdown(tasksInRange, ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed'], (task) => task.status)
+  const priorityBreakdown = buildTaskBreakdown(tasksInRange, ['Low', 'Medium', 'High', 'Critical'], (task) => task.priorityBand ?? 'Unscored')
+
+  return <section className="panel-page reports-page" aria-label="Reports">
+    <div className="report-toolbar">
+      <div>
+        <h2>Workspace reports</h2>
+        <p>{selectedProject ? `${selectedProject.name} delivery activity for the selected date range.` : 'Create a project to start reporting.'}</p>
+      </div>
+      <div className="date-range">
+        <label><span>From</span><input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></label>
+        <label><span>To</span><input type="date" value={to} onChange={(event) => onToChange(event.target.value)} /></label>
+      </div>
+    </div>
+
+    <section className="report-metrics" aria-label="Report summary">
+      <Metric label="Tasks due in range" value={tasksInRange.length} icon={<Clock3 />} />
+      <Metric label="Completed" value={completedTasks} icon={<CheckCircle2 />} />
+      <Metric label="Blocked" value={blockedTasks} icon={<Columns3 />} tone="warn" />
+      <Metric label="Critical" value={criticalTasks} icon={<AlertTriangle />} tone="danger" />
+    </section>
+
+    <section className="report-grid">
+      <BarChart title="Report status" items={statusBreakdown} colors={statusChartColors} />
+      <BarChart title="Report priority" items={priorityBreakdown} colors={priorityChartColors} />
+      <article className="report-card">
+        <header><h2>Project delivery</h2><span>{projectsInRange.length} in range</span></header>
+        <div className="report-project-list">
+          {projectsInRange.map((project) => {
+            const delivery = deliveryStatus(project.targetDate)
+            return <article key={project.id}>
+              <strong>{project.name}</strong>
+              <span>{project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+              {delivery && <small className={`delivery-badge ${delivery.tone}`}>{delivery.label}</small>}
+            </article>
+          })}
+          {!projectsInRange.length && <p className="muted">No project delivery or archive date falls inside this range.</p>}
+        </div>
+      </article>
+      <article className="report-card">
+        <header><h2>Executive summary</h2><span>{dashboard.projectProgress.completionPercentage}% complete</span></header>
+        <p>{selectedProject
+          ? `${selectedProject.name} has ${dashboard.projectProgress.completedTasks} completed task${dashboard.projectProgress.completedTasks === 1 ? '' : 's'} out of ${dashboard.projectProgress.totalTasks}, with ${overdueTasks} overdue due-date signal${overdueTasks === 1 ? '' : 's'} in this report range.`
+          : 'Reports become richer after a project and tasks are created.'}</p>
+      </article>
+    </section>
+
+    <section className="work-area report-table">
+      <div className="table-head report-head"><span>Task</span><span>Status</span><span>Due</span><span>Priority</span></div>
+      {loading ? <div className="loading">Loading reports...</div> : pageTasks.length
+        ? pageTasks.map((task) => <article className="task-row report-row" key={task.id}>
+          <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase() ?? 'low'}`} /><div><strong>{task.title}</strong><small>{task.tags.length ? task.tags.join(', ') : 'No tags'}</small></div></div>
+          <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+          <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? formatDate(task.dueDate) : 'No date'}</span>
+          <span className="score"><strong>{task.priorityBand ?? 'Unscored'}</strong><small>{task.priorityScore ?? 0}</small></span>
+        </article>)
+        : <div className="empty compact"><ChartBar /><h2>No report rows</h2><p>No task due dates match this range for the selected project.</p></div>}
+      <Pagination
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={tasksInRange.length}
+        totalPages={totalPages}
+        onPageChange={setPageNumber}
+      />
+    </section>
+  </section>
+}
+
+function dateInRange(value: string, from: string, to: string) {
+  if (!from && !to) return true
+  const time = new Date(`${value}T00:00:00`).getTime()
+  const fromTime = from ? new Date(`${from}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY
+  const toTime = to ? new Date(`${to}T23:59:59`).getTime() : Number.POSITIVE_INFINITY
+  return time >= fromTime && time <= toTime
+}
+
+function buildTaskBreakdown(
+  tasks: TaskItem[],
+  labels: string[],
+  selector: (task: TaskItem) => string,
+) {
+  return labels.map((label) => ({
+    label,
+    count: tasks.filter((task) => selector(task) === label).length,
+  }))
 }
 
 function ProjectGovernance({
