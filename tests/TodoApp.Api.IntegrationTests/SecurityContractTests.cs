@@ -138,8 +138,18 @@ public sealed class SecurityContractTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(summary.GetProperty("isSuperAdmin").GetBoolean());
         Assert.Equal(
-            "Healthy",
+            "Degraded",
             summary.GetProperty("overallHealth").GetString());
+        Assert.Contains(
+            summary.GetProperty("healthChecks").EnumerateArray(),
+            check => check.GetProperty("name").GetString() == "API running");
+        Assert.Contains(
+            summary.GetProperty("healthChecks").EnumerateArray(),
+            check => check.GetProperty("name").GetString() == "Database");
+        Assert.Equal(
+            "Development",
+            summary.GetProperty("runtime").GetProperty("environment").GetString());
+        Assert.True(summary.TryGetProperty("recentLogs", out _));
     }
 
     [Fact]

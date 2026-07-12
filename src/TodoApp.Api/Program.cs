@@ -13,6 +13,9 @@ using TodoApp.Infrastructure.Persistence.Seeding;
 LoadEnvironmentFile();
 
 var builder = WebApplication.CreateBuilder(args);
+var operationLogs = new InMemoryLogStore();
+builder.Services.AddSingleton(operationLogs);
+builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
 
 ValidateDeploymentConfiguration(
     builder.Environment,
@@ -50,11 +53,86 @@ builder.Services.ConfigureHttpJsonOptions(options =>
         new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks()
     .AddCheck(
-        "process",
-        () => HealthCheckResult.Healthy(),
+        "API running",
+        () => HealthCheckResult.Healthy(
+            "HTTP API is running and can answer live traffic."),
         tags: ["live"])
+    .AddCheck(
+        "CORS configuration",
+        () =>
+        {
+            var origins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>() ?? [];
+            if (origins.Length == 0 && builder.Environment.IsDevelopment())
+            {
+                origins = ["http://localhost:5173"];
+            }
+
+            return origins.Length == 0
+                ? HealthCheckResult.Degraded(
+                    "No frontend origins are configured. Set Cors:AllowedOrigins for production.")
+                : HealthCheckResult.Healthy(
+                    $"Allowed frontend origins: {string.Join(", ", origins)}.");
+        },
+        tags: ["ready"])
+    .AddCheck(
+        "Email notifications",
+        () =>
+        {
+            var enabled = ReadBool(
+                builder.Configuration["Email:Smtp:Enabled"]);
+            if (!enabled)
+            {
+                return HealthCheckResult.Degraded(
+                    "SMTP is disabled. Emails are written to application logs only.");
+            }
+
+            var host = builder.Configuration["Email:Smtp:Host"];
+            var from = builder.Configuration["Email:Smtp:FromAddress"];
+            return string.IsNullOrWhiteSpace(host) ||
+                string.IsNullOrWhiteSpace(from)
+                    ? HealthCheckResult.Unhealthy(
+                        "SMTP is enabled but host/from address is missing.")
+                    : HealthCheckResult.Healthy(
+                        $"SMTP is configured for {host}.");
+        },
+        tags: ["ready"])
+    .AddCheck(
+        "Authentication configuration",
+        () =>
+        {
+            if (builder.Environment.IsDevelopment())
+            {
+                return HealthCheckResult.Degraded(
+                    "Development header authentication is enabled.");
+            }
+
+            var authority = builder.Configuration["Authentication:Authority"];
+            var audience = builder.Configuration["Authentication:Audience"];
+            return string.IsNullOrWhiteSpace(authority) ||
+                string.IsNullOrWhiteSpace(audience)
+                ? HealthCheckResult.Unhealthy(
+                    "Authentication authority or audience is missing.")
+                : HealthCheckResult.Healthy(
+                    "Authentication authority and audience are configured.");
+        },
+        tags: ["ready"])
+    .AddCheck(
+        "Due date reminder runner",
+        () =>
+        {
+            var schedulerEnabled = ReadBool(
+                builder.Configuration["Notifications:Scheduler:Enabled"]);
+            return schedulerEnabled
+                ? HealthCheckResult.Healthy(
+                    "Scheduled due-date reminder worker is configured.")
+                : HealthCheckResult.Degraded(
+                    "Manual reminder endpoint is available; no automatic scheduler is configured.");
+        },
+        tags: ["ready"])
     .AddDbContextCheck<TodoAppDbContext>(
-        "database",
+        "Database",
         tags: ["ready"]);
 builder.Services.AddApplicationUseCases();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -204,6 +282,9 @@ static bool ShouldSeedDemoData(
     bool.TryParse(
         configuration["DemoData:SeedOnStartup"],
         out var seedDemoData) && seedDemoData;
+
+static bool ReadBool(string? value) =>
+    bool.TryParse(value, out var result) && result;
 
 static void ValidateDeploymentConfiguration(
     IWebHostEnvironment environment,

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, OperationsSummary, ProjectCategory, ProjectDetails,
+  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import './styles.css'
@@ -1684,13 +1684,32 @@ function ActivityControls({
 }
 
 function OperationsPage({ summary }: { summary: OperationsSummary }) {
+  const check = (name: string) =>
+    summary.healthChecks.find((item) =>
+      item.name.toLowerCase() === name.toLowerCase())
+  const api = check('API running')
+  const database = check('Database')
+  const email = check('Email notifications')
+  const cors = check('CORS configuration')
+  const auth = check('Authentication configuration')
+  const reminders = check('Due date reminder runner')
+  const statusText = (item?: OperationHealthCheck) =>
+    item?.description ?? item?.status ?? 'Not reported'
+
   return <section className="panel-page operations-page" aria-label="Operations health and logs">
     <div className="activity-toolbar">
       <div>
         <p className="eyebrow">Super admin</p>
-        <h2>Health and logs</h2>
+        <h2>Application monitoring</h2>
       </div>
       <span className={`status ${summary.overallHealth.toLowerCase()}`}>{summary.overallHealth}</span>
+    </div>
+
+    <div className="operations-overview">
+      <OperationCard title="API running" value={api?.status ?? 'Unknown'} detail={statusText(api)} icon={<Activity />} />
+      <OperationCard title="Database" value={database?.status ?? 'Unknown'} detail={statusText(database)} icon={<CircleGauge />} />
+      <OperationCard title="Email" value={email?.status ?? 'Unknown'} detail={statusText(email)} icon={<Bell />} />
+      <OperationCard title="Reminders" value={reminders?.status ?? 'Unknown'} detail={statusText(reminders)} icon={<Clock3 />} />
     </div>
 
     <div className="operations-grid">
@@ -1698,8 +1717,8 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
         <div className="profile-heading">
           <span className="metric-icon"><ShieldCheck /></span>
           <div>
-            <h2>Health checks</h2>
-            <p>Current API readiness checks generated {new Date(summary.generatedAt).toLocaleString()}.</p>
+            <h2>Service health</h2>
+            <p>Generated {new Date(summary.generatedAt).toLocaleString()}.</p>
           </div>
         </div>
         <div className="health-check-list">
@@ -1716,19 +1735,52 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
 
       <article className="profile-card">
         <div className="profile-heading">
-          <span className="metric-icon"><Activity /></span>
+          <span className="metric-icon"><Settings2 /></span>
           <div>
-            <h2>Log settings</h2>
-            <p>{summary.logging.message}</p>
+            <h2>Runtime configuration</h2>
+            <p>Deployment settings currently used by the API.</p>
           </div>
         </div>
         <div className="log-summary">
-          <span><strong>Default</strong>{summary.logging.defaultLevel}</span>
-          <span><strong>ASP.NET Core</strong>{summary.logging.aspNetCoreLevel}</span>
+          <span><strong>Environment</strong>{summary.runtime.environment}</span>
+          <span><strong>Database</strong>{summary.runtime.databaseProvider}</span>
+          <span><strong>Frontend URL</strong>{summary.runtime.publicBaseUrl}</span>
+          <span><strong>Email mode</strong>{summary.runtime.emailMode}</span>
+          <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
+          <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? 'Enabled' : 'Manual endpoint only'}</span>
+        </div>
+      </article>
+
+      <article className="profile-card operations-wide">
+        <div className="profile-heading">
+          <span className="metric-icon"><LayoutList /></span>
+          <div>
+            <h2>Recent application logs</h2>
+            <p>Newest API log entries captured from the running application.</p>
+          </div>
+        </div>
+        <div className="operation-log-list">
+          {summary.recentLogs.length
+            ? summary.recentLogs.map((entry, index) => <article className={`operation-log-row ${entry.level.toLowerCase()}`} key={`${entry.timestamp}-${index}`}>
+                <span className="log-level">{entry.level}</span>
+                <div>
+                  <strong>{entry.message}</strong>
+                  <small>{entry.category} - {new Date(entry.timestamp).toLocaleString()}{entry.eventId ? ` - event ${entry.eventId}` : ''}</small>
+                  {entry.exception && <p>{entry.exception}</p>}
+                </div>
+              </article>)
+            : <div className="empty compact"><Activity /><h2>No logs captured yet</h2><p>Use the application or run a reminder/email action to generate log entries.</p></div>}
         </div>
       </article>
     </div>
   </section>
+}
+
+function OperationCard({ title, value, detail, icon }: { title: string; value: string; detail: string; icon: ReactNode }) {
+  return <article className={`operation-card ${value.toLowerCase()}`}>
+    <span className="metric-icon">{icon}</span>
+    <div><strong>{title}</strong><b>{value}</b><small>{detail}</small></div>
+  </article>
 }
 
 function activityMessage(item: WorkspaceActivity, members: WorkspaceMember[] = [], currentUserId = '') {

@@ -219,7 +219,8 @@ export interface OperationsSummary {
   generatedAt: string
   overallHealth: string
   healthChecks: OperationHealthCheck[]
-  logging: LoggingSummary
+  runtime: OperationsRuntime
+  recentLogs: OperationLogRecord[]
 }
 
 export interface OperationHealthCheck {
@@ -229,10 +230,23 @@ export interface OperationHealthCheck {
   durationMilliseconds: number
 }
 
-export interface LoggingSummary {
-  defaultLevel: string
-  aspNetCoreLevel: string
+export interface OperationsRuntime {
+  environment: string
+  databaseProvider: string
+  publicBaseUrl: string
+  corsAllowedOrigins: string[]
+  emailMode: string
+  smtpEnabled: boolean
+  reminderSchedulerEnabled: boolean
+}
+
+export interface OperationLogRecord {
+  timestamp: string
+  level: string
+  category: string
   message: string
+  exception: string | null
+  eventId: string | null
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

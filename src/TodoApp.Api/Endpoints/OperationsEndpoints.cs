@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TodoApp.Application.Abstractions;
+using TodoApp.Api.Diagnostics;
 
 namespace TodoApp.Api.Endpoints;
 
@@ -25,6 +26,8 @@ internal static class OperationsEndpoints
         IAccountRepository accounts,
         IConfiguration configuration,
         HealthCheckService healthChecks,
+        InMemoryLogStore logs,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(
@@ -45,17 +48,39 @@ internal static class OperationsEndpoints
                 entry.Value.Description,
                 entry.Value.Duration.TotalMilliseconds))
             .ToArray();
+        var corsOrigins = configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? [];
+        if (corsOrigins.Length == 0 && environment.IsDevelopment())
+        {
+            corsOrigins = ["http://localhost:5173"];
+        }
+        var smtpEnabled = ReadBool(configuration["Email:Smtp:Enabled"]);
+        var schedulerEnabled = ReadBool(
+            configuration["Notifications:Scheduler:Enabled"]);
 
         return Results.Ok(new OperationsSummaryResponse(
             true,
             DateTimeOffset.UtcNow,
             report.Status.ToString(),
             checks,
-            new LoggingSummary(
-                configuration["Logging:LogLevel:Default"] ?? "Information",
-                configuration["Logging:LogLevel:Microsoft.AspNetCore"] ??
-                    "Warning",
-                "Application logs are emitted through ASP.NET Core ILogger providers. Use Azure App Service Log Stream or Application Insights in production.")));
+            new OperationsRuntime(
+                environment.EnvironmentName,
+                configuration["Database:Provider"] ?? "Sqlite",
+                configuration["App:PublicBaseUrl"] ?? "http://localhost:5173",
+                corsOrigins,
+                smtpEnabled ? "SMTP" : "LogOnly",
+                smtpEnabled,
+                schedulerEnabled),
+            logs.Recent(50)
+                .Select(entry => new OperationLogRecord(
+                    entry.Timestamp,
+                    entry.Level,
+                    entry.Category,
+                    entry.Message,
+                    entry.Exception,
+                    entry.EventId))
+                .ToArray()));
     }
 
     private static bool IsSuperAdmin(
@@ -76,6 +101,9 @@ internal static class OperationsEndpoints
                 candidate?.Trim(),
                 StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool ReadBool(string? value) =>
+        bool.TryParse(value, out var result) && result;
 }
 
 public sealed record OperationsSummaryResponse(
@@ -83,7 +111,8 @@ public sealed record OperationsSummaryResponse(
     DateTimeOffset GeneratedAt,
     string OverallHealth,
     IReadOnlyCollection<OperationHealthCheck> HealthChecks,
-    LoggingSummary Logging);
+    OperationsRuntime Runtime,
+    IReadOnlyCollection<OperationLogRecord> RecentLogs);
 
 public sealed record OperationHealthCheck(
     string Name,
@@ -91,7 +120,19 @@ public sealed record OperationHealthCheck(
     string? Description,
     double DurationMilliseconds);
 
-public sealed record LoggingSummary(
-    string DefaultLevel,
-    string AspNetCoreLevel,
-    string Message);
+public sealed record OperationsRuntime(
+    string Environment,
+    string DatabaseProvider,
+    string PublicBaseUrl,
+    IReadOnlyCollection<string> CorsAllowedOrigins,
+    string EmailMode,
+    bool SmtpEnabled,
+    bool ReminderSchedulerEnabled);
+
+public sealed record OperationLogRecord(
+    DateTimeOffset Timestamp,
+    string Level,
+    string Category,
+    string Message,
+    string? Exception,
+    string? EventId);
