@@ -8,6 +8,7 @@ public sealed record TaskDetailsDto(
     Guid ProjectId,
     Guid? CreatedByUserId,
     Guid? AssignedUserId,
+    DateTimeOffset CreatedAt,
     string Title,
     Guid? CategoryId,
     IReadOnlyCollection<string> Tags,

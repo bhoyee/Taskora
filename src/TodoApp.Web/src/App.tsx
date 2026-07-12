@@ -1964,11 +1964,12 @@ function ProfilePage({
 function TaskList({ tasks, categories, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
-  return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Deadline</span><span>Priority</span><span /></div>
+  return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Created</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
       <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+      <span>{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
       <div className="row-actions"><button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>{task.createdByUserId === currentUserId && <button className="icon-button danger-action" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`} title="Delete task"><Trash2 /></button>}</div>
@@ -2181,31 +2182,44 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [noteDraft, setNoteDraft] = useState('')
+  const [error, setError] = useState('')
   const explanation = task.priorityExplanation
-  const canEditPlanning = !task.createdByUserId || task.createdByUserId === currentUserId
+  const canEditPlanning = !isMember && (!task.createdByUserId || task.createdByUserId === currentUserId)
   const isUnscored = !explanation
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setSaving(true)
-    const data = new FormData(event.currentTarget)
-    const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? 3
-    await api.updateTask(task.id, String(data.get('title')), String(data.get('dueDate')), effort)
-    if (canEditPlanning) {
-      await api.updatePlanning(
-        task.id,
-        Number(data.get('businessValue')),
-        Number(data.get('urgency')),
-        Number(data.get('riskReduction')),
-        effort,
-      )
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const data = new FormData(event.currentTarget)
+      const title = isMember ? task.title : String(data.get('title'))
+      const dueDate = isMember ? task.dueDate ?? '' : String(data.get('dueDate'))
+      const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? task.effort ?? 3
+      await api.updateTask(task.id, title, dueDate, effort)
+      if (canEditPlanning) {
+        await api.updatePlanning(
+          task.id,
+          Number(data.get('businessValue')),
+          Number(data.get('urgency')),
+          Number(data.get('riskReduction')),
+          effort,
+        )
+      }
+      const assignee = String(data.get('assignedUserId') ?? '')
+      if (assignee) await api.assign(task.id, assignee)
+      else if (task.assignedUserId) await api.unassign(task.id)
+      if (!isMember) {
+        const categoryId = String(data.get('categoryId') ?? '')
+        await api.updateCategory(task.id, categoryId || null)
+      }
+      if (!isMember && tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
+      if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
+      onSaved()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task could not be saved.')
+    } finally {
+      setSaving(false)
     }
-    const assignee = String(data.get('assignedUserId') ?? '')
-    if (assignee) await api.assign(task.id, assignee)
-    else if (task.assignedUserId) await api.unassign(task.id)
-    const categoryId = String(data.get('categoryId') ?? '')
-    await api.updateCategory(task.id, categoryId || null)
-    if (tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
-    if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
-    onSaved()
   }
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
@@ -2227,14 +2241,15 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} readOnly={isMember} autoFocus={!isMember} /></label>
-      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} readOnly={isMember} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? task.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
-        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''} disabled={isMember}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
         {!isMember && <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>}
-        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={40} placeholder="client, urgent, research" /></label>
-        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
+        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} disabled={isMember} maxLength={40} placeholder="client, urgent, research" /></label>
+        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving || isMember} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
         <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
         {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
       </div></fieldset>

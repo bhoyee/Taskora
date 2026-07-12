@@ -95,6 +95,7 @@ public sealed class CreateTaskHandler(
             task.Id,
             task.ProjectId,
             task.CreatedByUserId,
+            task.CreatedAt,
             task.Title,
             task.Status,
             task.DueDate?.Value,

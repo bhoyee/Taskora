@@ -16,6 +16,7 @@ export interface TaskItem {
   id: string
   createdByUserId: string | null
   assignedUserId: string | null
+  createdAt: string
   categoryId: string | null
   title: string
   status: TaskStatus
@@ -27,6 +28,7 @@ export interface TaskItem {
   priorityBand: string | null
   priorityExplanation: PriorityExplanation | null
   deadlineHealth: DeadlineHealth
+  effort?: number | null
 }
 
 export interface TaskPage {

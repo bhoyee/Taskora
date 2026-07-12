@@ -131,6 +131,7 @@ const taskPage = {
     id: 'task-1',
     createdByUserId: 'user-1',
     assignedUserId: null,
+    createdAt: '2026-07-06T09:00:00Z',
     categoryId: 'category-1',
     title: 'Ship portfolio',
     status: 'InProgress',

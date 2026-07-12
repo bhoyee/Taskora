@@ -7,6 +7,7 @@ public sealed record TaskListItemDto(
     Guid ProjectId,
     Guid? CreatedByUserId,
     Guid? AssignedUserId,
+    DateTimeOffset CreatedAt,
     string Title,
     Guid? CategoryId,
     IReadOnlyCollection<string> Tags,
