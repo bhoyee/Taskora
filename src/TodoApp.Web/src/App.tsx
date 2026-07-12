@@ -2188,28 +2188,43 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
 
 function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setSaving(true)
-    const data = new FormData(event.currentTarget)
-    const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
-    const categoryId = String(data.get('categoryId') ?? '')
-    const tag = String(data.get('tag') ?? '').trim()
-    const note = String(data.get('note') ?? '').trim()
-    if (categoryId) await api.updateCategory(task.id, categoryId)
-    if (tag) await api.addTag(task.id, tag)
-    if (note) await api.addNote(task.id, note)
-    onCreated()
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const data = new FormData(event.currentTarget)
+      const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
+      const categoryId = String(data.get('categoryId') ?? '')
+      const tag = String(data.get('tag') ?? '').trim()
+      const note = String(data.get('note') ?? '').trim()
+      if (categoryId) await api.updateCategory(task.id, categoryId)
+      if (tag) await api.addTag(task.id, tag)
+      if (note) await api.addNote(task.id, note)
+      onCreated()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task could not be created.')
+    } finally {
+      setSaving(false)
+    }
   }
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
     setSaving(true)
-    const category = await api.createCategory(projectId, categoryDraft.trim())
-    onCategoryCreated(category)
-    setCategoryDraft('')
-    setSaving(false)
+    setError('')
+    try {
+      const category = await api.createCategory(projectId, categoryDraft.trim())
+      onCategoryCreated(category)
+      setCategoryDraft('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Category could not be created.')
+    } finally {
+      setSaving(false)
+    }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}>{error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}<label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
   </dialog></div>
 }
