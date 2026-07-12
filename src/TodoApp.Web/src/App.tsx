@@ -2131,9 +2131,10 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
 
 const effortOptions = [1, 2, 3, 5, 8]
 
-function PriorityInputGuide({ readOnly = false }: { readOnly?: boolean }) {
+function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?: boolean; unscored?: boolean }) {
   return <p className="field-help">
     Use 1-5 scores: 1 is low impact or urgency, 3 is normal delivery value, and 5 is high business impact, urgent deadline pressure, or major risk reduction.
+    {unscored ? ' This task is currently unscored; the values shown are starter defaults until you save them.' : ''}
     {readOnly ? ' Only the task creator can change these priority inputs.' : ''}
   </p>
 }
@@ -2144,7 +2145,8 @@ function TaskEditor({ projectId, task, currentUserId, members, categories, onCat
   const [tagDraft, setTagDraft] = useState('')
   const [noteDraft, setNoteDraft] = useState('')
   const explanation = task.priorityExplanation
-  const canEditPlanning = !!task.createdByUserId && task.createdByUserId === currentUserId
+  const canEditPlanning = !task.createdByUserId || task.createdByUserId === currentUserId
+  const isUnscored = !explanation
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true)
     const data = new FormData(event.currentTarget)
@@ -2199,7 +2201,7 @@ function TaskEditor({ projectId, task, currentUserId, members, categories, onCat
         <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
         {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
       </div></fieldset>
-      <fieldset><legend>Priority inputs</legend><PriorityInputGuide readOnly={!canEditPlanning} /><div className="planning-grid">
+      <fieldset><legend>Priority inputs</legend><PriorityInputGuide readOnly={!canEditPlanning} unscored={isUnscored} /><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} readOnly={!canEditPlanning} /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
         <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} readOnly={!canEditPlanning} /></label>

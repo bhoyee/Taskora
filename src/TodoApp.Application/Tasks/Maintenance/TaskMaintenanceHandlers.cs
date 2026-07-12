@@ -113,8 +113,8 @@ public sealed class UpdatePlanningFactorsHandler(
         }
 
         if (!currentUser.IsAuthenticated ||
-            task.CreatedByUserId is null ||
-            task.CreatedByUserId != currentUser.UserId)
+            (task.CreatedByUserId is not null &&
+             task.CreatedByUserId != currentUser.UserId))
         {
             return Result<TaskItemStatus>.Failure(
                 new ApplicationError(

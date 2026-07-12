@@ -148,6 +148,26 @@ public sealed class TaskMaintenanceHandlerTests
     }
 
     [Fact]
+    public async Task UpdatePlanningFactors_WhenLegacyTaskHasNoCreator_AllowsPlanningInitialization()
+    {
+        var task = CreateTask();
+        var context = CreateContext(task);
+
+        var result = await new UpdatePlanningFactorsHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new UpdatePlanningFactorsCommand(task.Id, 3, 3, 3, 3),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(task.HasPlanningFactors);
+        Assert.Equal(7m, task.Priority.Value);
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task RemoveDependency_WhenDependencyExists_RemovesIt()
     {
         var task = CreateTask();
