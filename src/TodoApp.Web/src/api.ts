@@ -248,8 +248,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   const contentType = response.headers.get('content-type')
+  const isJson = contentType?.includes('application/json') ||
+    contentType?.includes('application/problem+json')
   if (!response.ok) {
-    if (contentType?.includes('application/json')) {
+    if (isJson) {
       const problem = await response.json().catch(() => null) as {
         title?: string
         detail?: string
@@ -267,7 +269,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`The API returned ${response.status}. Check that the API server is running.`)
   }
 
-  if (!contentType?.includes('application/json')) {
+  if (!isJson) {
     throw new Error('The API returned an unexpected response. Check that the API server is running.')
   }
 
