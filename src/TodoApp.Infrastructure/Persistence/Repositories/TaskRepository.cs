@@ -95,6 +95,9 @@ public sealed class TaskRepository(TodoAppDbContext context)
         var totalCount = await query.CountAsync(cancellationToken);
         query = criteria.SortBy switch
         {
+            TaskSortBy.CreatedDescending => query
+                .OrderByDescending(task => task.CreatedAt)
+                .ThenBy(task => task.Id),
             TaskSortBy.DueDateAscending => query
                 .OrderBy(task => task.DueDate == null)
                 .ThenBy(task => task.DueDate)

@@ -10,6 +10,6 @@ public sealed record SearchTasksQuery(
     Guid? CategoryId = null,
     string? Tag = null,
     string? Search = null,
-    TaskSortBy SortBy = TaskSortBy.PriorityDescending,
+    TaskSortBy SortBy = TaskSortBy.CreatedDescending,
     int PageNumber = 1,
     int PageSize = 20);

@@ -139,7 +139,7 @@ internal static class TaskEndpoints
                 categoryId,
                 tag,
                 search,
-                sortBy ?? TaskSortBy.PriorityDescending,
+                sortBy ?? TaskSortBy.CreatedDescending,
                 pageNumber == 0 ? 1 : pageNumber,
                 pageSize == 0 ? 20 : pageSize),
             cancellationToken));

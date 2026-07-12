@@ -159,6 +159,48 @@ public sealed class RepositoryTests
     }
 
     [Fact]
+    public async Task Search_WhenSortedByCreatedDescending_ReturnsNewestTasksFirst()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var project = Project.Create(Guid.NewGuid(), "Newest first");
+        var older = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Older task",
+            new DateTimeOffset(2026, 7, 1, 9, 0, 0, TimeSpan.Zero));
+        var newer = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Newer task",
+            new DateTimeOffset(2026, 7, 2, 9, 0, 0, TimeSpan.Zero));
+
+        await using (var seed = database.CreateContext())
+        {
+            seed.AddRange(project, older, newer);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = database.CreateContext();
+        var result = await new TaskRepository(context).SearchAsync(
+            new TaskSearchCriteria(
+                project.Id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                TaskSortBy.CreatedDescending,
+                1,
+                10),
+            CancellationToken.None);
+
+        Assert.Equal(
+            [newer.Id, older.Id],
+            result.Items.Select(task => task.Id));
+    }
+
+    [Fact]
     public async Task Transaction_WhenRolledBack_DoesNotPersistChanges()
     {
         await using var database = await TestDatabase.CreateAsync();
