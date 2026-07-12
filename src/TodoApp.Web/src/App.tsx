@@ -454,6 +454,18 @@ export default function App() {
       setSelectedTask(task)
     }
   }
+  const deleteTask = async (task: TaskItem) => {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
+
+    try {
+      setError('')
+      await api.deleteTask(task.id)
+      setNotice(`Task ${task.title} deleted.`)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The task could not be deleted.')
+    }
+  }
 
   if (inviteToken) {
     return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
@@ -551,8 +563,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
-                ? <TaskList tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} />
-                : <Board tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} onMove={moveTask} />}
+                ? <TaskList tasks={visible} categories={categories} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
+                : <Board tasks={visible} categories={categories} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -649,8 +661,8 @@ export default function App() {
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && project && <TaskDialog projectId={project.id} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
     </div>
   )
 }
@@ -1949,7 +1961,7 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, categories, onEdit }: { tasks: TaskItem[]; categories: ProjectCategory[]; onEdit: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Deadline</span><span>Priority</span><span /></div>
@@ -1959,7 +1971,7 @@ function TaskList({ tasks, categories, onEdit }: { tasks: TaskItem[]; categories
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
-      <button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>
+      <div className="row-actions"><button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>{task.createdByUserId === currentUserId && <button className="icon-button danger-action" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`} title="Delete task"><Trash2 /></button>}</div>
     </article>)}
   </div>
 }
@@ -1975,12 +1987,16 @@ function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName
 function Board({
   tasks,
   categories,
+  currentUserId,
   onEdit,
+  onDelete,
   onMove,
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  currentUserId: string
   onEdit: (task: TaskItem) => void
+  onDelete: (task: TaskItem) => void
   onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
 }) {
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
@@ -2021,7 +2037,9 @@ function Board({
         status={status}
         categories={categories}
         tasks={tasks.filter((task) => task.status === status)}
+        currentUserId={currentUserId}
         onEdit={onEdit}
+        onDelete={onDelete}
         dragActive={activeTask !== null}
         validTarget={validTargets.has(status)}
       />)}
@@ -2036,14 +2054,18 @@ function BoardColumn({
   status,
   tasks,
   categories,
+  currentUserId,
   onEdit,
+  onDelete,
   dragActive,
   validTarget,
 }: {
   status: TaskStatus
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  currentUserId: string
   onEdit: (task: TaskItem) => void
+  onDelete: (task: TaskItem) => void
   dragActive: boolean
   validTarget: boolean
 }) {
@@ -2060,7 +2082,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {tasks.map((task) =>
-        <BoardCard task={task} categories={categories} onEdit={onEdit} key={task.id} />)}
+        <BoardCard task={task} categories={categories} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2069,12 +2091,16 @@ function BoardColumn({
 function BoardCard({
   task,
   categories,
+  currentUserId,
   onEdit,
+  onDelete,
   overlay = false,
 }: {
   task: TaskItem
   categories?: ProjectCategory[]
+  currentUserId?: string
   onEdit: (task: TaskItem) => void
+  onDelete?: (task: TaskItem) => void
   overlay?: boolean
 }) {
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
@@ -2107,6 +2133,17 @@ function BoardCard({
         aria-label={`Edit ${task.title}`}
         title="Edit task"
       ><Pencil /></button>
+      {!overlay && onDelete && task.createdByUserId === currentUserId && <button
+        className="icon-button danger-action"
+        onClick={(event) => {
+          event.stopPropagation()
+          onDelete(task)
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        aria-label={`Delete ${task.title}`}
+        title="Delete task"
+      ><Trash2 /></button>}
     </div>
     <div className="board-task-meta">
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>
@@ -2139,7 +2176,7 @@ function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?:
   </p>
 }
 
-function TaskEditor({ projectId, task, currentUserId, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, currentUserId, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -2190,12 +2227,12 @@ function TaskEditor({ projectId, task, currentUserId, members, categories, onCat
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
-      <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
+      <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} readOnly={isMember} autoFocus={!isMember} /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
-        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
+        {!isMember && <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>}
         <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={40} placeholder="client, urgent, research" /></label>
         {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
         <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
@@ -2211,7 +2248,7 @@ function TaskEditor({ projectId, task, currentUserId, members, categories, onCat
   </dialog></div>
 }
 
-function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, isMember, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -2279,7 +2316,7 @@ function TaskDialog({ projectId, members, categories, onCategoryCreated, onClose
       </div></fieldset>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
-        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
+        {!isMember && <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>}
         <label>Tag<input name="tag" maxLength={40} /></label>
         <label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label>
       </div></fieldset>

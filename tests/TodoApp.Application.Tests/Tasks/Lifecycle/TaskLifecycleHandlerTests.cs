@@ -154,6 +154,14 @@ public sealed class TaskLifecycleHandlerTests
             _tasks.TryGetValue(taskId, out var task);
             return Task.FromResult(task);
         }
+
+        public Task RemoveAsync(
+            TaskItem task,
+            CancellationToken cancellationToken)
+        {
+            _tasks.Remove(task.Id);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork

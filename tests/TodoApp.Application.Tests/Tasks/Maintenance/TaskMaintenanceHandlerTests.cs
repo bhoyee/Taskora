@@ -108,6 +108,47 @@ public sealed class TaskMaintenanceHandlerTests
     }
 
     [Fact]
+    public async Task Delete_WhenCurrentUserCreatedTask_RemovesTask()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new DeleteTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new DeleteTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(context.Tasks.WasRemoved(task.Id));
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Delete_WhenCurrentUserDidNotCreateTask_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new DeleteTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new DeleteTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.False(context.Tasks.WasRemoved(task.Id));
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task UpdatePlanningFactors_WhenValuesAreValid_RecalculatesPriority()
     {
         var task = CreateTask();
@@ -259,6 +300,16 @@ public sealed class TaskMaintenanceHandlerTests
             _tasks.Add(task.Id, task);
             return Task.CompletedTask;
         }
+
+        public Task RemoveAsync(
+            TaskItem task,
+            CancellationToken cancellationToken)
+        {
+            _tasks.Remove(task.Id);
+            return Task.CompletedTask;
+        }
+
+        public bool WasRemoved(Guid taskId) => !_tasks.ContainsKey(taskId);
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork

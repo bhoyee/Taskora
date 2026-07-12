@@ -52,6 +52,8 @@ internal static class TaskEndpoints
             .WithName("CompleteTask");
         group.MapPost("/{taskId:guid}/reopen", ReopenTaskAsync)
             .WithName("ReopenTask");
+        group.MapDelete("/{taskId:guid}", DeleteTaskAsync)
+            .WithName("DeleteTask");
         group.MapPost("/{taskId:guid}/block", BlockTaskAsync)
             .WithName("BlockTask");
         group.MapPost("/{taskId:guid}/unblock", UnblockTaskAsync)
@@ -209,6 +211,14 @@ internal static class TaskEndpoints
             handler.HandleAsync(
                 new ReopenTaskCommand(taskId),
                 cancellationToken));
+
+    private static async Task<IResult> DeleteTaskAsync(
+        Guid taskId,
+        DeleteTaskHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new DeleteTaskCommand(taskId),
+            cancellationToken));
 
     private static Task<IResult> BlockTaskAsync(
         Guid taskId,

@@ -438,6 +438,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
     }),
+  deleteTask: (id: string) =>
+    request<boolean>(`/api/v1/tasks/${id}`, {
+      method: 'DELETE',
+    }),
   updatePlanning: (
     id: string,
     businessValue: number,

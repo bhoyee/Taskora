@@ -92,6 +92,43 @@ public sealed class ReopenTaskHandler(
             cancellationToken);
 }
 
+public sealed class DeleteTaskHandler(
+    ITaskRepository tasks,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteTaskCommand command,
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+
+        if (task is null)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "task.not_found",
+                    "The task was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (!currentUser.IsAuthenticated ||
+            task.CreatedByUserId is null ||
+            task.CreatedByUserId != currentUser.UserId)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "task.delete_forbidden",
+                    "Only the task creator can delete this task.",
+                    ErrorType.Forbidden));
+        }
+
+        await tasks.RemoveAsync(task, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 public sealed class UpdatePlanningFactorsHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,

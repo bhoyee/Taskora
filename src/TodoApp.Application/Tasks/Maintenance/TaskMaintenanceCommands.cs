@@ -14,6 +14,8 @@ public sealed record UnblockTaskCommand(Guid TaskId);
 
 public sealed record ReopenTaskCommand(Guid TaskId);
 
+public sealed record DeleteTaskCommand(Guid TaskId);
+
 public sealed record UpdatePlanningFactorsCommand(
     Guid TaskId,
     int BusinessValue,

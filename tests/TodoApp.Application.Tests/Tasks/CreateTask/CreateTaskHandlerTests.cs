@@ -169,6 +169,18 @@ public sealed class CreateTaskHandlerTests
             ReceivedCancellationToken = cancellationToken;
             return Task.CompletedTask;
         }
+
+        public Task RemoveAsync(
+            TaskItem task,
+            CancellationToken cancellationToken)
+        {
+            if (AddedTask?.Id == task.Id)
+            {
+                AddedTask = null;
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork
