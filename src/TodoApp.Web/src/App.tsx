@@ -1248,10 +1248,12 @@ function PinnedProjects({
   onOpen: (projectId: string) => void
 }) {
   const pinned = projects.filter((project) => pinnedProjectIds.has(project.id))
+  const visiblePinned = pinned.slice(0, 4)
+  const remainingPinned = pinned.length - visiblePinned.length
 
   return <section className="pinned-projects" aria-label="Pinned projects">
-    <h2>Pinned Projects</h2>
-    {pinned.length ? pinned.map((project) => {
+    <h2>Pinned projects</h2>
+    {visiblePinned.length ? visiblePinned.map((project) => {
       const delivery = deliveryStatus(project.targetDate)
       return <button
         key={project.id}
@@ -1262,6 +1264,7 @@ function PinnedProjects({
         <span>{project.name}</span>
       </button>
     }) : <p>Pin important projects from the Projects page.</p>}
+    {remainingPinned > 0 && <p>+{remainingPinned} more pinned project{remainingPinned === 1 ? '' : 's'}</p>}
   </section>
 }
 
@@ -1451,6 +1454,19 @@ function ProjectsPage({
   ) => Promise<void>
   onArchive: (projectId: string) => Promise<void>
 }) {
+  const projectPageSize = 6
+  const [projectPage, setProjectPage] = useState(1)
+  const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
+  const visibleProjects = projects.slice(
+    (projectPage - 1) * projectPageSize,
+    projectPage * projectPageSize)
+
+  useEffect(() => {
+    if (projectPage > totalProjectPages) {
+      setProjectPage(totalProjectPages)
+    }
+  }, [projectPage, totalProjectPages])
+
   return <section className="projects-page">
     <ProjectBar
       projects={projects}
@@ -1464,35 +1480,44 @@ function ProjectsPage({
       onArchive={onArchive}
     />
     {projects.length
-      ? <div className="project-grid" aria-label="Workspace projects">
-          {projects.map((project) => {
-            const delivery = deliveryStatus(project.targetDate)
-            const pinned = pinnedProjectIds.has(project.id)
-            return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
-              <header>
-                <div>
-                  <p className="eyebrow">Project</p>
-                  <h2>{project.name}</h2>
+      ? <>
+          <div className="project-grid" aria-label="Workspace projects">
+            {visibleProjects.map((project) => {
+              const delivery = deliveryStatus(project.targetDate)
+              const pinned = pinnedProjectIds.has(project.id)
+              return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
+                <header>
+                  <div>
+                    <p className="eyebrow">Project</p>
+                    <h2>{project.name}</h2>
+                  </div>
+                  <button
+                    className={`pin-button ${pinned ? 'active' : ''}`}
+                    onClick={() => onTogglePin(project.id)}
+                    aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+                    title={pinned ? 'Unpin project' : 'Pin project'}
+                  ><Pin /></button>
+                </header>
+                <p>{project.description || 'No description recorded yet.'}</p>
+                <div className="project-card-meta">
+                  <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+                  {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
                 </div>
-                <button
-                  className={`pin-button ${pinned ? 'active' : ''}`}
-                  onClick={() => onTogglePin(project.id)}
-                  aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
-                  title={pinned ? 'Unpin project' : 'Pin project'}
-                ><Pin /></button>
-              </header>
-              <p>{project.description || 'No description recorded yet.'}</p>
-              <div className="project-card-meta">
-                <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
-                {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
-              </div>
-              <footer>
-                <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
-                <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
-              </footer>
-            </article>
-          })}
-        </div>
+                <footer>
+                  <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
+                  <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+                </footer>
+              </article>
+            })}
+          </div>
+          <Pagination
+            pageNumber={projectPage}
+            pageSize={projectPageSize}
+            totalCount={projects.length}
+            totalPages={totalProjectPages}
+            onPageChange={setProjectPage}
+          />
+        </>
       : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
   </section>
 }

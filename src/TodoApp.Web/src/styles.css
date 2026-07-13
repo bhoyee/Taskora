@@ -12,8 +12,8 @@ button:disabled { cursor: not-allowed; }
 .sidebar nav button { color: #aeb8c5; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
 .sidebar nav button.active, .sidebar nav button:hover { background: #293442; color: white; }
 .pinned-projects { margin: 20px 0; padding: 16px 8px 0; border-top: 1px solid #34404e; display: grid; gap: 6px; }
-.pinned-projects h2 { margin: 0 0 6px; color: #8f9aa7; font-size: 11px; font-weight: 800; text-transform: uppercase; }
-.pinned-projects button { border: 0; border-radius: 6px; background: transparent; color: #d8dee6; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px 6px; text-align: left; }
+.pinned-projects h2 { margin: 0 0 6px; color: #8f9aa7; font-size: 11px; font-weight: 800; }
+.pinned-projects button { border: 0; border-radius: 6px; background: transparent; color: #d8dee6; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 6px; text-align: left; font-size: 12px; }
 .pinned-projects button:hover, .pinned-projects button.active { background: #293442; color: white; }
 .pinned-projects button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pinned-projects p { margin: 0; color: #8f9aa7; font-size: 12px; line-height: 1.4; }
