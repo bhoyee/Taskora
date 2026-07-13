@@ -6,14 +6,14 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, Bell, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
+  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
+  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api, streamWorkspaceEvents } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, ProjectCategory, ProjectDetails,
+  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import './styles.css'
@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
+type View = 'workspace' | 'tasks' | 'todos' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'reports', 'activity', 'settings', 'profile', 'operations']
+const views: View[] = ['workspace', 'tasks', 'todos', 'reports', 'activity', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -155,6 +155,10 @@ const activityTypes = [
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
+  const [todos, setTodos] = useState<PersonalTodo[]>([])
+  const [todoDate, setTodoDate] = useState(todayInput)
+  const [todoLoading, setTodoLoading] = useState(false)
+  const [todoError, setTodoError] = useState('')
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -276,7 +280,23 @@ export default function App() {
     }
   }
 
+  const loadTodos = async (date = todoDate) => {
+    try {
+      setTodoLoading(true)
+      setTodoError('')
+      setTodos(await api.todos(date))
+    } catch (reason) {
+      setTodoError(reason instanceof Error ? reason.message : 'Todos could not be loaded.')
+    } finally {
+      setTodoLoading(false)
+    }
+  }
+
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (loggedOut) return
+    void loadTodos(todoDate)
+  }, [todoDate, loggedOut])
   useEffect(() => {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
@@ -603,6 +623,7 @@ export default function App() {
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
+          <button className={view === 'todos' ? 'active' : ''} onClick={() => openView('todos')}><ListChecks size={18} /> Todos</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
@@ -695,6 +716,36 @@ export default function App() {
             />}
           </section>
         </>}
+        {view === 'todos' && <TodoPage
+          todos={todos}
+          selectedDate={todoDate}
+          loading={todoLoading}
+          error={todoError}
+          onDateChange={setTodoDate}
+          onReload={() => void loadTodos()}
+          onCreate={async (title, date, notes) => {
+            const created = await api.createTodo(title, date, notes)
+            setTodos((items) => [created, ...items])
+            setNotice(`Todo ${created.title} created.`)
+          }}
+          onUpdate={async (todo, title, date, notes) => {
+            const updated = await api.updateTodo(todo.id, title, date, notes)
+            setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
+            if (updated.todoDate !== todoDate) void loadTodos(todoDate)
+            setNotice(`Todo ${updated.title} updated.`)
+          }}
+          onToggle={async (todo) => {
+            const updated = todo.isCompleted
+              ? await api.reopenTodo(todo.id)
+              : await api.completeTodo(todo.id)
+            setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
+          }}
+          onDelete={async (todo) => {
+            await api.deleteTodo(todo.id)
+            setTodos((items) => items.filter((item) => item.id !== todo.id))
+            setNotice(`Todo ${todo.title} deleted.`)
+          }}
+        />}
         {view === 'activity' && <ActivityPage
           activity={activity}
           tasks={tasks}
@@ -795,6 +846,7 @@ function viewTitle(view: View) {
   return {
     workspace: 'Delivery workspace',
     tasks: 'Tasks',
+    todos: 'Today todos',
     reports: 'Reports',
     activity: 'Activity timeline',
     settings: 'Workspace settings',
@@ -1275,7 +1327,7 @@ function Metric({
   onClick,
 }: {
   label: string
-  value: number
+  value: number | string
   icon: ReactNode
   tone?: string
   selected?: boolean
@@ -1368,6 +1420,155 @@ function NotificationBell({
         : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
     </section>}
   </div>
+}
+
+function TodoPage({
+  todos,
+  selectedDate,
+  loading,
+  error,
+  onDateChange,
+  onReload,
+  onCreate,
+  onUpdate,
+  onToggle,
+  onDelete,
+}: {
+  todos: PersonalTodo[]
+  selectedDate: string
+  loading: boolean
+  error: string
+  onDateChange: (date: string) => void
+  onReload: () => void
+  onCreate: (title: string, date: string, notes: string) => Promise<void>
+  onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string) => Promise<void>
+  onToggle: (todo: PersonalTodo) => Promise<void>
+  onDelete: (todo: PersonalTodo) => Promise<void>
+}) {
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editDate, setEditDate] = useState(selectedDate)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const completedCount = todos.filter((todo) => todo.isCompleted).length
+  const openCount = todos.length - completedCount
+
+  const create = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!title.trim()) return
+    setSaving(true)
+    try {
+      await onCreate(title.trim(), selectedDate, notes.trim())
+      setTitle('')
+      setNotes('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const startEdit = (todo: PersonalTodo) => {
+    setEditingId(todo.id)
+    setEditTitle(todo.title)
+    setEditNotes(todo.notes ?? '')
+    setEditDate(todo.todoDate)
+  }
+
+  const saveEdit = async (todo: PersonalTodo) => {
+    if (!editTitle.trim()) return
+    setBusyId(todo.id)
+    try {
+      await onUpdate(todo, editTitle.trim(), editDate, editNotes.trim())
+      setEditingId(null)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const runItemAction = async (
+    todo: PersonalTodo,
+    action: (todo: PersonalTodo) => Promise<void>,
+  ) => {
+    setBusyId(todo.id)
+    try {
+      await action(todo)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return <section className="todo-page">
+    <div className="todo-hero">
+      <div>
+        <p className="eyebrow">Personal checklist</p>
+        <h2>Plan the day without creating project work.</h2>
+        <p>Use this for private reminders, calls, errands, and small follow-ups that do not belong on the team board.</p>
+      </div>
+      <label><span>Date</span><input type="date" value={selectedDate} onChange={(event) => onDateChange(event.target.value)} /></label>
+    </div>
+
+    <section className="todo-summary" aria-label="Todo summary">
+      <Metric label="Open todos" value={openCount} icon={<ListChecks />} />
+      <Metric label="Completed" value={completedCount} icon={<CheckCircle2 />} />
+      <Metric label="Selected date" value={new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} icon={<CalendarDays />} />
+    </section>
+
+    <form className="todo-create" onSubmit={(event) => void create(event)}>
+      <label>Todo title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} placeholder="Call client, review PR, buy domain..." /></label>
+      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context or checklist note." /></label>
+      <button className="primary" disabled={saving || !title.trim()}><Plus size={17} /> {saving ? 'Adding...' : 'Add todo'}</button>
+    </form>
+
+    <section className="todo-list-panel">
+      <header>
+        <div><h2>Todos for {new Date(`${selectedDate}T00:00:00`).toLocaleDateString()}</h2><p>{openCount} open, {completedCount} completed</p></div>
+        <button className="secondary" onClick={onReload} disabled={loading}><Search size={16} /> Refresh</button>
+      </header>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      {loading ? <div className="loading">Loading todos...</div> :
+        todos.length
+          ? <div className="todo-list">
+            {todos.map((todo) => {
+              const editing = editingId === todo.id
+              return <article className={`todo-item ${todo.isCompleted ? 'completed' : ''}`} key={todo.id}>
+                <button
+                  className={`todo-check ${todo.isCompleted ? 'done' : ''}`}
+                  onClick={() => void runItemAction(todo, onToggle)}
+                  disabled={busyId === todo.id}
+                  aria-label={todo.isCompleted ? 'Reopen todo' : 'Complete todo'}
+                ><CheckCircle2 size={18} /></button>
+                <div className="todo-content">
+                  {editing
+                    ? <>
+                        <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={160} />
+                        <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} maxLength={1000} />
+                        <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} />
+                      </>
+                    : <>
+                        <strong>{todo.title}</strong>
+                        {todo.notes && <p>{todo.notes}</p>}
+                        <small>{todo.isCompleted && todo.completedAt ? `Completed ${new Date(todo.completedAt).toLocaleString()}` : `Updated ${new Date(todo.updatedAt).toLocaleString()}`}</small>
+                      </>}
+                </div>
+                <div className="todo-actions">
+                  {editing
+                    ? <>
+                        <button className="icon-button" onClick={() => void saveEdit(todo)} disabled={busyId === todo.id || !editTitle.trim()} aria-label="Save todo"><Save /></button>
+                        <button className="icon-button" onClick={() => setEditingId(null)} aria-label="Cancel edit"><X /></button>
+                      </>
+                    : <>
+                        <button className="icon-button" onClick={() => startEdit(todo)} aria-label={`Edit ${todo.title}`}><Pencil /></button>
+                        <button className="icon-button danger-action" onClick={() => void runItemAction(todo, onDelete)} disabled={busyId === todo.id} aria-label={`Delete ${todo.title}`}><Trash2 /></button>
+                      </>}
+                </div>
+              </article>
+            })}
+          </div>
+          : <div className="empty"><ListChecks /><h2>No todos for this date</h2><p>Add a personal todo for calls, reminders, errands, or quick follow-ups.</p></div>}
+    </section>
+  </section>
 }
 
 function ReportsPage({

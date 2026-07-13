@@ -274,6 +274,17 @@ export interface WorkspaceRealtimeEvent {
   occurredAt: string
 }
 
+export interface PersonalTodo {
+  id: string
+  title: string
+  todoDate: string
+  notes: string | null
+  isCompleted: boolean
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
 function identityHeaders(): Record<string, string> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   return accessToken
@@ -578,6 +589,37 @@ export const api = {
     }),
   activity: (id: string) =>
     request<TaskActivity[]>(`/api/v1/tasks/${id}/activity`),
+  todos: (date?: string) =>
+    request<PersonalTodo[]>(
+      `/api/v1/todos${date ? `?${new URLSearchParams({ date })}` : ''}`,
+    ),
+  createTodo: (title: string, todoDate: string, notes: string) =>
+    request<PersonalTodo>('/api/v1/todos', {
+      method: 'POST',
+      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+    }),
+  updateTodo: (
+    id: string,
+    title: string,
+    todoDate: string,
+    notes: string,
+  ) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+    }),
+  completeTodo: (id: string) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}/complete`, {
+      method: 'POST',
+    }),
+  reopenTodo: (id: string) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}/reopen`, {
+      method: 'POST',
+    }),
+  deleteTodo: (id: string) =>
+    request<boolean>(`/api/v1/todos/${id}`, {
+      method: 'DELETE',
+    }),
   login: (email: string, password: string) =>
     request<AccountSession>('/api/v1/account/login', {
       method: 'POST',
