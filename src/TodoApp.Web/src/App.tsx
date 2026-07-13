@@ -59,6 +59,11 @@ const defaultProfile: UserProfile = {
 const defaultAccount: AccountSession | null = null
 const todayInput = new Date().toISOString().slice(0, 10)
 const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+type DashboardWarning = Dashboard['warnings'][number]
+type NotificationItem = DashboardWarning & {
+  id: string
+  read: boolean
+}
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -83,6 +88,29 @@ function readPinnedProjects(userId: string) {
   if (!userId) return new Set<string>()
   try {
     const value = localStorage.getItem(`todoapp_pinned_projects_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function notificationId(warning: DashboardWarning) {
+  return [
+    warning.type,
+    warning.taskId ?? '',
+    warning.projectId ?? '',
+    warning.title,
+    warning.dueDate ?? '',
+  ].join('|')
+}
+
+function notificationReadKey(userId: string, workspaceId: string) {
+  return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
+}
+
+function readStoredNotificationIds(userId: string, workspaceId: string) {
+  try {
+    const value = localStorage.getItem(notificationReadKey(userId, workspaceId))
     return new Set<string>(value ? JSON.parse(value) : [])
   } catch {
     return new Set<string>()
@@ -205,6 +233,10 @@ export default function App() {
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() =>
+    readStoredNotificationIds(
+      localStorage.getItem('todoapp_current_user_id') ?? '',
+      localStorage.getItem('todoapp_workspace_id') ?? ''))
   const [report, setReport] = useState<WorkspaceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportFrom, setReportFrom] = useState(todayInput)
@@ -218,6 +250,12 @@ export default function App() {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
     setPinnedProjectIds(readPinnedProjects(currentUserId || account?.userId || ''))
   }, [currentUserId, account?.userId])
+
+  useEffect(() => {
+    setReadNotificationIds(readStoredNotificationIds(
+      currentUserId || account?.userId || '',
+      workspace?.id ?? selectedWorkspaceId))
+  }, [currentUserId, account?.userId, workspace?.id, selectedWorkspaceId])
 
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
@@ -383,6 +421,34 @@ export default function App() {
   const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
   const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
   const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
+  const notificationItems = useMemo<NotificationItem[]>(
+    () => notifications.map((warning) => {
+      const id = notificationId(warning)
+      return {
+        ...warning,
+        id,
+        read: readNotificationIds.has(id),
+      }
+    }),
+    [notifications, readNotificationIds])
+  const persistReadNotifications = (ids: Set<string>) => {
+    localStorage.setItem(
+      notificationReadKey(
+        currentUserId || account?.userId || '',
+        workspace?.id ?? selectedWorkspaceId),
+      JSON.stringify([...ids]))
+    setReadNotificationIds(ids)
+  }
+  const markNotificationRead = (id: string) => {
+    if (readNotificationIds.has(id)) return
+    persistReadNotifications(new Set([...readNotificationIds, id]))
+  }
+  const markAllNotificationsRead = () => {
+    persistReadNotifications(new Set([
+      ...readNotificationIds,
+      ...notificationItems.map((item) => item.id),
+    ]))
+  }
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
@@ -688,9 +754,15 @@ export default function App() {
             onCreate={createWorkspace}
           />
           <NotificationBell
-            warnings={notifications}
+            notifications={notificationItems}
             open={notificationsOpen}
             onToggle={() => setNotificationsOpen((current) => !current)}
+            onMarkRead={markNotificationRead}
+            onMarkAllRead={markAllNotificationsRead}
+            onViewAll={() => {
+              setNotificationsOpen(false)
+              openView('activity')
+            }}
           />
           {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
@@ -824,6 +896,7 @@ export default function App() {
         {view === 'activity' && <ActivityPage
           activity={activity}
           tasks={tasks}
+          notifications={notificationItems}
           loading={loading}
           selectedType={activityType}
           onTypeChange={(nextType) => {
@@ -836,6 +909,7 @@ export default function App() {
           onPageChange={setActivityPageNumber}
           members={members}
           currentUserId={currentUserId || account?.userId || ''}
+          onMarkNotificationRead={markNotificationRead}
         />}
         {view === 'reports' && <ReportsPage
           dashboard={dashboard}
@@ -1777,44 +1851,68 @@ function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
 }
 
 function NotificationBell({
-  warnings,
+  notifications,
   open,
   onToggle,
+  onMarkRead,
+  onMarkAllRead,
+  onViewAll,
 }: {
-  warnings: Dashboard['warnings']
+  notifications: NotificationItem[]
   open: boolean
   onToggle: () => void
+  onMarkRead: (id: string) => void
+  onMarkAllRead: () => void
+  onViewAll: () => void
 }) {
-  const criticalCount = warnings.filter((warning) => warning.severity === 'critical').length
+  const unreadCount = notifications.filter((notification) => !notification.read).length
+  const criticalCount = notifications.filter((notification) => !notification.read && notification.severity === 'critical').length
   return <div className="notification-center">
     <button
-      className={`icon-button notification-button ${warnings.length ? 'has-alerts' : ''}`}
+      className={`icon-button notification-button ${unreadCount ? 'has-alerts' : ''}`}
       onClick={onToggle}
-      aria-label={`Notifications ${warnings.length}`}
+      aria-label={`Notifications ${unreadCount}`}
       aria-expanded={open}
     >
       <Bell />
-      {warnings.length > 0 && <span>{warnings.length}</span>}
+      {unreadCount > 0 && <span>{unreadCount}</span>}
     </button>
     {open && <section className="notification-panel" aria-label="In-app notifications">
       <header>
         <div>
           <h2>Notifications</h2>
-          <p>{criticalCount ? `${criticalCount} critical reminder${criticalCount === 1 ? '' : 's'}` : 'Workspace reminders'}</p>
+          <p>{unreadCount
+            ? `${unreadCount} unread${criticalCount ? `, ${criticalCount} critical` : ''}`
+            : 'All caught up'}</p>
         </div>
+        <button
+          className="link-button"
+          disabled={!unreadCount}
+          onClick={onMarkAllRead}
+        >
+          Mark all as read
+        </button>
       </header>
-      {warnings.length
+      {notifications.length
         ? <div className="notification-list">
-          {warnings.map((warning) => <article className={`notification-item ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
-            <AlertTriangle size={16} />
+          {notifications.map((notification) => <button
+            type="button"
+            className={`notification-item ${notification.severity} ${notification.read ? 'read' : 'unread'}`}
+            key={notification.id}
+            onClick={() => onMarkRead(notification.id)}
+          >
+            <span className="notification-status">{notification.read ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}</span>
             <div>
-              <strong>{warning.title}</strong>
-              <p>{warning.message}</p>
-              {warning.dueDate && <small>{formatDate(warning.dueDate)}</small>}
+              <strong>{notification.title}</strong>
+              <p>{notification.message}</p>
+              {notification.dueDate && <small>{formatDate(notification.dueDate)}</small>}
             </div>
-          </article>)}
+          </button>)}
         </div>
         : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
+      <footer>
+        <button className="link-button" onClick={onViewAll}>View all notifications</button>
+      </footer>
     </section>}
   </div>
 }
@@ -2371,6 +2469,7 @@ function chartPercentage(count: number, total: number) {
 function ActivityPage({
   activity,
   tasks,
+  notifications,
   loading,
   selectedType,
   onTypeChange,
@@ -2380,9 +2479,11 @@ function ActivityPage({
   onPageChange,
   members,
   currentUserId,
+  onMarkNotificationRead,
 }: {
   activity: WorkspaceActivity[]
   tasks: TaskItem[]
+  notifications: NotificationItem[]
   loading: boolean
   selectedType: (typeof activityTypes)[number]
   onTypeChange: (type: (typeof activityTypes)[number]) => void
@@ -2392,6 +2493,7 @@ function ActivityPage({
   onPageChange: (page: number) => void
   members: WorkspaceMember[]
   currentUserId: string
+  onMarkNotificationRead: (id: string) => void
 }) {
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -2399,10 +2501,15 @@ function ActivityPage({
     selectedType={selectedType}
     onTypeChange={onTypeChange}
   />
+  const notificationSummary = <NotificationDigest
+    notifications={notifications}
+    onMarkRead={onMarkNotificationRead}
+  />
 
   if (!activity.length) {
     return <section className="panel-page activity-page">
       {controls}
+      {notificationSummary}
       <div className="empty compact"><Activity /><h2>No recorded activity yet</h2><p>Move tasks across the board or edit work items to build the timeline.</p></div>
       {!!tasks.length && <div className="activity-snapshot" aria-label="Current task snapshot">
         <h2>Current task snapshot</h2>
@@ -2420,6 +2527,7 @@ function ActivityPage({
 
   return <section className="panel-page activity-page" aria-label="Activity timeline">
     {controls}
+    {notificationSummary}
     <div className="activity-timeline">
       {activity.map((item) => <article className="activity-item" key={item.sequence}>
       <span className="activity-icon">{activityIcon(item.action)}</span>
@@ -2465,6 +2573,43 @@ function ActivityControls({
       <ChevronDown />
     </label>
   </div>
+}
+
+function NotificationDigest({
+  notifications,
+  onMarkRead,
+}: {
+  notifications: NotificationItem[]
+  onMarkRead: (id: string) => void
+}) {
+  if (!notifications.length) return null
+
+  const unreadCount = notifications.filter((item) => !item.read).length
+
+  return <section className="activity-notifications" aria-label="All notifications">
+    <header>
+      <div>
+        <p className="eyebrow">Notifications</p>
+        <h2>Workspace reminders</h2>
+      </div>
+      <span>{unreadCount ? `${unreadCount} unread` : 'All read'}</span>
+    </header>
+    <div className="notification-list full">
+      {notifications.map((notification) => <button
+        type="button"
+        className={`notification-item ${notification.severity} ${notification.read ? 'read' : 'unread'}`}
+        key={notification.id}
+        onClick={() => onMarkRead(notification.id)}
+      >
+        <span className="notification-status">{notification.read ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}</span>
+        <div>
+          <strong>{notification.title}</strong>
+          <p>{notification.message}</p>
+          {notification.dueDate && <small>{formatDate(notification.dueDate)}</small>}
+        </div>
+      </button>)}
+    </div>
+  </section>
 }
 
 function OperationsPage({ summary }: { summary: OperationsSummary }) {
