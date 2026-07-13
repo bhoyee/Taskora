@@ -7,7 +7,7 @@ import {
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, FolderPlus, GripVertical, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
@@ -106,6 +106,10 @@ function notificationId(warning: DashboardWarning) {
 
 function notificationReadKey(userId: string, workspaceId: string) {
   return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
+}
+
+function onboardingSeenKey(userId: string) {
+  return `todoapp_onboarding_seen_${userId || 'development'}`
 }
 
 function readStoredNotificationIds(userId: string, workspaceId: string) {
@@ -247,7 +251,10 @@ export default function App() {
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState(0)
   const inviteToken = inviteTokenFromPath()
+  const activeUserId = currentUserId || account?.userId || 'development'
 
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
@@ -259,6 +266,13 @@ export default function App() {
       currentUserId || account?.userId || '',
       workspace?.id ?? selectedWorkspaceId))
   }, [currentUserId, account?.userId, workspace?.id, selectedWorkspaceId])
+
+  useEffect(() => {
+    if (loggedOut || !activeUserId) return
+    if (localStorage.getItem(onboardingSeenKey(activeUserId)) === 'true') return
+    setOnboardingStep(0)
+    setOnboardingOpen(true)
+  }, [activeUserId, loggedOut])
 
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
@@ -811,6 +825,10 @@ export default function App() {
           <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
+          <button onClick={() => {
+            setOnboardingStep(0)
+            setOnboardingOpen(true)
+          }}><HelpCircle size={18} /> Help tour</button>
         </nav>
         <PinnedProjects
           projects={projects}
@@ -1100,6 +1118,19 @@ export default function App() {
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
+      {onboardingOpen && <OnboardingDialog
+        step={onboardingStep}
+        onStepChange={setOnboardingStep}
+        onSkip={() => {
+          localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
+          setOnboardingOpen(false)
+        }}
+        onComplete={() => {
+          localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
+          setOnboardingOpen(false)
+        }}
+        onClose={() => setOnboardingOpen(false)}
+      />}
     </div>
   )
 }
@@ -1116,6 +1147,102 @@ function initials(name: string) {
 function inviteTokenFromPath() {
   const match = window.location.pathname.match(/^\/invite\/([^/]+)$/i)
   return match ? decodeURIComponent(match[1]) : ''
+}
+
+const onboardingSlides = [
+  {
+    eyebrow: 'Welcome',
+    title: 'Run delivery work from one workspace.',
+    body: 'Taskora connects workspaces, projects, sprints, tasks, reports, notifications, and personal todos so the team can see the same delivery picture.',
+    icon: <CircleGauge />,
+  },
+  {
+    eyebrow: 'Workspace first',
+    title: 'Everything follows the selected workspace.',
+    body: 'Cards, boards, lists, projects, members, activity, reports, and notifications are scoped to the workspace you switch into.',
+    icon: <UserPlus />,
+  },
+  {
+    eyebrow: 'Projects',
+    title: 'Create a project before creating tasks.',
+    body: 'Projects are delivery containers with required delivery dates. Tasks must belong to an active project so work never floats without context.',
+    icon: <FolderPlus />,
+  },
+  {
+    eyebrow: 'Sprints',
+    title: 'Plan short cycles with Sprint 1, Sprint 2, and more.',
+    body: 'Use planned and active sprints to group project tasks into focused delivery windows, then drill into each sprint to see task status and deadlines.',
+    icon: <Clock3 />,
+  },
+  {
+    eyebrow: 'Board workflow',
+    title: 'Move work from backlog to completion.',
+    body: 'Use Backlog, Ready, In Progress, Blocked, and Completed to show what is waiting, what is picked up, what is stuck, and what is done.',
+    icon: <Columns3 />,
+  },
+  {
+    eyebrow: 'Visibility',
+    title: 'Use reports and notifications to stay ahead.',
+    body: 'Dashboard charts, reports, activity, due-date reminders, and in-app notifications help the team catch blockers and delivery risk early.',
+    icon: <ChartBar />,
+  },
+]
+
+function OnboardingDialog({
+  step,
+  onStepChange,
+  onSkip,
+  onComplete,
+  onClose,
+}: {
+  step: number
+  onStepChange: (step: number) => void
+  onSkip: () => void
+  onComplete: () => void
+  onClose: () => void
+}) {
+  const current = onboardingSlides[step] ?? onboardingSlides[0]
+  const isLast = step === onboardingSlides.length - 1
+
+  return <div className="dialog-backdrop onboarding-backdrop" role="presentation">
+    <dialog open className="onboarding-dialog" aria-labelledby="onboarding-title">
+      <header>
+        <div>
+          <p className="eyebrow">{current.eyebrow}</p>
+          <h2 id="onboarding-title">Welcome to Taskora</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} aria-label="Close onboarding"><X /></button>
+      </header>
+      <section className="onboarding-body">
+        <div className="onboarding-visual">
+          <span>{current.icon}</span>
+        </div>
+        <div className="onboarding-copy">
+          <span>Step {step + 1} of {onboardingSlides.length}</span>
+          <h3>{current.title}</h3>
+          <p>{current.body}</p>
+        </div>
+        <div className="onboarding-progress" aria-label="Onboarding progress">
+          {onboardingSlides.map((slide, index) =>
+            <button
+              key={slide.eyebrow}
+              className={index === step ? 'active' : ''}
+              onClick={() => onStepChange(index)}
+              aria-label={`Show onboarding step ${index + 1}`}
+            />)}
+        </div>
+      </section>
+      <footer className="onboarding-actions">
+        <button className="secondary" onClick={onSkip}>Skip tour</button>
+        <div>
+          <button className="secondary" disabled={step === 0} onClick={() => onStepChange(Math.max(0, step - 1))}>Back</button>
+          <button className="primary" onClick={() => isLast ? onComplete() : onStepChange(step + 1)}>
+            {isLast ? 'Get started' : 'Next'}
+          </button>
+        </div>
+      </footer>
+    </dialog>
+  </div>
 }
 
 function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {

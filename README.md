@@ -34,6 +34,7 @@ monitoring, sprint planning, and CI/CD.
   project health, risk register, decision log, release readiness, activity, and
   reports.
 - In-app notifications and SMTP-backed email notifications.
+- First-run onboarding tour with replayable help guidance from the sidebar.
 - Super-admin-only Operations page for API health, database health, scheduler
   status, log settings, and recent application logs.
 - Seed/demo data mode for portfolio walkthroughs.
@@ -78,6 +79,8 @@ real workspace application:
 - `Pinned projects`: sidebar shortcut area for important projects.
 - `Notifications`: top-bar notification feed with unread count, mark-as-read,
   mark-all-as-read, and view-all behaviour.
+- `Help tour`: replayable onboarding slides that explain workspaces, projects,
+  sprints, board workflow, reporting, and notifications.
 
 ## Architecture
 
