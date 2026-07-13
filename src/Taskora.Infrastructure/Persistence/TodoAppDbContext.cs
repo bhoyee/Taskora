@@ -20,6 +20,8 @@ public sealed class TodoAppDbContext(
 
     public DbSet<ProjectCategory> ProjectCategories => Set<ProjectCategory>();
 
+    public DbSet<Sprint> Sprints => Set<Sprint>();
+
     public DbSet<TaskTag> TaskTags => Set<TaskTag>();
 
     public DbSet<TaskNote> TaskNotes => Set<TaskNote>();

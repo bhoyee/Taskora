@@ -63,7 +63,23 @@ public sealed class CreateProjectHandler(
                     category.Id,
                     category.ProjectId,
                     category.Name))
+                .ToArray(),
+            project.Sprints
+                .OrderByDescending(sprint => sprint.Status == SprintStatus.Active)
+                .ThenBy(sprint => sprint.StartDate)
+                .Select(ToSprintDto)
                 .ToArray());
+
+    internal static SprintDto ToSprintDto(Sprint sprint) =>
+        new(
+            sprint.Id,
+            sprint.ProjectId,
+            sprint.Name,
+            sprint.Goal,
+            sprint.StartDate,
+            sprint.EndDate,
+            sprint.Status.ToString(),
+            sprint.ClosedAt);
 }
 
 public sealed class UpdateProjectHandler(
@@ -347,6 +363,266 @@ public sealed class CreateWorkspaceProjectHandler(
                     "project.validation",
                     exception.Message,
                     ErrorType.Validation));
+        }
+    }
+}
+
+public sealed class CreateSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<SprintDto>> HandleAsync(
+        CreateSprintCommand command,
+        CancellationToken cancellationToken)
+    {
+        var project = await projects.GetByIdAsync(
+            command.ProjectId,
+            cancellationToken);
+        if (project is null)
+        {
+            return Failure("project.not_found", "The project was not found.", ErrorType.NotFound);
+        }
+
+        var permission = await ProjectAccess.RequireManagerAsync(
+            workspaces,
+            currentUser,
+            project,
+            cancellationToken);
+        if (!permission.IsSuccess)
+        {
+            return Result<SprintDto>.Failure(permission.Error);
+        }
+
+        try
+        {
+            var sprint = project.AddSprint(
+                identifiers.NewId(),
+                command.Name,
+                command.Goal,
+                command.StartDate,
+                command.EndDate);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<SprintDto>.Success(CreateProjectHandler.ToSprintDto(sprint));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Failure("sprint.validation", exception.Message, ErrorType.Validation);
+        }
+        catch (DomainRuleException exception)
+        {
+            return Failure("sprint.conflict", exception.Message, ErrorType.Conflict);
+        }
+    }
+
+    private static Result<SprintDto> Failure(
+        string code,
+        string description,
+        ErrorType type) =>
+        Result<SprintDto>.Failure(new ApplicationError(code, description, type));
+}
+
+public sealed class UpdateSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<SprintDto>> HandleAsync(
+        UpdateSprintCommand command,
+        CancellationToken cancellationToken)
+    {
+        var access = await SprintAccess.RequireSprintManagerAsync(
+            command.ProjectId,
+            command.SprintId,
+            projects,
+            workspaces,
+            currentUser,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<SprintDto>.Failure(access.Error);
+        }
+
+        try
+        {
+            access.Value.Update(
+                command.Name,
+                command.Goal,
+                command.StartDate,
+                command.EndDate);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<SprintDto>.Success(
+                CreateProjectHandler.ToSprintDto(access.Value));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Failure("sprint.validation", exception.Message, ErrorType.Validation);
+        }
+        catch (DomainRuleException exception)
+        {
+            return Failure("sprint.conflict", exception.Message, ErrorType.Conflict);
+        }
+    }
+
+    private static Result<SprintDto> Failure(
+        string code,
+        string description,
+        ErrorType type) =>
+        Result<SprintDto>.Failure(new ApplicationError(code, description, type));
+}
+
+public sealed class StartSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<SprintDto>> HandleAsync(
+        ChangeSprintStatusCommand command,
+        CancellationToken cancellationToken)
+    {
+        var access = await SprintAccess.RequireSprintManagerAsync(
+            command.ProjectId,
+            command.SprintId,
+            projects,
+            workspaces,
+            currentUser,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<SprintDto>.Failure(access.Error);
+        }
+
+        try
+        {
+            access.Value.Start();
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<SprintDto>.Success(
+                CreateProjectHandler.ToSprintDto(access.Value));
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<SprintDto>.Failure(
+                new ApplicationError("sprint.conflict", exception.Message, ErrorType.Conflict));
+        }
+    }
+}
+
+public sealed class CompleteSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<SprintDto>> HandleAsync(
+        ChangeSprintStatusCommand command,
+        CancellationToken cancellationToken)
+    {
+        var access = await SprintAccess.RequireSprintManagerAsync(
+            command.ProjectId,
+            command.SprintId,
+            projects,
+            workspaces,
+            currentUser,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<SprintDto>.Failure(access.Error);
+        }
+
+        try
+        {
+            access.Value.Complete(clock.UtcNow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<SprintDto>.Success(
+                CreateProjectHandler.ToSprintDto(access.Value));
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<SprintDto>.Failure(
+                new ApplicationError("sprint.conflict", exception.Message, ErrorType.Conflict));
+        }
+    }
+}
+
+public sealed class CancelSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<SprintDto>> HandleAsync(
+        ChangeSprintStatusCommand command,
+        CancellationToken cancellationToken)
+    {
+        var access = await SprintAccess.RequireSprintManagerAsync(
+            command.ProjectId,
+            command.SprintId,
+            projects,
+            workspaces,
+            currentUser,
+            cancellationToken);
+        if (!access.IsSuccess)
+        {
+            return Result<SprintDto>.Failure(access.Error);
+        }
+
+        try
+        {
+            access.Value.Cancel(clock.UtcNow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<SprintDto>.Success(
+                CreateProjectHandler.ToSprintDto(access.Value));
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<SprintDto>.Failure(
+                new ApplicationError("sprint.conflict", exception.Message, ErrorType.Conflict));
+        }
+    }
+}
+
+internal static class SprintAccess
+{
+    public static async Task<Result<Sprint>> RequireSprintManagerAsync(
+        Guid projectId,
+        Guid sprintId,
+        IProjectRepository projects,
+        IWorkspaceRepository workspaces,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var project = await projects.GetByIdAsync(projectId, cancellationToken);
+        if (project is null)
+        {
+            return Result<Sprint>.Failure(
+                new ApplicationError("project.not_found", "The project was not found.", ErrorType.NotFound));
+        }
+
+        var permission = await ProjectAccess.RequireManagerAsync(
+            workspaces,
+            currentUser,
+            project,
+            cancellationToken);
+        if (!permission.IsSuccess)
+        {
+            return Result<Sprint>.Failure(permission.Error);
+        }
+
+        try
+        {
+            return Result<Sprint>.Success(project.GetSprint(sprintId));
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<Sprint>.Failure(
+                new ApplicationError("sprint.not_found", exception.Message, ErrorType.NotFound));
         }
     }
 }

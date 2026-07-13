@@ -12,4 +12,5 @@ public sealed record TaskSearchCriteria(
     string? Search,
     TaskSortBy SortBy,
     int PageNumber,
-    int PageSize);
+    int PageSize,
+    Guid? SprintId = null);

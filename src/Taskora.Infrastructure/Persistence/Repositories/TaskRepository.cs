@@ -91,6 +91,12 @@ public sealed class TaskRepository(TodoAppDbContext context)
                 task => task.CategoryId == criteria.CategoryId.Value);
         }
 
+        if (criteria.SprintId.HasValue)
+        {
+            query = query.Where(
+                task => task.SprintId == criteria.SprintId.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(criteria.Tag))
         {
             query = query.Where(task =>

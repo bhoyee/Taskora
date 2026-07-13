@@ -103,7 +103,8 @@ internal static class TaskEndpoints
                 request.Effort,
                 request.BusinessValue,
                 request.Urgency,
-                request.RiskReduction),
+                request.RiskReduction,
+                request.SprintId),
             cancellationToken);
 
         if (!result.IsSuccess)
@@ -146,6 +147,7 @@ internal static class TaskEndpoints
         TaskItemStatus? status,
         bool? isBlocked,
         Guid? categoryId,
+        Guid? sprintId,
         string? tag,
         string? search,
         TaskSortBy? sortBy,
@@ -164,7 +166,8 @@ internal static class TaskEndpoints
                 search,
                 sortBy ?? TaskSortBy.CreatedDescending,
                 pageNumber == 0 ? 1 : pageNumber,
-                pageSize == 0 ? 20 : pageSize),
+                pageSize == 0 ? 20 : pageSize,
+                sprintId),
             cancellationToken));
 
     private static async Task<IResult> UpdateTaskAsync(
@@ -182,7 +185,8 @@ internal static class TaskEndpoints
                 taskId,
                 request.Title,
                 request.DueDate,
-                request.Effort),
+                request.Effort,
+                request.SprintId),
             cancellationToken);
         await PublishTaskChangeAsync(
             result.IsSuccess,

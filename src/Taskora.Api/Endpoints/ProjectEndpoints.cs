@@ -42,6 +42,33 @@ internal static class ProjectEndpoints
             .Produces<ProjectCategoryDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPost("/{projectId:guid}/sprints", CreateSprintAsync)
+            .WithName("CreateSprint")
+            .Produces<SprintDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPut("/{projectId:guid}/sprints/{sprintId:guid}", UpdateSprintAsync)
+            .WithName("UpdateSprint")
+            .Produces<SprintDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/{projectId:guid}/sprints/{sprintId:guid}/start", StartSprintAsync)
+            .WithName("StartSprint")
+            .Produces<SprintDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/{projectId:guid}/sprints/{sprintId:guid}/complete", CompleteSprintAsync)
+            .WithName("CompleteSprint")
+            .Produces<SprintDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/{projectId:guid}/sprints/{sprintId:guid}/cancel", CancelSprintAsync)
+            .WithName("CancelSprint")
+            .Produces<SprintDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         return endpoints;
     }
@@ -109,6 +136,63 @@ internal static class ProjectEndpoints
         CancellationToken cancellationToken) =>
         ApiResult.From(await handler.HandleAsync(
             new CreateCategoryCommand(projectId, request.Name),
+            cancellationToken));
+
+    private static async Task<IResult> CreateSprintAsync(
+        Guid projectId,
+        CreateSprintRequest request,
+        CreateSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new CreateSprintCommand(
+                projectId,
+                request.Name,
+                request.Goal,
+                request.StartDate,
+                request.EndDate),
+            cancellationToken));
+
+    private static async Task<IResult> UpdateSprintAsync(
+        Guid projectId,
+        Guid sprintId,
+        UpdateSprintRequest request,
+        UpdateSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new UpdateSprintCommand(
+                projectId,
+                sprintId,
+                request.Name,
+                request.Goal,
+                request.StartDate,
+                request.EndDate),
+            cancellationToken));
+
+    private static async Task<IResult> StartSprintAsync(
+        Guid projectId,
+        Guid sprintId,
+        StartSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new ChangeSprintStatusCommand(projectId, sprintId),
+            cancellationToken));
+
+    private static async Task<IResult> CompleteSprintAsync(
+        Guid projectId,
+        Guid sprintId,
+        CompleteSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new ChangeSprintStatusCommand(projectId, sprintId),
+            cancellationToken));
+
+    private static async Task<IResult> CancelSprintAsync(
+        Guid projectId,
+        Guid sprintId,
+        CancelSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new ChangeSprintStatusCommand(projectId, sprintId),
             cancellationToken));
 }
 

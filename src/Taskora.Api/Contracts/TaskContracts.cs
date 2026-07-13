@@ -6,12 +6,14 @@ public sealed record CreateTaskRequest(
     int? Effort,
     int? BusinessValue,
     int? Urgency,
-    int? RiskReduction);
+    int? RiskReduction,
+    Guid? SprintId);
 
 public sealed record UpdateTaskRequest(
     string Title,
     DateOnly? DueDate,
-    int? Effort);
+    int? Effort,
+    Guid? SprintId);
 
 public sealed record BlockTaskRequest(string Reason);
 

@@ -6,6 +6,7 @@ namespace TodoApp.Domain.Projects;
 public sealed class Project
 {
     private readonly List<ProjectCategory> _categories = [];
+    private readonly List<Sprint> _sprints = [];
 
     private Project(
         Guid id,
@@ -41,6 +42,9 @@ public sealed class Project
 
     public IReadOnlyCollection<ProjectCategory> Categories =>
         _categories.AsReadOnly();
+
+    public IReadOnlyCollection<Sprint> Sprints =>
+        _sprints.AsReadOnly();
 
     public static Project Create(
         Guid id,
@@ -98,6 +102,36 @@ public sealed class Project
 
     public bool HasCategory(Guid categoryId) =>
         _categories.Any(category => category.Id == categoryId);
+
+    public Sprint AddSprint(
+        Guid id,
+        string name,
+        string? goal,
+        DateOnly startDate,
+        DateOnly endDate)
+    {
+        EnsureActive();
+        var sprint = Sprint.Create(id, Id, name, goal, startDate, endDate);
+        if (_sprints.Any(existing =>
+                existing.Name.Equals(
+                    sprint.Name,
+                    StringComparison.OrdinalIgnoreCase) &&
+                existing.Status != SprintStatus.Cancelled))
+        {
+            throw new DomainRuleException(
+                "An active sprint with this name already exists.");
+        }
+
+        _sprints.Add(sprint);
+        return sprint;
+    }
+
+    public Sprint GetSprint(Guid sprintId) =>
+        _sprints.SingleOrDefault(sprint => sprint.Id == sprintId) ??
+        throw new DomainRuleException("The sprint was not found.");
+
+    public bool HasSprint(Guid sprintId) =>
+        _sprints.Any(sprint => sprint.Id == sprintId);
 
     private ProjectCategory GetCategory(Guid categoryId) =>
         _categories.SingleOrDefault(category => category.Id == categoryId) ??

@@ -49,6 +49,11 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<ListWorkspaceProjectsHandler>();
         services.AddScoped<CreateWorkspaceProjectHandler>();
         services.AddScoped<GetProjectBoardHandler>();
+        services.AddScoped<CreateSprintHandler>();
+        services.AddScoped<UpdateSprintHandler>();
+        services.AddScoped<StartSprintHandler>();
+        services.AddScoped<CompleteSprintHandler>();
+        services.AddScoped<CancelSprintHandler>();
 
         services.AddScoped<CreateTaskHandler>();
         services.AddScoped<GetTaskActivityHandler>();

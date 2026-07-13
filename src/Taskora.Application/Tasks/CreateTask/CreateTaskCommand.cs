@@ -7,4 +7,5 @@ public sealed record CreateTaskCommand(
     int? Effort = null,
     int? BusinessValue = null,
     int? Urgency = null,
-    int? RiskReduction = null);
+    int? RiskReduction = null,
+    Guid? SprintId = null);

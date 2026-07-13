@@ -7,6 +7,7 @@ public sealed record TaskListItemDto(
     Guid ProjectId,
     Guid? CreatedByUserId,
     Guid? AssignedUserId,
+    Guid? SprintId,
     DateTimeOffset CreatedAt,
     string Title,
     Guid? CategoryId,

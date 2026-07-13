@@ -40,6 +40,7 @@ public sealed class TaskMaintenanceHandlerTests
         var context = CreateContext(task);
         var handler = new UpdateTaskHandler(
             context.Tasks,
+            context.Projects,
             context.UnitOfWork);
 
         var result = await handler.HandleAsync(
@@ -354,6 +355,7 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new UpdateTaskHandler(
                 context.Tasks,
+                context.Projects,
                 context.UnitOfWork)
             .HandleAsync(
                 new UpdateTaskCommand(task.Id, " ", null, null),
@@ -361,6 +363,31 @@ public sealed class TaskMaintenanceHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(ErrorType.Validation, result.Error.Type);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Update_WhenSprintDoesNotBelongToProject_ReturnsNotFound()
+    {
+        var task = CreateTask();
+        var context = CreateContext(task);
+
+        var result = await new UpdateTaskHandler(
+                context.Tasks,
+                context.Projects,
+                context.UnitOfWork)
+            .HandleAsync(
+                new UpdateTaskCommand(
+                    task.Id,
+                    task.Title,
+                    task.DueDate?.Value,
+                    task.EffortEstimate?.Value,
+                    Guid.NewGuid()),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("sprint.not_found", result.Error.Code);
+        Assert.Equal(ErrorType.NotFound, result.Error.Type);
         Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
