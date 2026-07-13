@@ -108,24 +108,35 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   Completed: { Ready: { action: 'reopen' } },
 }
 
-function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) {
+function canMoveTask(
+  task: TaskItem,
+  target: TaskStatus,
+  currentUserId: string,
+  workspaceRole?: Workspace['role'] | null,
+) {
   if (!boardTransitions[task.status]?.[target]) return false
   const isAssignee = !!task.assignedUserId && task.assignedUserId === currentUserId
   const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
+  const isCoordinator = workspaceRole === 'Owner' || workspaceRole === 'Manager'
 
   if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
   if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
-  if (task.status === 'Blocked' && (target === 'Ready' || target === 'InProgress')) return isAssignee
-  if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
+  if (task.status === 'Blocked' && target === 'Ready') return isAssignee || isCreator || isCoordinator
+  if (task.status === 'Blocked' && target === 'InProgress') return isAssignee
+  if (task.status === 'Backlog' && target === 'Ready') return isCreator || isCoordinator || !task.createdByUserId
   if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
 
   return false
 }
 
-function allowedTaskTargets(task: TaskItem, currentUserId: string) {
+function allowedTaskTargets(
+  task: TaskItem,
+  currentUserId: string,
+  workspaceRole?: Workspace['role'] | null,
+) {
   return Object.keys(boardTransitions[task.status] ?? {})
     .filter((status): status is TaskStatus =>
-      canMoveTask(task, status as TaskStatus, currentUserId))
+      canMoveTask(task, status as TaskStatus, currentUserId, workspaceRole))
 }
 
 const activityTypes = [
@@ -502,7 +513,7 @@ export default function App() {
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
-    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
+    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '', workspace?.role ?? null)) return
     const previousTasks = tasks
     const previousDashboard = dashboard
     const userId = currentUserId || account?.userId || ''
@@ -674,7 +685,7 @@ export default function App() {
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -774,7 +785,7 @@ export default function App() {
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
@@ -2300,6 +2311,7 @@ function Board({
   categories,
   members,
   currentUserId,
+  workspaceRole,
   pinnedTaskIds,
   onEdit,
   onDelete,
@@ -2312,6 +2324,7 @@ function Board({
   categories: ProjectCategory[]
   members: WorkspaceMember[]
   currentUserId: string
+  workspaceRole: Workspace['role'] | null
   pinnedTaskIds: Set<string>
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
@@ -2328,14 +2341,14 @@ function Board({
     useSensor(KeyboardSensor),
   )
   const validTargets = activeTask
-    ? new Set(allowedTaskTargets(activeTask, currentUserId))
+    ? new Set(allowedTaskTargets(activeTask, currentUserId, workspaceRole))
     : new Set<string>()
 
   const finishDrag = async ({ active, over }: DragEndEvent) => {
     const task = active.data.current?.task as TaskItem | undefined
     const target = over?.id as TaskStatus | undefined
     setActiveTask(null)
-    if (!task || !target || !canMoveTask(task, target, currentUserId)) return
+    if (!task || !target || !canMoveTask(task, target, currentUserId, workspaceRole)) return
 
     setMoving(true)
     try {
@@ -2361,6 +2374,7 @@ function Board({
         pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
         currentUserId={currentUserId}
+        workspaceRole={workspaceRole}
         onEdit={onEdit}
         onDelete={onDelete}
         onNote={onNote}
@@ -2371,7 +2385,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -2383,6 +2397,7 @@ function BoardColumn({
   members,
   pinnedTaskIds,
   currentUserId,
+  workspaceRole,
   onEdit,
   onDelete,
   onNote,
@@ -2397,6 +2412,7 @@ function BoardColumn({
   members: WorkspaceMember[]
   pinnedTaskIds: Set<string>
   currentUserId: string
+  workspaceRole: Workspace['role'] | null
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
   onNote: (task: TaskItem) => void
@@ -2423,7 +2439,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {orderedTasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2434,6 +2450,7 @@ function BoardCard({
   categories,
   members = [],
   currentUserId,
+  workspaceRole,
   pinned = false,
   onEdit,
   onDelete,
@@ -2446,6 +2463,7 @@ function BoardCard({
   categories?: ProjectCategory[]
   members?: WorkspaceMember[]
   currentUserId?: string
+  workspaceRole?: Workspace['role'] | null
   pinned?: boolean
   onEdit: (task: TaskItem) => void
   onDelete?: (task: TaskItem) => void
@@ -2454,7 +2472,7 @@ function BoardCard({
   onLockedMoveAttempt?: (message: string) => void
   overlay?: boolean
 }) {
-  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId).length > 0
+  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId, workspaceRole).length > 0
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   const lockedAssigneeName = task.assignedUserId
     ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
@@ -2622,7 +2640,7 @@ function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { t
   </div>
 }
 
-function TaskEditor({ projectId, task, currentUserId, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -2632,7 +2650,7 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   const canEditPlanning = !isMember && (!task.createdByUserId || task.createdByUserId === currentUserId)
   const isUnscored = !explanation
   const availableActions = (nextActions[task.status] ?? [])
-    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId))
+    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId, workspaceRole))
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSaving(true)

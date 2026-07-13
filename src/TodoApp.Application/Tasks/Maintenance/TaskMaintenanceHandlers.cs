@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.Lifecycle;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Maintenance;
@@ -82,6 +83,8 @@ public sealed class BlockTaskHandler(
 
 public sealed class UnblockTaskHandler(
     ITaskRepository tasks,
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
@@ -95,9 +98,9 @@ public sealed class UnblockTaskHandler(
             return TaskMutationExecutor.NotFound();
         }
 
-        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+        var authorization = await EnsureCanClearBlockerAsync(
             task,
-            currentUser);
+            cancellationToken);
         if (!authorization.IsSuccess)
         {
             return Result<TaskItemStatus>.Failure(authorization.Error);
@@ -109,6 +112,58 @@ public sealed class UnblockTaskHandler(
             unitOfWork,
             item => item.Unblock(),
             cancellationToken);
+    }
+
+    private async Task<Result<bool>> EnsureCanClearBlockerAsync(
+        TaskItem task,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return Result<bool>.Failure(new ApplicationError(
+                "task.auth_required",
+                "Sign in before changing active task status.",
+                ErrorType.Unauthorized));
+        }
+
+        if (task.AssignedUserId == currentUser.UserId ||
+            task.CreatedByUserId == currentUser.UserId)
+        {
+            return Result<bool>.Success(true);
+        }
+
+        var project = await projects.GetByIdAsync(
+            task.ProjectId,
+            cancellationToken);
+        if (project is null || project.WorkspaceId == Guid.Empty)
+        {
+            return Result<bool>.Failure(new ApplicationError(
+                "task.unblock_forbidden",
+                "Only the task assignee, creator, workspace owner, or workspace manager can clear a blocker.",
+                ErrorType.Forbidden));
+        }
+
+        var workspace = await workspaces.GetByIdAsync(
+            project.WorkspaceId,
+            cancellationToken);
+        if (workspace is null || !workspace.HasMember(currentUser.UserId))
+        {
+            return Result<bool>.Failure(new ApplicationError(
+                "workspace.not_found",
+                "The workspace was not found.",
+                ErrorType.NotFound));
+        }
+
+        var role = workspace.GetRole(currentUser.UserId);
+        if (role is WorkspaceRole.Owner or WorkspaceRole.Manager)
+        {
+            return Result<bool>.Success(true);
+        }
+
+        return Result<bool>.Failure(new ApplicationError(
+            "task.unblock_forbidden",
+            "Only the task assignee, creator, workspace owner, or workspace manager can clear a blocker.",
+            ErrorType.Forbidden));
     }
 }
 
