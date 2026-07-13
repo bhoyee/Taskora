@@ -474,6 +474,7 @@ export default function App() {
     const transition = boardTransitions[task.status]?.[target]
     if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
     const previousTasks = tasks
+    const previousDashboard = dashboard
     const userId = currentUserId || account?.userId || ''
 
     try {
@@ -482,15 +483,19 @@ export default function App() {
         ? {
             ...item,
             status: target,
+            isBlocked: target === 'Blocked',
+            deadlineHealth: target === 'Completed' ? 'Completed' : item.deadlineHealth,
             assignedUserId: target === 'InProgress' && !item.assignedUserId
               ? userId
               : item.assignedUserId,
           }
         : item))
+      setDashboard((current) => applyTaskMoveToDashboard(current, task, target))
       await api.transition(task.id, transition.action, transition.body)
       await load({ silent: true })
     } catch (reason) {
       setTasks(previousTasks)
+      setDashboard(previousDashboard)
       setError(reason instanceof Error ? reason.message : 'The task could not be moved.')
       throw reason
     }
@@ -1119,6 +1124,107 @@ function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
   return tasks
 }
 
+function applyTaskMoveToDashboard(
+  current: Dashboard,
+  task: TaskItem,
+  target: TaskStatus,
+): Dashboard {
+  if (task.status === target) return current
+
+  const oldActive = task.status !== 'Completed'
+  const newActive = target !== 'Completed'
+  const oldBlocked = task.status === 'Blocked' || task.isBlocked
+  const newBlocked = target === 'Blocked'
+  const oldCompleted = task.status === 'Completed'
+  const newCompleted = target === 'Completed'
+  const oldCritical = task.priorityBand === 'Critical' && oldActive
+  const newCritical = task.priorityBand === 'Critical' && newActive
+  const oldOverdue = task.deadlineHealth === 'Overdue' && oldActive
+  const newOverdue = task.deadlineHealth === 'Overdue' && newActive
+  const completedTasks = Math.max(
+    0,
+    current.projectProgress.completedTasks +
+      (newCompleted ? 1 : 0) -
+      (oldCompleted ? 1 : 0),
+  )
+  const totalTasks = current.projectProgress.totalTasks
+  const completionPercentage = totalTasks === 0
+    ? 0
+    : Math.round(completedTasks * 100 / totalTasks)
+
+  return {
+    ...current,
+    activeTaskCount: Math.max(
+      0,
+      current.activeTaskCount + (newActive ? 1 : 0) - (oldActive ? 1 : 0),
+    ),
+    blockedTaskCount: Math.max(
+      0,
+      current.blockedTaskCount + (newBlocked ? 1 : 0) - (oldBlocked ? 1 : 0),
+    ),
+    criticalTaskCount: Math.max(
+      0,
+      current.criticalTaskCount + (newCritical ? 1 : 0) - (oldCritical ? 1 : 0),
+    ),
+    overdueTaskCount: Math.max(
+      0,
+      current.overdueTaskCount + (newOverdue ? 1 : 0) - (oldOverdue ? 1 : 0),
+    ),
+    statusBreakdown: moveBreakdownCount(
+      current.statusBreakdown,
+      task.status,
+      target,
+    ),
+    priorityBreakdown: task.priorityBand === 'Critical' && oldCritical !== newCritical
+      ? adjustBreakdownCount(
+          current.priorityBreakdown,
+          'Critical',
+          newCritical ? 1 : -1,
+        )
+      : current.priorityBreakdown,
+    deadlineBreakdown: task.deadlineHealth === 'Overdue' && oldOverdue !== newOverdue
+      ? adjustBreakdownCount(
+          current.deadlineBreakdown,
+          'Overdue',
+          newOverdue ? 1 : -1,
+        )
+      : current.deadlineBreakdown,
+    projectProgress: {
+      ...current.projectProgress,
+      completedTasks,
+      completionPercentage,
+    },
+  }
+}
+
+function moveBreakdownCount(
+  items: DashboardBreakdownItem[],
+  from: TaskStatus,
+  to: TaskStatus,
+) {
+  return items.map((item) => {
+    if (item.label === from) {
+      return { ...item, count: Math.max(0, item.count - 1) }
+    }
+
+    if (item.label === to) {
+      return { ...item, count: item.count + 1 }
+    }
+
+    return item
+  })
+}
+
+function adjustBreakdownCount(
+  items: DashboardBreakdownItem[],
+  label: string,
+  delta: number,
+) {
+  return items.map((item) => item.label === label
+    ? { ...item, count: Math.max(0, item.count + delta) }
+    : item)
+}
+
 function Metric({
   label,
   value,
@@ -1333,7 +1439,6 @@ function ProjectGovernance({
   const hasBlocked = dashboard.blockedTaskCount > 0
   const hasCritical = dashboard.criticalTaskCount > 0
   const deliveryAtRisk = delivery?.tone === 'critical' || delivery?.tone === 'warning'
-  const riskCount = [hasOverdue, hasBlocked, hasCritical, deliveryAtRisk].filter(Boolean).length
   const healthScore = Math.max(0, Math.min(100,
     100 -
     dashboard.overdueTaskCount * 18 -
@@ -1357,7 +1462,8 @@ function ProjectGovernance({
     { label: 'No critical dashboard warnings', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
   ]
   const risks = buildRiskRegister(dashboard, delivery?.label, tasks)
-  const decisions = buildDecisionSuggestions(risks.length, completion, openTasks)
+  const activeRiskCount = risks.filter((risk) => risk.tone !== 'healthy').length
+  const decisions = buildDecisionSuggestions(activeRiskCount, completion, openTasks)
 
   return <section className="governance-grid" aria-label="Project governance">
     <article className={`governance-card health-card ${healthTone}`}>
@@ -1371,7 +1477,7 @@ function ProjectGovernance({
     </article>
 
     <article className="governance-card">
-      <header><h2>Risk register</h2><span>{riskCount} signals</span></header>
+      <header><h2>Risk register</h2><span>{activeRiskCount} signals</span></header>
       <ul className="governance-list risk-list">
         {risks.map((risk) => <li key={risk.title}>
           <span className={`risk-dot ${risk.tone}`} />
