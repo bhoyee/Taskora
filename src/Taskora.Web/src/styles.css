@@ -311,6 +311,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .project-create footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin: 0; }
 .project-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .project-actions .secondary:hover:not(:disabled) { border-color: #abc0d1; }
+.project-actions .sprint-action { background: #fff3d8; border-color: #f2d38f; color: #8a5b0d; }
+.project-actions .sprint-action:hover:not(:disabled) { background: #ffe8b5; border-color: #e6bd62; color: #6f4606; }
 .selected-action { background: #e3f4ef; border-color: #b8ddd2; color: #17624f; }
 .projects-page { display: grid; gap: 18px; }
 .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }

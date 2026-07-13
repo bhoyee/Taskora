@@ -834,7 +834,7 @@ export default function App() {
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
-          {view === 'home' && <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>}
+          <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPageNumber(1) }} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>
           <NotificationBell
             notifications={notificationItems}
             open={notificationsOpen}
@@ -1443,6 +1443,7 @@ function ProjectBar({
   onSwitch,
   onSprintSwitch,
   onTogglePin,
+  onAddSprint,
   onCreate,
   onUpdate,
   onArchive,
@@ -1455,6 +1456,7 @@ function ProjectBar({
   onSwitch: (projectId: string) => void
   onSprintSwitch?: (sprintId: string) => void
   onTogglePin?: (projectId: string) => void
+  onAddSprint?: () => void
   onCreate: (
     name: string,
     description: string,
@@ -1564,6 +1566,7 @@ function ProjectBar({
     </label>}
     {(canCreateProject || selectedProject) && <div className="project-actions">
       {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
+      {canCreateProject && selectedProject && onAddSprint && <button className="secondary sprint-action" onClick={onAddSprint}><Clock3 size={16} /> New sprint</button>}
       {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
       {canCreateProject && selectedProject && <>
         <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
@@ -1658,6 +1661,7 @@ function ProjectsPage({
 }) {
   const projectPageSize = 6
   const [projectPage, setProjectPage] = useState(1)
+  const [sprintComposerToken, setSprintComposerToken] = useState(0)
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
   const visibleProjects = projects.slice(
@@ -1678,6 +1682,7 @@ function ProjectsPage({
       pinnedProjectIds={pinnedProjectIds}
       onSwitch={onSwitch}
       onTogglePin={onTogglePin}
+      onAddSprint={() => setSprintComposerToken((token) => token + 1)}
       onCreate={onCreate}
       onUpdate={onUpdate}
       onArchive={onArchive}
@@ -1685,6 +1690,7 @@ function ProjectsPage({
     {selectedProject && <SprintPanel
       project={selectedProject}
       workspaceRole={workspaceRole}
+      composerToken={sprintComposerToken}
       onCreate={onCreateSprint}
       onUpdate={onUpdateSprint}
       onChangeStatus={onChangeSprintStatus}
@@ -1735,12 +1741,14 @@ function ProjectsPage({
 function SprintPanel({
   project,
   workspaceRole,
+  composerToken,
   onCreate,
   onUpdate,
   onChangeStatus,
 }: {
   project: ProjectDetails
   workspaceRole: Workspace['role'] | null
+  composerToken?: number
   onCreate: (
     projectId: string,
     name: string,
@@ -1769,6 +1777,13 @@ function SprintPanel({
   const [error, setError] = useState('')
   const activeSprint = project.sprints.find((sprint) => sprint.status === 'Active')
   const plannedCount = project.sprints.filter((sprint) => sprint.status === 'Planned').length
+
+  useEffect(() => {
+    if (composerToken) {
+      setCreating(true)
+      setEditing(null)
+    }
+  }, [composerToken])
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1856,7 +1871,7 @@ function SprintPanel({
             </footer>}
           </article>)}
         </div>
-      : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create a sprint to group tasks into short delivery cycles.</p></div>}
+      : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create a sprint to group tasks into short delivery cycles.</p>{canManage && <button className="primary" onClick={() => setCreating(true)}><Plus size={16} /> Add first sprint</button>}</div>}
   </section>
 }
 
