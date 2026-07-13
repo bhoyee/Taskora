@@ -34,14 +34,16 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'todos' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'todos', 'reports', 'activity', 'settings', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
-  return views.includes(value as View) ? value as View : 'workspace'
+  if (value === 'workspace' || value === '') return 'home'
+  if (value === 'todos' || value === 'my-day') return 'myday'
+  return views.includes(value as View) ? value as View : 'home'
 }
 
 interface UserProfile {
@@ -83,6 +85,16 @@ function readPinnedTasks(userId: string) {
   if (!userId) return new Set<string>()
   try {
     const value = localStorage.getItem(`todoapp_pinned_tasks_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function readPinnedProjects(userId: string) {
+  if (!userId) return new Set<string>()
+  try {
+    const value = localStorage.getItem(`todoapp_pinned_projects_${userId}`)
     return new Set<string>(value ? JSON.parse(value) : [])
   } catch {
     return new Set<string>()
@@ -176,7 +188,6 @@ export default function App() {
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
-  const [mode, setMode] = useState<'list' | 'board'>('list')
   const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
@@ -189,6 +200,8 @@ export default function App() {
   const [quickNoteTask, setQuickNoteTask] = useState<TaskItem | null>(null)
   const [pinnedTaskIds, setPinnedTaskIds] = useState<Set<string>>(() =>
     readPinnedTasks(localStorage.getItem('todoapp_current_user_id') ?? ''))
+  const [pinnedProjectIds, setPinnedProjectIds] = useState<Set<string>>(() =>
+    readPinnedProjects(localStorage.getItem('todoapp_current_user_id') ?? ''))
   const [navOpen, setNavOpen] = useState(false)
   const [activity, setActivity] = useState<WorkspaceActivity[]>([])
   const [activityTotal, setActivityTotal] = useState(0)
@@ -217,6 +230,7 @@ export default function App() {
 
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
+    setPinnedProjectIds(readPinnedProjects(currentUserId || account?.userId || ''))
   }, [currentUserId, account?.userId])
 
   const load = async (options: { silent?: boolean } = {}) => {
@@ -380,7 +394,6 @@ export default function App() {
       window.removeEventListener('popstate', syncViewFromHash)
     }
   }, [])
-  useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
   const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
   const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
   const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
@@ -394,7 +407,7 @@ export default function App() {
     setOperations(null)
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
-    window.location.hash = 'workspace'
+    window.location.hash = 'home'
     setNavOpen(false)
   }
   const resetSession = () => {
@@ -610,6 +623,23 @@ export default function App() {
       return next
     })
   }
+  const togglePinnedProject = (projectId: string) => {
+    const userId = currentUserId || account?.userId || ''
+    if (!userId) return
+    setPinnedProjectIds((current) => {
+      const next = new Set(current)
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
+      localStorage.setItem(
+        `todoapp_pinned_projects_${userId}`,
+        JSON.stringify(Array.from(next)))
+      return next
+    })
+  }
+  const openPinnedProject = (projectId: string) => {
+    switchProject(projectId)
+    openView('board')
+  }
   const deleteTask = async (task: TaskItem) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
 
@@ -636,15 +666,25 @@ export default function App() {
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
         <nav aria-label="Primary navigation">
-          <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
+          <button className={view === 'home' ? 'active' : ''} onClick={() => openView('home')}><CircleGauge size={18} /> Home</button>
+          <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
-          <button className={view === 'todos' ? 'active' : ''} onClick={() => openView('todos')}><ListChecks size={18} /> Todos</button>
+          <button className={view === 'projects' ? 'active' : ''} onClick={() => openView('projects')}><FolderPlus size={18} /> Projects</button>
+          <button className={view === 'board' ? 'active' : ''} onClick={() => openView('board')}><Columns3 size={18} /> Board</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
+          <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
+          <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
+        <PinnedProjects
+          projects={projects}
+          pinnedProjectIds={pinnedProjectIds}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          onOpen={openPinnedProject}
+        />
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
@@ -667,13 +707,13 @@ export default function App() {
             open={notificationsOpen}
             onToggle={() => setNotificationsOpen((current) => !current)}
           />
-          {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
+          {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
         {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button><button onClick={resetSession}>Reset session</button></div>}
 
-        {view === 'workspace' && <>
+        {view === 'home' && <>
           <section className="metrics" aria-label="Portfolio health">
             <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
             <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
@@ -695,12 +735,14 @@ export default function App() {
           </section>}
         </>}
 
-        {view === 'tasks' && <>
+        {(view === 'tasks' || view === 'board') && <>
           <ProjectBar
             projects={projects}
             selectedProjectId={project?.id ?? selectedProjectId}
             workspaceRole={workspace?.role ?? null}
+            pinnedProjectIds={pinnedProjectIds}
             onSwitch={switchProject}
+            onTogglePin={togglePinnedProject}
             onCreate={createProject}
             onUpdate={updateProject}
             onArchive={archiveProject}
@@ -709,8 +751,8 @@ export default function App() {
             <div className="toolbar">
               <div className="search"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1) }} placeholder="Search tasks" aria-label="Search tasks" /></div>
               <div className="segmented" aria-label="View">
-                <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
-                <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+                <button className={view === 'tasks' ? 'selected' : ''} onClick={() => openView('tasks')}><LayoutList size={16} /> List</button>
+                <button className={view === 'board' ? 'selected' : ''} onClick={() => openView('board')}><Columns3 size={16} /> Board</button>
               </div>
             </div>
             {drilldown !== 'all' && <div className="task-filter-banner">
@@ -719,7 +761,7 @@ export default function App() {
             </div>}
 
             {loading ? <div className="loading">Loading workspace...</div> :
-              mode === 'list'
+              view === 'tasks'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
                 : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
@@ -731,7 +773,22 @@ export default function App() {
             />}
           </section>
         </>}
-        {view === 'todos' && <TodoPage
+        {view === 'projects' && <ProjectsPage
+          projects={projects}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          workspaceRole={workspace?.role ?? null}
+          pinnedProjectIds={pinnedProjectIds}
+          onSwitch={switchProject}
+          onOpenTasks={(projectId) => {
+            switchProject(projectId)
+            openView('tasks')
+          }}
+          onTogglePin={togglePinnedProject}
+          onCreate={createProject}
+          onUpdate={updateProject}
+          onArchive={archiveProject}
+        />}
+        {view === 'myday' && <TodoPage
           todos={todos}
           totalCount={todoTotal}
           selectedDate={todoDate}
@@ -778,6 +835,7 @@ export default function App() {
             await loadTodos(todoDate, todoSearch, todoPageNumber)
           }}
         />}
+        {view === 'calendar' && <CalendarPage projects={projects} tasks={tasks} selectedProject={project} />}
         {view === 'activity' && <ActivityPage
           activity={activity}
           tasks={tasks}
@@ -803,8 +861,7 @@ export default function App() {
           onFromChange={setReportFrom}
           onToChange={setReportTo}
         />}
-        {view === 'settings' && <SettingsPage
-          settings={settings}
+        {view === 'team' && <TeamPage
           workspace={workspace}
           members={members}
           invitations={invitations}
@@ -833,6 +890,9 @@ export default function App() {
             setNotice('Workspace invitation cancelled.')
             await load()
           }}
+        />}
+        {view === 'settings' && <SettingsPage
+          settings={settings}
           onSave={(next) => {
           setSettings(next)
           localStorage.setItem('todoapp_settings', JSON.stringify(next))
@@ -876,11 +936,15 @@ export default function App() {
 
 function viewTitle(view: View) {
   return {
-    workspace: 'Delivery workspace',
+    home: 'Delivery workspace',
     tasks: 'Tasks',
-    todos: 'Today todos',
+    myday: 'My Day',
+    projects: 'Projects',
+    board: 'Board',
     reports: 'Reports',
+    calendar: 'Calendar',
     activity: 'Activity timeline',
+    team: 'Team',
     settings: 'Workspace settings',
     profile: 'Profile',
     operations: 'Operations',
@@ -1172,11 +1236,43 @@ function WorkspaceSwitcher({
   </div>
 }
 
+function PinnedProjects({
+  projects,
+  pinnedProjectIds,
+  selectedProjectId,
+  onOpen,
+}: {
+  projects: ProjectDetails[]
+  pinnedProjectIds: Set<string>
+  selectedProjectId: string
+  onOpen: (projectId: string) => void
+}) {
+  const pinned = projects.filter((project) => pinnedProjectIds.has(project.id))
+  if (!pinned.length) return null
+
+  return <section className="pinned-projects" aria-label="Pinned projects">
+    <h2>Pinned Projects</h2>
+    {pinned.map((project) => {
+      const delivery = deliveryStatus(project.targetDate)
+      return <button
+        key={project.id}
+        className={project.id === selectedProjectId ? 'active' : ''}
+        onClick={() => onOpen(project.id)}
+      >
+        <span className={`project-dot ${delivery?.tone ?? 'healthy'}`} />
+        <span>{project.name}</span>
+      </button>
+    })}
+  </section>
+}
+
 function ProjectBar({
   projects,
   selectedProjectId,
   workspaceRole,
+  pinnedProjectIds,
   onSwitch,
+  onTogglePin,
   onCreate,
   onUpdate,
   onArchive,
@@ -1184,7 +1280,9 @@ function ProjectBar({
   projects: ProjectDetails[]
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
+  pinnedProjectIds?: Set<string>
   onSwitch: (projectId: string) => void
+  onTogglePin?: (projectId: string) => void
   onCreate: (
     name: string,
     description: string,
@@ -1205,6 +1303,7 @@ function ProjectBar({
   const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
+  const selectedPinned = selectedProject ? pinnedProjectIds?.has(selectedProject.id) : false
 
   if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
@@ -1282,9 +1381,10 @@ function ProjectBar({
       </select>
       <ChevronDown />
     </label>}
-    {canCreateProject && <div className="project-actions">
-      <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
-      {selectedProject && <>
+    {(canCreateProject || selectedProject) && <div className="project-actions">
+      {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
+      {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
+      {canCreateProject && selectedProject && <>
         <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
         <button className="secondary danger-action" disabled={busy} onClick={() => {
           setBusy(true)
@@ -1318,6 +1418,148 @@ function formatDate(value?: string | null) {
     ? new Date(value)
     : new Date(`${value}T00:00:00`)
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
+}
+
+function ProjectsPage({
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  pinnedProjectIds,
+  onSwitch,
+  onOpenTasks,
+  onTogglePin,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  pinnedProjectIds: Set<string>
+  onSwitch: (projectId: string) => void
+  onOpenTasks: (projectId: string) => void
+  onTogglePin: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+}) {
+  return <section className="projects-page">
+    <ProjectBar
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      workspaceRole={workspaceRole}
+      pinnedProjectIds={pinnedProjectIds}
+      onSwitch={onSwitch}
+      onTogglePin={onTogglePin}
+      onCreate={onCreate}
+      onUpdate={onUpdate}
+      onArchive={onArchive}
+    />
+    {projects.length
+      ? <div className="project-grid" aria-label="Workspace projects">
+          {projects.map((project) => {
+            const delivery = deliveryStatus(project.targetDate)
+            const pinned = pinnedProjectIds.has(project.id)
+            return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
+              <header>
+                <div>
+                  <p className="eyebrow">Project</p>
+                  <h2>{project.name}</h2>
+                </div>
+                <button
+                  className={`pin-button ${pinned ? 'active' : ''}`}
+                  onClick={() => onTogglePin(project.id)}
+                  aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+                  title={pinned ? 'Unpin project' : 'Pin project'}
+                ><Pin /></button>
+              </header>
+              <p>{project.description || 'No description recorded yet.'}</p>
+              <div className="project-card-meta">
+                <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+                {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+              </div>
+              <footer>
+                <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
+                <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+              </footer>
+            </article>
+          })}
+        </div>
+      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
+  </section>
+}
+
+function CalendarPage({
+  projects,
+  tasks,
+  selectedProject,
+}: {
+  projects: ProjectDetails[]
+  tasks: TaskItem[]
+  selectedProject: ProjectDetails | null
+}) {
+  const events = [
+    ...projects
+      .filter((project) => project.targetDate)
+      .map((project) => ({
+        id: `project-${project.id}`,
+        date: project.targetDate!,
+        title: project.name,
+        type: 'Project delivery',
+        tone: deliveryStatus(project.targetDate)?.tone ?? 'healthy',
+      })),
+    ...tasks
+      .filter((task) => task.dueDate)
+      .map((task) => ({
+        id: `task-${task.id}`,
+        date: task.dueDate!,
+        title: task.title,
+        type: statusLabels[task.status],
+        tone: task.deadlineHealth === 'Overdue'
+          ? 'critical'
+          : task.deadlineHealth === 'AtRisk'
+            ? 'warning'
+            : 'healthy',
+      })),
+  ].sort((left, right) => left.date.localeCompare(right.date))
+  const nextEvents = events.slice(0, 10)
+
+  return <section className="calendar-page">
+    <div className="calendar-hero panel-page">
+      <div>
+        <p className="eyebrow">Delivery calendar</p>
+        <h2>Project deadlines and task due dates</h2>
+        <p>Projects have delivery dates because delivery cannot stay open forever. Task deadlines appear here for the selected project.</p>
+      </div>
+      <div className="calendar-focus">
+        <strong>{selectedProject?.name ?? 'No selected project'}</strong>
+        <span>{selectedProject?.targetDate ? `Delivery ${formatDate(selectedProject.targetDate)}` : 'Select or create a project to schedule delivery.'}</span>
+      </div>
+    </div>
+    <div className="calendar-grid">
+      {nextEvents.length
+        ? nextEvents.map((event) => <article className={`calendar-event ${event.tone}`} key={event.id}>
+            <time dateTime={event.date}>
+              <strong>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { day: '2-digit' })}</strong>
+              <span>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span>
+            </time>
+            <div>
+              <strong>{event.title}</strong>
+              <small>{event.type}</small>
+            </div>
+          </article>)
+        : <div className="empty compact"><CalendarDays /><h2>No scheduled dates</h2><p>Add project delivery dates and task due dates to populate the calendar.</p></div>}
+    </div>
+  </section>
 }
 
 const drilldownLabels: Record<TaskDrilldown, string> = {
@@ -2416,8 +2658,7 @@ function Pagination({
   </footer>
 }
 
-function SettingsPage({
-  settings,
+function TeamPage({
   workspace,
   members,
   invitations,
@@ -2426,9 +2667,7 @@ function SettingsPage({
   onRoleChanged,
   onInvited,
   onInvitationCancelled,
-  onSave,
 }: {
-  settings: UserSettings
   workspace: Workspace | null
   members: WorkspaceMember[]
   invitations: WorkspaceInvitation[]
@@ -2437,14 +2676,10 @@ function SettingsPage({
   onRoleChanged: (userId: string, role: 'Manager' | 'Member') => Promise<void>
   onInvited: (fullName: string, email: string, role: 'Manager' | 'Member') => Promise<void>
   onInvitationCancelled: (invitationId: string) => Promise<void>
-  onSave: (settings: UserSettings) => void
 }) {
-  const [draft, setDraft] = useState(settings)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  useEffect(() => setDraft(settings), [settings])
   const canManage = workspace?.role === 'Owner'
-
   const invite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = event.currentTarget
@@ -2466,26 +2701,10 @@ function SettingsPage({
   }
 
   return <section className="settings-grid">
-    <form className="panel-page settings-form" onSubmit={(event) => {
-      event.preventDefault()
-      onSave(draft)
-    }}>
-      <div className="settings-section">
-        <div>
-          <h2>Workspace preferences</h2>
-          <p>Choose the default view and notification behaviour for this browser session.</p>
-        </div>
-        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">List</option><option value="board">Board</option></select><ChevronDown /></label>
-      </div>
-      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
-      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
-      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
-    </form>
-
     <section className="panel-page member-admin">
       <div className="settings-section compact-heading">
         <div>
-          <h2>Members</h2>
+          <h2>Team members</h2>
           <p>{workspace ? `${workspace.name} access and roles.` : 'Workspace access and roles.'}</p>
         </div>
       </div>
@@ -2547,6 +2766,35 @@ function SettingsPage({
         {!invitations.length && <p className="muted">No pending invitations for this workspace.</p>}
       </div>
     </section>}
+  </section>
+}
+
+function SettingsPage({
+  settings,
+  onSave,
+}: {
+  settings: UserSettings
+  onSave: (settings: UserSettings) => void
+}) {
+  const [draft, setDraft] = useState(settings)
+  useEffect(() => setDraft(settings), [settings])
+
+  return <section className="settings-grid">
+    <form className="panel-page settings-form" onSubmit={(event) => {
+      event.preventDefault()
+      onSave(draft)
+    }}>
+      <div className="settings-section">
+        <div>
+          <h2>Workspace preferences</h2>
+          <p>Choose the default landing view and notification behaviour for this browser session.</p>
+        </div>
+        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">Tasks list</option><option value="board">Board</option></select><ChevronDown /></label>
+      </div>
+      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
+      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
+      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
+    </form>
   </section>
 }
 
