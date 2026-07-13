@@ -746,7 +746,7 @@ export default function App() {
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div className="topbar-title"><p className="eyebrow">{view === 'home' ? 'Workspace' : workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          <div className="topbar-title"><h1>Workspace</h1></div>
           <WorkspaceSwitcher
             workspaces={workspaces}
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
@@ -765,6 +765,9 @@ export default function App() {
               openView('activity')
             }}
           />
+          <button className="topbar-avatar" onClick={() => openView('profile')} aria-label={`Open profile for ${profile.displayName}`}>
+            {initials(profile.displayName)}
+          </button>
           {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
@@ -1319,14 +1322,13 @@ function WorkspaceSwitcher({
   }
 
   return <div className="workspace-switcher">
-    <label>
-      <span>Workspace</span>
+    <label aria-label="Workspace">
       <select value={selectedWorkspaceId} onChange={(event) => onSwitch(event.target.value)}>
-        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name} ({item.role})</option>)}
+        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
       </select>
       <ChevronDown />
     </label>
-    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New workspace</button>
+    <button className="topbar-create" onClick={() => setCreating(true)} aria-label="Create workspace"><Plus size={20} /></button>
   </div>
 }
 
