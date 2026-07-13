@@ -124,7 +124,11 @@ public sealed class AccountRepository(TodoAppDbContext context)
             cancellationToken);
         return credential is null
             ? null
-            : new AccountRecord(user, credential.PasswordHash);
+            : new AccountRecord(
+                user,
+                credential.PasswordHash,
+                credential.PasswordResetTokenHash,
+                credential.PasswordResetTokenExpiresAt);
     }
 
     public async Task<AccountRecord?> GetByIdAsync(
@@ -144,7 +148,11 @@ public sealed class AccountRepository(TodoAppDbContext context)
             cancellationToken);
         return credential is null
             ? null
-            : new AccountRecord(user, credential.PasswordHash);
+            : new AccountRecord(
+                user,
+                credential.PasswordHash,
+                credential.PasswordResetTokenHash,
+                credential.PasswordResetTokenExpiresAt);
     }
 
     public async Task AddAsync(
@@ -188,5 +196,22 @@ public sealed class AccountRepository(TodoAppDbContext context)
         }
 
         credential.ChangePasswordHash(passwordHash);
+    }
+
+    public async Task SetPasswordResetTokenAsync(
+        Guid userId,
+        string tokenHash,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
+        var credential = await context.UserCredentials.FindAsync(
+            [userId],
+            cancellationToken);
+        if (credential is null)
+        {
+            return;
+        }
+
+        credential.SetPasswordResetToken(tokenHash, expiresAt);
     }
 }

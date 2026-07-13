@@ -16,6 +16,7 @@ import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
+import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -33,14 +34,16 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'todos' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'todos', 'reports', 'activity', 'settings', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
-  return views.includes(value as View) ? value as View : 'workspace'
+  if (value === 'workspace' || value === '') return 'home'
+  if (value === 'todos' || value === 'my-day') return 'myday'
+  return views.includes(value as View) ? value as View : 'home'
 }
 
 interface UserProfile {
@@ -48,26 +51,19 @@ interface UserProfile {
   email: string
 }
 
-interface UserSettings {
-  defaultView: 'list' | 'board'
-  compactMode: boolean
-  emailDigest: boolean
-}
-
 const defaultProfile: UserProfile = {
   displayName: 'Jadesola Aliu',
   email: 'jadesola@example.com',
 }
 
-const defaultSettings: UserSettings = {
-  defaultView: 'list',
-  compactMode: false,
-  emailDigest: true,
-}
-
 const defaultAccount: AccountSession | null = null
 const todayInput = new Date().toISOString().slice(0, 10)
 const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+type DashboardWarning = Dashboard['warnings'][number]
+type NotificationItem = DashboardWarning & {
+  id: string
+  read: boolean
+}
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -82,6 +78,39 @@ function readPinnedTasks(userId: string) {
   if (!userId) return new Set<string>()
   try {
     const value = localStorage.getItem(`todoapp_pinned_tasks_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function readPinnedProjects(userId: string) {
+  if (!userId) return new Set<string>()
+  try {
+    const value = localStorage.getItem(`todoapp_pinned_projects_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function notificationId(warning: DashboardWarning) {
+  return [
+    warning.type,
+    warning.taskId ?? '',
+    warning.projectId ?? '',
+    warning.title,
+    warning.dueDate ?? '',
+  ].join('|')
+}
+
+function notificationReadKey(userId: string, workspaceId: string) {
+  return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
+}
+
+function readStoredNotificationIds(userId: string, workspaceId: string) {
+  try {
+    const value = localStorage.getItem(notificationReadKey(userId, workspaceId))
     return new Set<string>(value ? JSON.parse(value) : [])
   } catch {
     return new Set<string>()
@@ -175,7 +204,6 @@ export default function App() {
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
-  const [mode, setMode] = useState<'list' | 'board'>('list')
   const [view, setView] = useState<View>(() => viewFromHash(window.location.hash))
   const [search, setSearch] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
@@ -188,6 +216,8 @@ export default function App() {
   const [quickNoteTask, setQuickNoteTask] = useState<TaskItem | null>(null)
   const [pinnedTaskIds, setPinnedTaskIds] = useState<Set<string>>(() =>
     readPinnedTasks(localStorage.getItem('todoapp_current_user_id') ?? ''))
+  const [pinnedProjectIds, setPinnedProjectIds] = useState<Set<string>>(() =>
+    readPinnedProjects(localStorage.getItem('todoapp_current_user_id') ?? ''))
   const [navOpen, setNavOpen] = useState(false)
   const [activity, setActivity] = useState<WorkspaceActivity[]>([])
   const [activityTotal, setActivityTotal] = useState(0)
@@ -196,8 +226,6 @@ export default function App() {
   const [activityType, setActivityType] = useState<(typeof activityTypes)[number]>('All')
   const [profile, setProfile] = useState<UserProfile>(() =>
     readLocal('todoapp_profile', defaultProfile))
-  const [settings, setSettings] = useState<UserSettings>(() =>
-    readLocal('todoapp_settings', defaultSettings))
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
   const [currentUserId, setCurrentUserId] = useState(() =>
@@ -205,6 +233,10 @@ export default function App() {
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() =>
+    readStoredNotificationIds(
+      localStorage.getItem('todoapp_current_user_id') ?? '',
+      localStorage.getItem('todoapp_workspace_id') ?? ''))
   const [report, setReport] = useState<WorkspaceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportFrom, setReportFrom] = useState(todayInput)
@@ -216,7 +248,14 @@ export default function App() {
 
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
+    setPinnedProjectIds(readPinnedProjects(currentUserId || account?.userId || ''))
   }, [currentUserId, account?.userId])
+
+  useEffect(() => {
+    setReadNotificationIds(readStoredNotificationIds(
+      currentUserId || account?.userId || '',
+      workspace?.id ?? selectedWorkspaceId))
+  }, [currentUserId, account?.userId, workspace?.id, selectedWorkspaceId])
 
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
@@ -379,10 +418,37 @@ export default function App() {
       window.removeEventListener('popstate', syncViewFromHash)
     }
   }, [])
-  useEffect(() => { setMode(settings.defaultView) }, [settings.defaultView])
   const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
   const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
   const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
+  const notificationItems = useMemo<NotificationItem[]>(
+    () => notifications.map((warning) => {
+      const id = notificationId(warning)
+      return {
+        ...warning,
+        id,
+        read: readNotificationIds.has(id),
+      }
+    }),
+    [notifications, readNotificationIds])
+  const persistReadNotifications = (ids: Set<string>) => {
+    localStorage.setItem(
+      notificationReadKey(
+        currentUserId || account?.userId || '',
+        workspace?.id ?? selectedWorkspaceId),
+      JSON.stringify([...ids]))
+    setReadNotificationIds(ids)
+  }
+  const markNotificationRead = (id: string) => {
+    if (readNotificationIds.has(id)) return
+    persistReadNotifications(new Set([...readNotificationIds, id]))
+  }
+  const markAllNotificationsRead = () => {
+    persistReadNotifications(new Set([
+      ...readNotificationIds,
+      ...notificationItems.map((item) => item.id),
+    ]))
+  }
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
@@ -393,7 +459,7 @@ export default function App() {
     setOperations(null)
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
-    window.location.hash = 'workspace'
+    window.location.hash = 'home'
     setNavOpen(false)
   }
   const resetSession = () => {
@@ -609,6 +675,23 @@ export default function App() {
       return next
     })
   }
+  const togglePinnedProject = (projectId: string) => {
+    const userId = currentUserId || account?.userId || ''
+    if (!userId) return
+    setPinnedProjectIds((current) => {
+      const next = new Set(current)
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
+      localStorage.setItem(
+        `todoapp_pinned_projects_${userId}`,
+        JSON.stringify(Array.from(next)))
+      return next
+    })
+  }
+  const openPinnedProject = (projectId: string) => {
+    switchProject(projectId)
+    openView('board')
+  }
   const deleteTask = async (task: TaskItem) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
 
@@ -627,7 +710,7 @@ export default function App() {
   }
 
   if (loggedOut || (!import.meta.env.DEV && !localStorage.getItem('todoapp_access_token'))) {
-    return <AuthPage onAuthenticated={authenticated} />
+    return <PublicAccessPage onAuthenticated={authenticated} />
   }
 
   return (
@@ -635,15 +718,24 @@ export default function App() {
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
         <nav aria-label="Primary navigation">
-          <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
+          <button className={view === 'home' ? 'active' : ''} onClick={() => openView('home')}><CircleGauge size={18} /> Home</button>
+          <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
-          <button className={view === 'todos' ? 'active' : ''} onClick={() => openView('todos')}><ListChecks size={18} /> Todos</button>
+          <button className={view === 'projects' ? 'active' : ''} onClick={() => openView('projects')}><FolderPlus size={18} /> Projects</button>
+          <button className={view === 'board' ? 'active' : ''} onClick={() => openView('board')}><Columns3 size={18} /> Board</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
+          <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
-          <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
+          <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
+        <PinnedProjects
+          projects={projects}
+          pinnedProjectIds={pinnedProjectIds}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          onOpen={openPinnedProject}
+        />
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
           <span className="avatar">{initials(profile.displayName)}</span>
@@ -654,30 +746,47 @@ export default function App() {
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          <div className="topbar-title"><h1>Workspace</h1></div>
           <WorkspaceSwitcher
             workspaces={workspaces}
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
+          {view === 'home' && <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>}
           <NotificationBell
-            warnings={notifications}
+            notifications={notificationItems}
             open={notificationsOpen}
             onToggle={() => setNotificationsOpen((current) => !current)}
+            onMarkRead={markNotificationRead}
+            onMarkAllRead={markAllNotificationsRead}
+            onViewAll={() => {
+              setNotificationsOpen(false)
+              openView('activity')
+            }}
           />
-          {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
+          <button className="topbar-avatar" onClick={() => openView('profile')} aria-label={`Open profile for ${profile.displayName}`}>
+            {initials(profile.displayName)}
+          </button>
+          {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
         {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button><button onClick={resetSession}>Reset session</button></div>}
 
-        {view === 'workspace' && <>
+        {view === 'home' && <>
+          <section className="home-heading">
+            <div>
+              <p className="eyebrow">Workspace Health</p>
+              <h2>{workspace?.name ?? 'Workspace'} overview</h2>
+            </div>
+            <span>{projects.length} project{projects.length === 1 ? '' : 's'} tracked</span>
+          </section>
           <section className="metrics" aria-label="Portfolio health">
-            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Projects" value={dashboard.projectCount} detail={`${projects.filter((item) => item.archivedAt === null).length} active`} icon={<FolderPlus />} selected={false} onClick={() => openView('projects')} />
+            <Metric label="Active work" value={dashboard.activeTaskCount} detail={`${dashboard.overdueTaskCount} overdue`} icon={<LayoutList />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} detail={dashboard.criticalTaskCount ? 'Needs attention' : 'No critical tasks'} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} detail={dashboard.blockedTaskCount ? 'Workflow blocked' : 'No blocked work'} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
           </section>
 
           <DashboardAnalytics dashboard={dashboard} />
@@ -694,12 +803,14 @@ export default function App() {
           </section>}
         </>}
 
-        {view === 'tasks' && <>
+        {(view === 'tasks' || view === 'board') && <>
           <ProjectBar
             projects={projects}
             selectedProjectId={project?.id ?? selectedProjectId}
             workspaceRole={workspace?.role ?? null}
+            pinnedProjectIds={pinnedProjectIds}
             onSwitch={switchProject}
+            onTogglePin={togglePinnedProject}
             onCreate={createProject}
             onUpdate={updateProject}
             onArchive={archiveProject}
@@ -708,8 +819,8 @@ export default function App() {
             <div className="toolbar">
               <div className="search"><Search size={17} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1) }} placeholder="Search tasks" aria-label="Search tasks" /></div>
               <div className="segmented" aria-label="View">
-                <button className={mode === 'list' ? 'selected' : ''} onClick={() => setMode('list')}><LayoutList size={16} /> List</button>
-                <button className={mode === 'board' ? 'selected' : ''} onClick={() => setMode('board')}><Columns3 size={16} /> Board</button>
+                <button className={view === 'tasks' ? 'selected' : ''} onClick={() => openView('tasks')}><LayoutList size={16} /> List</button>
+                <button className={view === 'board' ? 'selected' : ''} onClick={() => openView('board')}><Columns3 size={16} /> Board</button>
               </div>
             </div>
             {drilldown !== 'all' && <div className="task-filter-banner">
@@ -718,7 +829,7 @@ export default function App() {
             </div>}
 
             {loading ? <div className="loading">Loading workspace...</div> :
-              mode === 'list'
+              view === 'tasks'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
                 : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
@@ -730,7 +841,22 @@ export default function App() {
             />}
           </section>
         </>}
-        {view === 'todos' && <TodoPage
+        {view === 'projects' && <ProjectsPage
+          projects={projects}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          workspaceRole={workspace?.role ?? null}
+          pinnedProjectIds={pinnedProjectIds}
+          onSwitch={switchProject}
+          onOpenTasks={(projectId) => {
+            switchProject(projectId)
+            openView('tasks')
+          }}
+          onTogglePin={togglePinnedProject}
+          onCreate={createProject}
+          onUpdate={updateProject}
+          onArchive={archiveProject}
+        />}
+        {view === 'myday' && <TodoPage
           todos={todos}
           totalCount={todoTotal}
           selectedDate={todoDate}
@@ -777,9 +903,11 @@ export default function App() {
             await loadTodos(todoDate, todoSearch, todoPageNumber)
           }}
         />}
+        {view === 'calendar' && <CalendarPage projects={projects} tasks={tasks} selectedProject={project} />}
         {view === 'activity' && <ActivityPage
           activity={activity}
           tasks={tasks}
+          notifications={notificationItems}
           loading={loading}
           selectedType={activityType}
           onTypeChange={(nextType) => {
@@ -792,6 +920,7 @@ export default function App() {
           onPageChange={setActivityPageNumber}
           members={members}
           currentUserId={currentUserId || account?.userId || ''}
+          onMarkNotificationRead={markNotificationRead}
         />}
         {view === 'reports' && <ReportsPage
           dashboard={dashboard}
@@ -802,8 +931,7 @@ export default function App() {
           onFromChange={setReportFrom}
           onToChange={setReportTo}
         />}
-        {view === 'settings' && <SettingsPage
-          settings={settings}
+        {view === 'team' && <TeamPage
           workspace={workspace}
           members={members}
           invitations={invitations}
@@ -832,11 +960,7 @@ export default function App() {
             setNotice('Workspace invitation cancelled.')
             await load()
           }}
-          onSave={(next) => {
-          setSettings(next)
-          localStorage.setItem('todoapp_settings', JSON.stringify(next))
-          setNotice('Settings saved.')
-        }} />}
+        />}
         {view === 'profile' && <ProfilePage
           profile={profile}
           account={account}
@@ -875,12 +999,15 @@ export default function App() {
 
 function viewTitle(view: View) {
   return {
-    workspace: 'Delivery workspace',
+    home: 'Delivery workspace',
     tasks: 'Tasks',
-    todos: 'Today todos',
+    myday: 'My Day',
+    projects: 'Projects',
+    board: 'Board',
     reports: 'Reports',
+    calendar: 'Calendar',
     activity: 'Activity timeline',
-    settings: 'Workspace settings',
+    team: 'Team',
     profile: 'Profile',
     operations: 'Operations',
   }[view]
@@ -900,16 +1027,127 @@ function inviteTokenFromPath() {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
-function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
+  const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing')
+
+  if (mode !== 'landing') {
+    return <AuthPage
+      initialMode={mode}
+      onBack={() => setMode('landing')}
+      onAuthenticated={onAuthenticated}
+    />
+  }
+
+  return <main className="landing-page">
+    <header className="landing-nav">
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+      <nav aria-label="Public navigation">
+        <button className="secondary" onClick={() => setMode('login')}><KeyRound size={16} /> Sign in</button>
+        <button className="primary" onClick={() => setMode('register')}><UserRound size={16} /> Create account</button>
+      </nav>
+    </header>
+
+    <section className="landing-hero" aria-labelledby="landing-title">
+      <div className="landing-copy">
+        <p className="eyebrow">Workspace delivery platform</p>
+        <h1 id="landing-title">Run project work, daily tasks, and delivery signals from one calm workspace.</h1>
+        <p>
+          Taskora combines project boards, priority scoring, reminders, reports,
+          workspace roles, and personal todos in one production-style portfolio app.
+        </p>
+        <div className="landing-actions">
+          <button className="primary" onClick={() => setMode('register')}><UserPlus size={17} /> Start a workspace</button>
+          <button className="secondary" onClick={() => setMode('login')}><KeyRound size={17} /> Sign in</button>
+        </div>
+        <dl className="landing-proof">
+          <div><dt>Role-based</dt><dd>Owners, managers, members</dd></div>
+          <div><dt>Realtime</dt><dd>Board and dashboard updates</dd></div>
+          <div><dt>Ops-ready</dt><dd>Health, logs, CI/CD</dd></div>
+        </dl>
+      </div>
+      <figure className="landing-visual">
+        <img src={landingDashboard} alt="Taskora dashboard preview showing workspace health cards, charts, and task board columns" />
+      </figure>
+    </section>
+
+    <section className="landing-section" aria-label="Taskora capabilities">
+      <article>
+        <CircleGauge size={20} />
+        <h2>Delivery workspace</h2>
+        <p>Track projects, delivery dates, active work, blockers, overdue tasks, and release readiness by workspace.</p>
+      </article>
+      <article>
+        <Columns3 size={20} />
+        <h2>Smarter task flow</h2>
+        <p>Move tasks through Backlog, Ready, In Progress, Blocked, and Completed with assignment-aware rules.</p>
+      </article>
+      <article>
+        <Bell size={20} />
+        <h2>Notifications</h2>
+        <p>Use in-app alerts and SMTP email reminders for assignments, due dates, project delivery, and risks.</p>
+      </article>
+      <article>
+        <ChartBar size={20} />
+        <h2>Reports and operations</h2>
+        <p>Review activity, date-range reports, health checks, logs, and deployment-ready configuration.</p>
+      </article>
+    </section>
+
+    <footer className="landing-footer">
+      <span>Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></span>
+      <span>Copyright 2026</span>
+    </footer>
+  </main>
+}
+
+function AuthPage({
+  initialMode = 'login',
+  onBack,
+  onAuthenticated,
+}: {
+  initialMode?: 'login' | 'register'
+  onBack?: () => void
+  onAuthenticated: (session: AccountSession) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [resetEmail, setResetEmail] = useState('')
+
+  useEffect(() => {
+    setMode(initialMode)
+  }, [initialMode])
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setBusy(true)
     setError('')
+    setNotice('')
     const data = new FormData(event.currentTarget)
     try {
+      if (mode === 'forgot') {
+        const email = String(data.get('email')).trim()
+        await api.requestPasswordReset(email)
+        setResetEmail(email)
+        setNotice('If that email exists, a 6-digit reset code has been sent.')
+        setMode('reset')
+        return
+      }
+
+      if (mode === 'reset') {
+        const email = String(data.get('email')).trim()
+        await api.resetPasswordWithToken(
+          email,
+          String(data.get('token')),
+          String(data.get('password')),
+        )
+        setResetEmail(email)
+        setNotice('Password reset. Sign in with your new password.')
+        setMode('login')
+        return
+      }
+
       const session = mode === 'login'
         ? await api.login(String(data.get('email')), String(data.get('password')))
         : await api.register(
@@ -931,22 +1169,33 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSessi
       <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">Account access</p>
-        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+        <h1>{mode === 'login'
+          ? 'Sign in'
+          : mode === 'register'
+            ? 'Create account'
+            : mode === 'forgot'
+              ? 'Reset password'
+              : 'Enter reset code'}</h1>
       </div>
-      <div className="segmented" aria-label="Account mode">
-        <button className={mode === 'login' ? 'selected' : ''} onClick={() => setMode('login')}><KeyRound size={16} /> Login</button>
-        <button className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}><UserRound size={16} /> Register</button>
-      </div>
+      {(mode === 'login' || mode === 'register') && <div className="segmented" aria-label="Account mode">
+        <button className={mode === 'login' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('login') }}><KeyRound size={16} /> Login</button>
+        <button className={mode === 'register' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('register') }}><UserRound size={16} /> Register</button>
+      </div>}
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
         {mode === 'register' && <>
           <label>Display name<input name="displayName" required maxLength={120} autoComplete="name" /></label>
           <label>Workspace name<input name="workspaceName" required maxLength={160} defaultValue="Portfolio workspace" /></label>
         </>}
-        <label>Email<input name="email" type="email" required autoComplete="email" /></label>
-        <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        <label>Email<input key={`${mode}-${resetEmail}`} name="email" type="email" required autoComplete="email" defaultValue={resetEmail} /></label>
+        {mode === 'reset' && <label>Reset code<input name="token" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" /></label>}
+        {mode !== 'forgot' && <label>{mode === 'reset' ? 'New password' : 'Password'}<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>}
         {error && <p className="field-error">{error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Register'}</button>
+        {notice && <p className="field-success">{notice}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : mode === 'forgot' ? 'Send reset code' : 'Reset password'}</button>
       </form>
+      {mode === 'login' && <button className="link-button" type="button" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
+      {(mode === 'forgot' || mode === 'reset') && <button className="secondary" type="button" onClick={() => { setError(''); setMode('login') }}>Back to sign in</button>}
+      {onBack && <button className="secondary" onClick={onBack}>Back to overview</button>}
     </section>
   </main>
 }
@@ -1073,22 +1322,55 @@ function WorkspaceSwitcher({
   }
 
   return <div className="workspace-switcher">
-    <label>
-      <span>Workspace</span>
+    <label aria-label="Workspace">
       <select value={selectedWorkspaceId} onChange={(event) => onSwitch(event.target.value)}>
-        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name} ({item.role})</option>)}
+        {workspaces.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
       </select>
       <ChevronDown />
     </label>
-    <button className="secondary icon-text" onClick={() => setCreating(true)}><FolderPlus size={16} /> New workspace</button>
+    <button className="topbar-create" onClick={() => setCreating(true)} aria-label="Create workspace"><Plus size={20} /></button>
   </div>
+}
+
+function PinnedProjects({
+  projects,
+  pinnedProjectIds,
+  selectedProjectId,
+  onOpen,
+}: {
+  projects: ProjectDetails[]
+  pinnedProjectIds: Set<string>
+  selectedProjectId: string
+  onOpen: (projectId: string) => void
+}) {
+  const pinned = projects.filter((project) => pinnedProjectIds.has(project.id))
+  const visiblePinned = pinned.slice(0, 4)
+  const remainingPinned = pinned.length - visiblePinned.length
+
+  return <section className="pinned-projects" aria-label="Pinned projects">
+    <h2>Pinned projects</h2>
+    {visiblePinned.length ? visiblePinned.map((project) => {
+      const delivery = deliveryStatus(project.targetDate)
+      return <button
+        key={project.id}
+        className={project.id === selectedProjectId ? 'active' : ''}
+        onClick={() => onOpen(project.id)}
+      >
+        <span className={`project-dot ${delivery?.tone ?? 'healthy'}`} />
+        <span>{project.name}</span>
+      </button>
+    }) : <p>Pin important projects from the Projects page.</p>}
+    {remainingPinned > 0 && <p>+{remainingPinned} more pinned project{remainingPinned === 1 ? '' : 's'}</p>}
+  </section>
 }
 
 function ProjectBar({
   projects,
   selectedProjectId,
   workspaceRole,
+  pinnedProjectIds,
   onSwitch,
+  onTogglePin,
   onCreate,
   onUpdate,
   onArchive,
@@ -1096,7 +1378,9 @@ function ProjectBar({
   projects: ProjectDetails[]
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
+  pinnedProjectIds?: Set<string>
   onSwitch: (projectId: string) => void
+  onTogglePin?: (projectId: string) => void
   onCreate: (
     name: string,
     description: string,
@@ -1117,6 +1401,7 @@ function ProjectBar({
   const canCreateProject = workspaceRole === 'Owner' || workspaceRole === 'Manager'
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
+  const selectedPinned = selectedProject ? pinnedProjectIds?.has(selectedProject.id) : false
 
   if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
@@ -1194,9 +1479,10 @@ function ProjectBar({
       </select>
       <ChevronDown />
     </label>}
-    {canCreateProject && <div className="project-actions">
-      <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>
-      {selectedProject && <>
+    {(canCreateProject || selectedProject) && <div className="project-actions">
+      {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
+      {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
+      {canCreateProject && selectedProject && <>
         <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
         <button className="secondary danger-action" disabled={busy} onClick={() => {
           setBusy(true)
@@ -1230,6 +1516,170 @@ function formatDate(value?: string | null) {
     ? new Date(value)
     : new Date(`${value}T00:00:00`)
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
+}
+
+function ProjectsPage({
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  pinnedProjectIds,
+  onSwitch,
+  onOpenTasks,
+  onTogglePin,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  pinnedProjectIds: Set<string>
+  onSwitch: (projectId: string) => void
+  onOpenTasks: (projectId: string) => void
+  onTogglePin: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+}) {
+  const projectPageSize = 6
+  const [projectPage, setProjectPage] = useState(1)
+  const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
+  const visibleProjects = projects.slice(
+    (projectPage - 1) * projectPageSize,
+    projectPage * projectPageSize)
+
+  useEffect(() => {
+    if (projectPage > totalProjectPages) {
+      setProjectPage(totalProjectPages)
+    }
+  }, [projectPage, totalProjectPages])
+
+  return <section className="projects-page">
+    <ProjectBar
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      workspaceRole={workspaceRole}
+      pinnedProjectIds={pinnedProjectIds}
+      onSwitch={onSwitch}
+      onTogglePin={onTogglePin}
+      onCreate={onCreate}
+      onUpdate={onUpdate}
+      onArchive={onArchive}
+    />
+    {projects.length
+      ? <>
+          <div className="project-grid" aria-label="Workspace projects">
+            {visibleProjects.map((project) => {
+              const delivery = deliveryStatus(project.targetDate)
+              const pinned = pinnedProjectIds.has(project.id)
+              return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
+                <header>
+                  <div>
+                    <p className="eyebrow">Project</p>
+                    <h2>{project.name}</h2>
+                  </div>
+                  <button
+                    className={`pin-button ${pinned ? 'active' : ''}`}
+                    onClick={() => onTogglePin(project.id)}
+                    aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+                    title={pinned ? 'Unpin project' : 'Pin project'}
+                  ><Pin /></button>
+                </header>
+                <p>{project.description || 'No description recorded yet.'}</p>
+                <div className="project-card-meta">
+                  <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+                  {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+                </div>
+                <footer>
+                  <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
+                  <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+                </footer>
+              </article>
+            })}
+          </div>
+          <Pagination
+            pageNumber={projectPage}
+            pageSize={projectPageSize}
+            totalCount={projects.length}
+            totalPages={totalProjectPages}
+            onPageChange={setProjectPage}
+          />
+        </>
+      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
+  </section>
+}
+
+function CalendarPage({
+  projects,
+  tasks,
+  selectedProject,
+}: {
+  projects: ProjectDetails[]
+  tasks: TaskItem[]
+  selectedProject: ProjectDetails | null
+}) {
+  const events = [
+    ...projects
+      .filter((project) => project.targetDate)
+      .map((project) => ({
+        id: `project-${project.id}`,
+        date: project.targetDate!,
+        title: project.name,
+        type: 'Project delivery',
+        tone: deliveryStatus(project.targetDate)?.tone ?? 'healthy',
+      })),
+    ...tasks
+      .filter((task) => task.dueDate)
+      .map((task) => ({
+        id: `task-${task.id}`,
+        date: task.dueDate!,
+        title: task.title,
+        type: statusLabels[task.status],
+        tone: task.deadlineHealth === 'Overdue'
+          ? 'critical'
+          : task.deadlineHealth === 'AtRisk'
+            ? 'warning'
+            : 'healthy',
+      })),
+  ].sort((left, right) => left.date.localeCompare(right.date))
+  const nextEvents = events.slice(0, 10)
+
+  return <section className="calendar-page">
+    <div className="calendar-hero panel-page">
+      <div>
+        <p className="eyebrow">Delivery calendar</p>
+        <h2>Project deadlines and task due dates</h2>
+        <p>Projects have delivery dates because delivery cannot stay open forever. Task deadlines appear here for the selected project.</p>
+      </div>
+      <div className="calendar-focus">
+        <strong>{selectedProject?.name ?? 'No selected project'}</strong>
+        <span>{selectedProject?.targetDate ? `Delivery ${formatDate(selectedProject.targetDate)}` : 'Select or create a project to schedule delivery.'}</span>
+      </div>
+    </div>
+    <div className="calendar-grid">
+      {nextEvents.length
+        ? nextEvents.map((event) => <article className={`calendar-event ${event.tone}`} key={event.id}>
+            <time dateTime={event.date}>
+              <strong>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { day: '2-digit' })}</strong>
+              <span>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span>
+            </time>
+            <div>
+              <strong>{event.title}</strong>
+              <small>{event.type}</small>
+            </div>
+          </article>)
+        : <div className="empty compact"><CalendarDays /><h2>No scheduled dates</h2><p>Add project delivery dates and task due dates to populate the calendar.</p></div>}
+    </div>
+  </section>
 }
 
 const drilldownLabels: Record<TaskDrilldown, string> = {
@@ -1352,6 +1802,7 @@ function adjustBreakdownCount(
 function Metric({
   label,
   value,
+  detail,
   icon,
   tone = '',
   selected = false,
@@ -1359,6 +1810,7 @@ function Metric({
 }: {
   label: string
   value: number | string
+  detail?: string
   icon: ReactNode
   tone?: string
   selected?: boolean
@@ -1367,7 +1819,7 @@ function Metric({
   const className = `metric ${tone} ${onClick ? 'interactive' : ''} ${selected ? 'selected' : ''}`
   const content = <>
     <span className="metric-icon">{icon}</span>
-    <div><strong>{value}</strong><span>{label}</span></div>
+    <div><span className="metric-label">{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</div>
   </>
   return onClick
     ? <button className={className} onClick={onClick} aria-pressed={selected} type="button">{content}</button>
@@ -1411,44 +1863,68 @@ function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
 }
 
 function NotificationBell({
-  warnings,
+  notifications,
   open,
   onToggle,
+  onMarkRead,
+  onMarkAllRead,
+  onViewAll,
 }: {
-  warnings: Dashboard['warnings']
+  notifications: NotificationItem[]
   open: boolean
   onToggle: () => void
+  onMarkRead: (id: string) => void
+  onMarkAllRead: () => void
+  onViewAll: () => void
 }) {
-  const criticalCount = warnings.filter((warning) => warning.severity === 'critical').length
+  const unreadCount = notifications.filter((notification) => !notification.read).length
+  const criticalCount = notifications.filter((notification) => !notification.read && notification.severity === 'critical').length
   return <div className="notification-center">
     <button
-      className={`icon-button notification-button ${warnings.length ? 'has-alerts' : ''}`}
+      className={`icon-button notification-button ${unreadCount ? 'has-alerts' : ''}`}
       onClick={onToggle}
-      aria-label={`Notifications ${warnings.length}`}
+      aria-label={`Notifications ${unreadCount}`}
       aria-expanded={open}
     >
       <Bell />
-      {warnings.length > 0 && <span>{warnings.length}</span>}
+      {unreadCount > 0 && <span>{unreadCount}</span>}
     </button>
     {open && <section className="notification-panel" aria-label="In-app notifications">
       <header>
         <div>
           <h2>Notifications</h2>
-          <p>{criticalCount ? `${criticalCount} critical reminder${criticalCount === 1 ? '' : 's'}` : 'Workspace reminders'}</p>
+          <p>{unreadCount
+            ? `${unreadCount} unread${criticalCount ? `, ${criticalCount} critical` : ''}`
+            : 'All caught up'}</p>
         </div>
+        <button
+          className="link-button"
+          disabled={!unreadCount}
+          onClick={onMarkAllRead}
+        >
+          Mark all as read
+        </button>
       </header>
-      {warnings.length
+      {notifications.length
         ? <div className="notification-list">
-          {warnings.map((warning) => <article className={`notification-item ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
-            <AlertTriangle size={16} />
+          {notifications.map((notification) => <button
+            type="button"
+            className={`notification-item ${notification.severity} ${notification.read ? 'read' : 'unread'}`}
+            key={notification.id}
+            onClick={() => onMarkRead(notification.id)}
+          >
+            <span className="notification-status">{notification.read ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}</span>
             <div>
-              <strong>{warning.title}</strong>
-              <p>{warning.message}</p>
-              {warning.dueDate && <small>{formatDate(warning.dueDate)}</small>}
+              <strong>{notification.title}</strong>
+              <p>{notification.message}</p>
+              {notification.dueDate && <small>{formatDate(notification.dueDate)}</small>}
             </div>
-          </article>)}
+          </button>)}
         </div>
         : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
+      <footer>
+        <button className="link-button" onClick={onViewAll}>View all notifications</button>
+      </footer>
     </section>}
   </div>
 }
@@ -2005,6 +2481,7 @@ function chartPercentage(count: number, total: number) {
 function ActivityPage({
   activity,
   tasks,
+  notifications,
   loading,
   selectedType,
   onTypeChange,
@@ -2014,9 +2491,11 @@ function ActivityPage({
   onPageChange,
   members,
   currentUserId,
+  onMarkNotificationRead,
 }: {
   activity: WorkspaceActivity[]
   tasks: TaskItem[]
+  notifications: NotificationItem[]
   loading: boolean
   selectedType: (typeof activityTypes)[number]
   onTypeChange: (type: (typeof activityTypes)[number]) => void
@@ -2026,6 +2505,7 @@ function ActivityPage({
   onPageChange: (page: number) => void
   members: WorkspaceMember[]
   currentUserId: string
+  onMarkNotificationRead: (id: string) => void
 }) {
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -2033,10 +2513,15 @@ function ActivityPage({
     selectedType={selectedType}
     onTypeChange={onTypeChange}
   />
+  const notificationSummary = <NotificationDigest
+    notifications={notifications}
+    onMarkRead={onMarkNotificationRead}
+  />
 
   if (!activity.length) {
     return <section className="panel-page activity-page">
       {controls}
+      {notificationSummary}
       <div className="empty compact"><Activity /><h2>No recorded activity yet</h2><p>Move tasks across the board or edit work items to build the timeline.</p></div>
       {!!tasks.length && <div className="activity-snapshot" aria-label="Current task snapshot">
         <h2>Current task snapshot</h2>
@@ -2054,6 +2539,7 @@ function ActivityPage({
 
   return <section className="panel-page activity-page" aria-label="Activity timeline">
     {controls}
+    {notificationSummary}
     <div className="activity-timeline">
       {activity.map((item) => <article className="activity-item" key={item.sequence}>
       <span className="activity-icon">{activityIcon(item.action)}</span>
@@ -2099,6 +2585,43 @@ function ActivityControls({
       <ChevronDown />
     </label>
   </div>
+}
+
+function NotificationDigest({
+  notifications,
+  onMarkRead,
+}: {
+  notifications: NotificationItem[]
+  onMarkRead: (id: string) => void
+}) {
+  if (!notifications.length) return null
+
+  const unreadCount = notifications.filter((item) => !item.read).length
+
+  return <section className="activity-notifications" aria-label="All notifications">
+    <header>
+      <div>
+        <p className="eyebrow">Notifications</p>
+        <h2>Workspace reminders</h2>
+      </div>
+      <span>{unreadCount ? `${unreadCount} unread` : 'All read'}</span>
+    </header>
+    <div className="notification-list full">
+      {notifications.map((notification) => <button
+        type="button"
+        className={`notification-item ${notification.severity} ${notification.read ? 'read' : 'unread'}`}
+        key={notification.id}
+        onClick={() => onMarkRead(notification.id)}
+      >
+        <span className="notification-status">{notification.read ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}</span>
+        <div>
+          <strong>{notification.title}</strong>
+          <p>{notification.message}</p>
+          {notification.dueDate && <small>{formatDate(notification.dueDate)}</small>}
+        </div>
+      </button>)}
+    </div>
+  </section>
 }
 
 function OperationsPage({ summary }: { summary: OperationsSummary }) {
@@ -2328,8 +2851,7 @@ function Pagination({
   </footer>
 }
 
-function SettingsPage({
-  settings,
+function TeamPage({
   workspace,
   members,
   invitations,
@@ -2338,9 +2860,7 @@ function SettingsPage({
   onRoleChanged,
   onInvited,
   onInvitationCancelled,
-  onSave,
 }: {
-  settings: UserSettings
   workspace: Workspace | null
   members: WorkspaceMember[]
   invitations: WorkspaceInvitation[]
@@ -2349,14 +2869,10 @@ function SettingsPage({
   onRoleChanged: (userId: string, role: 'Manager' | 'Member') => Promise<void>
   onInvited: (fullName: string, email: string, role: 'Manager' | 'Member') => Promise<void>
   onInvitationCancelled: (invitationId: string) => Promise<void>
-  onSave: (settings: UserSettings) => void
 }) {
-  const [draft, setDraft] = useState(settings)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  useEffect(() => setDraft(settings), [settings])
   const canManage = workspace?.role === 'Owner'
-
   const invite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = event.currentTarget
@@ -2378,26 +2894,10 @@ function SettingsPage({
   }
 
   return <section className="settings-grid">
-    <form className="panel-page settings-form" onSubmit={(event) => {
-      event.preventDefault()
-      onSave(draft)
-    }}>
-      <div className="settings-section">
-        <div>
-          <h2>Workspace preferences</h2>
-          <p>Choose the default view and notification behaviour for this browser session.</p>
-        </div>
-        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">List</option><option value="board">Board</option></select><ChevronDown /></label>
-      </div>
-      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
-      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
-      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
-    </form>
-
     <section className="panel-page member-admin">
       <div className="settings-section compact-heading">
         <div>
-          <h2>Members</h2>
+          <h2>Team members</h2>
           <p>{workspace ? `${workspace.name} access and roles.` : 'Workspace access and roles.'}</p>
         </div>
       </div>

@@ -47,7 +47,11 @@ public interface IWorkspaceInvitationRepository
         CancellationToken cancellationToken);
 }
 
-public sealed record AccountRecord(UserProfile User, string PasswordHash);
+public sealed record AccountRecord(
+    UserProfile User,
+    string PasswordHash,
+    string? PasswordResetTokenHash,
+    DateTimeOffset? PasswordResetTokenExpiresAt);
 
 public interface IAccountRepository
 {
@@ -77,5 +81,11 @@ public interface IAccountRepository
     Task ChangePasswordAsync(
         Guid userId,
         string passwordHash,
+        CancellationToken cancellationToken);
+
+    Task SetPasswordResetTokenAsync(
+        Guid userId,
+        string tokenHash,
+        DateTimeOffset expiresAt,
         CancellationToken cancellationToken);
 }

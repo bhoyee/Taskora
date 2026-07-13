@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Api.IntegrationTests;
 
@@ -10,6 +14,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Path.Combine(
             Path.GetTempPath(),
             $"todoapp-api-{Guid.NewGuid():N}.db");
+
+    public RecordingEmailSender EmailSender { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -22,9 +28,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                     ["ConnectionStrings:TodoApp"] =
                         $"Data Source={_databasePath}",
                     ["Database:Provider"] = "Sqlite",
+                    ["Email:Smtp:Enabled"] = "false",
                     ["Administration:SuperAdminEmails:0"] =
                         "jadesola@example.com"
                 });
+        });
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<INotificationEmailSender>();
+            services.AddSingleton<INotificationEmailSender>(EmailSender);
         });
     }
 
@@ -44,5 +56,20 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         {
             File.Delete(_databasePath);
         }
+    }
+}
+
+public sealed class RecordingEmailSender : INotificationEmailSender
+{
+    private readonly List<NotificationEmailMessage> _messages = [];
+
+    public IReadOnlyList<NotificationEmailMessage> Messages => _messages;
+
+    public Task SendAsync(
+        NotificationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        _messages.Add(message);
+        return Task.CompletedTask;
     }
 }
