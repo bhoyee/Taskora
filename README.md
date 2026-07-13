@@ -27,14 +27,49 @@ monitoring, and CI/CD.
 - Categories, tags, and task notes with writer name and timestamp.
 - Personal Todo page for daily private work with CRUD, search, pagination,
   complete/reopen, mobile layout, and automatic carry-over after midnight.
-- Dashboard cards, charts, project health, risk register, decision log, release
-  readiness, activity, and reports.
+- Dashboard cards, task progress donut, weekly flow chart, workload chart,
+  project health, risk register, decision log, release readiness, activity, and
+  reports.
 - In-app notifications and SMTP-backed email notifications.
 - Super-admin-only Operations page for API health, database health, scheduler
   status, log settings, and recent application logs.
 - Seed/demo data mode for portfolio walkthroughs.
 - Azure DevOps pipeline for restore, build, tests, frontend build, migrations,
   packaging, and optional deployment.
+
+## Application Navigation
+
+Taskora is organized around the same menus a delivery team would expect in a
+real workspace application:
+
+- `Home`: workspace health cards, Task Progress donut chart, Weekly Flow chart,
+  top workload chart, project health, risk register, decision log, release
+  readiness, and deadline warnings.
+- `My Day`: personal daily todos with CRUD, search, pagination, completion,
+  mobile-friendly layout, and automatic carry-over for unfinished work.
+- `Tasks`: searchable and paginated task list with project context, assignee,
+  category, tags, priority score, due date, created date, edit/delete actions,
+  and creator/member permission handling.
+- `Projects`: project CRUD, required delivery dates, delivery countdown badges,
+  archive support, pinning, pagination, and quick access to project tasks.
+- `Board`: drag-and-drop delivery board across Backlog, Ready, In Progress,
+  Blocked, and Completed, with guarded assignment rules, pinned tasks, and
+  quick task notes.
+- `Reports`: date-range reporting for completed tasks, active work, closed
+  projects, critical work, project progress, executive summary, and paginated
+  report tasks.
+- `Calendar`: project delivery dates and task due dates in a schedule-focused
+  view.
+- `Activity`: audit-style timeline of task and workspace events, with filters,
+  pagination, and notification read actions.
+- `Team`: workspace members, roles, invitation links, pending invites, and
+  owner/manager membership controls.
+- `Profile`: email update, password change, and logout.
+- `Operations`: super-admin-only application monitoring for API health,
+  database health, reminder scheduler status, log settings, and recent logs.
+- `Pinned projects`: sidebar shortcut area for important projects.
+- `Notifications`: top-bar notification feed with unread count, mark-as-read,
+  mark-all-as-read, and view-all behaviour.
 
 ## Architecture
 
@@ -78,17 +113,17 @@ flowchart LR
 
 ```text
 src/
-├── Taskora.Api             HTTP API, auth, health checks, SSE, startup
-├── Taskora.Application     Commands, queries, DTOs, ports, use cases
-├── Taskora.Domain          Entities, value objects, domain rules, events
-├── Taskora.Infrastructure  EF Core, repositories, email, logging, seed data
-└── Taskora.Web             React + TypeScript frontend
+|-- Taskora.Api             HTTP API, auth, health checks, SSE, startup
+|-- Taskora.Application     Commands, queries, DTOs, ports, use cases
+|-- Taskora.Domain          Entities, value objects, domain rules, events
+|-- Taskora.Infrastructure  EF Core, repositories, email, logging, seed data
+`-- Taskora.Web             React + TypeScript frontend
 
 tests/
-├── Taskora.Domain.Tests
-├── Taskora.Application.Tests
-├── Taskora.Infrastructure.Tests
-└── Taskora.Api.IntegrationTests
+|-- Taskora.Domain.Tests
+|-- Taskora.Application.Tests
+|-- Taskora.Infrastructure.IntegrationTests
+`-- Taskora.Api.IntegrationTests
 ```
 
 ## Key Product Workflows
