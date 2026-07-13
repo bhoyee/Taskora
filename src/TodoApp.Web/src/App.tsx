@@ -156,9 +156,13 @@ export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
   const [todos, setTodos] = useState<PersonalTodo[]>([])
+  const [todoTotal, setTodoTotal] = useState(0)
   const [todoDate, setTodoDate] = useState(todayInput)
+  const [todoSearch, setTodoSearch] = useState('')
+  const [todoPageNumber, setTodoPageNumber] = useState(1)
   const [todoLoading, setTodoLoading] = useState(false)
   const [todoError, setTodoError] = useState('')
+  const todoPageSize = 10
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -280,11 +284,21 @@ export default function App() {
     }
   }
 
-  const loadTodos = async (date = todoDate) => {
+  const loadTodos = async (
+    date = todoDate,
+    search = todoSearch,
+    pageNumber = todoPageNumber,
+  ) => {
     try {
       setTodoLoading(true)
       setTodoError('')
-      setTodos(await api.todos(date))
+      const page = await api.todos(
+        date,
+        search,
+        pageNumber,
+        todoPageSize)
+      setTodos(page.items)
+      setTodoTotal(page.totalCount)
     } catch (reason) {
       setTodoError(reason instanceof Error ? reason.message : 'Todos could not be loaded.')
     } finally {
@@ -295,8 +309,8 @@ export default function App() {
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
     if (loggedOut) return
-    void loadTodos(todoDate)
-  }, [todoDate, loggedOut])
+    void loadTodos(todoDate, todoSearch, todoPageNumber)
+  }, [todoDate, todoSearch, todoPageNumber, loggedOut])
   useEffect(() => {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
@@ -718,22 +732,35 @@ export default function App() {
         </>}
         {view === 'todos' && <TodoPage
           todos={todos}
+          totalCount={todoTotal}
           selectedDate={todoDate}
+          search={todoSearch}
+          pageNumber={todoPageNumber}
+          pageSize={todoPageSize}
           loading={todoLoading}
           error={todoError}
-          onDateChange={setTodoDate}
+          onDateChange={(date) => {
+            setTodoDate(date)
+            setTodoPageNumber(1)
+          }}
+          onSearchChange={(nextSearch) => {
+            setTodoSearch(nextSearch)
+            setTodoPageNumber(1)
+          }}
+          onPageChange={setTodoPageNumber}
           onReload={() => void loadTodos()}
           onCreate={async (title, date, notes) => {
             setTodoError('')
             const created = await api.createTodo(title, date, notes)
-            setTodos((items) => [created, ...items])
             setNotice(`Todo ${created.title} created.`)
+            setTodoPageNumber(1)
+            await loadTodos(date, todoSearch, 1)
           }}
           onUpdate={async (todo, title, date, notes) => {
             setTodoError('')
             const updated = await api.updateTodo(todo.id, title, date, notes)
             setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
-            if (updated.todoDate !== todoDate) void loadTodos(todoDate)
+            if (updated.todoDate !== todoDate) await loadTodos(todoDate, todoSearch, todoPageNumber)
             setNotice(`Todo ${updated.title} updated.`)
           }}
           onToggle={async (todo) => {
@@ -746,8 +773,8 @@ export default function App() {
           onDelete={async (todo) => {
             setTodoError('')
             await api.deleteTodo(todo.id)
-            setTodos((items) => items.filter((item) => item.id !== todo.id))
             setNotice(`Todo ${todo.title} deleted.`)
+            await loadTodos(todoDate, todoSearch, todoPageNumber)
           }}
         />}
         {view === 'activity' && <ActivityPage
@@ -1428,10 +1455,16 @@ function NotificationBell({
 
 function TodoPage({
   todos,
+  totalCount,
   selectedDate,
+  search,
+  pageNumber,
+  pageSize,
   loading,
   error,
   onDateChange,
+  onSearchChange,
+  onPageChange,
   onReload,
   onCreate,
   onUpdate,
@@ -1439,10 +1472,16 @@ function TodoPage({
   onDelete,
 }: {
   todos: PersonalTodo[]
+  totalCount: number
   selectedDate: string
+  search: string
+  pageNumber: number
+  pageSize: number
   loading: boolean
   error: string
   onDateChange: (date: string) => void
+  onSearchChange: (search: string) => void
+  onPageChange: (page: number) => void
   onReload: () => void
   onCreate: (title: string, date: string, notes: string) => Promise<void>
   onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string) => Promise<void>
@@ -1459,6 +1498,9 @@ function TodoPage({
   const [busyId, setBusyId] = useState<string | null>(null)
   const completedCount = todos.filter((todo) => todo.isCompleted).length
   const openCount = todos.length - completedCount
+  const totalPages = totalCount === 0
+    ? 0
+    : Math.ceil(totalCount / pageSize)
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1516,6 +1558,7 @@ function TodoPage({
     <section className="todo-summary" aria-label="Todo summary">
       <Metric label="Open todos" value={openCount} icon={<ListChecks />} />
       <Metric label="Completed" value={completedCount} icon={<CheckCircle2 />} />
+      <Metric label="Total matches" value={totalCount} icon={<Search />} />
       <Metric label="Selected date" value={new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} icon={<CalendarDays />} />
     </section>
 
@@ -1528,7 +1571,10 @@ function TodoPage({
     <section className="todo-list-panel">
       <header>
         <div><h2>Todos for {new Date(`${selectedDate}T00:00:00`).toLocaleDateString()}</h2><p>{openCount} open, {completedCount} completed</p></div>
-        <button className="secondary" onClick={onReload} disabled={loading}><Search size={16} /> Refresh</button>
+        <div className="todo-toolbar">
+          <label className="search"><Search size={17} /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search todos" aria-label="Search todos" /></label>
+          <button className="secondary" onClick={onReload} disabled={loading}><Search size={16} /> Refresh</button>
+        </div>
       </header>
       {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
       {loading ? <div className="loading">Loading todos...</div> :
@@ -1552,6 +1598,7 @@ function TodoPage({
                       </>
                     : <>
                         <strong>{todo.title}</strong>
+                        {todo.carriedOverFromDate && <span className="carryover-badge">Carry over from {formatDate(todo.originalTodoDate)}</span>}
                         {todo.notes && <p>{todo.notes}</p>}
                         <small>{todo.isCompleted && todo.completedAt ? `Completed ${new Date(todo.completedAt).toLocaleString()}` : `Updated ${new Date(todo.updatedAt).toLocaleString()}`}</small>
                       </>}
@@ -1571,6 +1618,13 @@ function TodoPage({
             })}
           </div>
           : <div className="empty"><ListChecks /><h2>No todos for this date</h2><p>Add a personal todo for calls, reminders, errands, or quick follow-ups.</p></div>}
+      {!loading && <Pagination
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />}
     </section>
   </section>
 }

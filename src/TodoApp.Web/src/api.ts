@@ -278,6 +278,8 @@ export interface PersonalTodo {
   id: string
   title: string
   todoDate: string
+  originalTodoDate: string
+  carriedOverFromDate: string | null
   notes: string | null
   isCompleted: boolean
   createdAt: string
@@ -589,9 +591,19 @@ export const api = {
     }),
   activity: (id: string) =>
     request<TaskActivity[]>(`/api/v1/tasks/${id}/activity`),
-  todos: (date?: string) =>
-    request<PersonalTodo[]>(
-      `/api/v1/todos${date ? `?${new URLSearchParams({ date })}` : ''}`,
+  todos: (
+    date?: string,
+    search = '',
+    pageNumber = 1,
+    pageSize = 10,
+  ) =>
+    request<PagedResponse<PersonalTodo>>(
+      `/api/v1/todos?${new URLSearchParams({
+        ...(date ? { date } : {}),
+        search,
+        pageNumber: String(pageNumber),
+        pageSize: String(pageSize),
+      })}`,
     ),
   createTodo: (title: string, todoDate: string, notes: string) =>
     request<PersonalTodo>('/api/v1/todos', {
