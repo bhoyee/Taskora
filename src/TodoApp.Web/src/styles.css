@@ -137,7 +137,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .readiness-list li { display: flex; align-items: center; gap: 8px; color: #677382; font-size: 13px; }
 .readiness-list li { transition: transform .16s ease, color .16s ease; }
 .readiness-list li.ready { color: #20664f; font-weight: 700; }
-.readiness-list li.not-ready svg { color: #aeb8c4; }
+.readiness-list li.not-ready { color: #94620b; font-weight: 700; }
+.readiness-list li.not-ready svg { color: #c78911; }
 .readiness-list li.ready svg { color: #147d68; }
 .governance-delivery-badge { width: fit-content; margin-top: 12px; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; display: inline-flex; }
 .governance-delivery-badge.healthy { background: #e3f4ef; color: #17624f; }

@@ -1481,12 +1481,12 @@ function ProjectGovernance({
       ? 'Needs attention'
       : 'At risk'
   const readiness = [
-    { label: 'Active project selected', ready: !!project },
-    { label: 'Delivery date confirmed', ready: !!project?.targetDate },
-    { label: 'No overdue tasks', ready: !hasOverdue },
-    { label: 'No blocked work', ready: !hasBlocked },
-    { label: 'Completion above 80%', ready: completion >= 80 || openTasks === 0 },
-    { label: 'No critical dashboard warnings', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
+    { readyLabel: 'Active project selected', blockedLabel: 'Select an active project', ready: !!project },
+    { readyLabel: 'Delivery date confirmed', blockedLabel: 'Delivery date missing', ready: !!project?.targetDate },
+    { readyLabel: 'No overdue tasks', blockedLabel: `${dashboard.overdueTaskCount} overdue task${dashboard.overdueTaskCount === 1 ? '' : 's'} remaining`, ready: !hasOverdue },
+    { readyLabel: 'No blocked work', blockedLabel: `${dashboard.blockedTaskCount} blocked task${dashboard.blockedTaskCount === 1 ? '' : 's'} remaining`, ready: !hasBlocked },
+    { readyLabel: 'Completion above 80%', blockedLabel: `${completion}% complete; ${openTasks} open task${openTasks === 1 ? '' : 's'} remaining`, ready: completion >= 80 || openTasks === 0 },
+    { readyLabel: 'No critical dashboard warnings', blockedLabel: 'Critical dashboard warning needs review', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
   ]
   const risks = buildRiskRegister(dashboard, delivery?.label, tasks)
   const activeRiskCount = risks.filter((risk) => risk.tone !== 'healthy').length
@@ -1526,9 +1526,9 @@ function ProjectGovernance({
     <article className="governance-card">
       <header><h2>Release readiness</h2><span>{readiness.filter((item) => item.ready).length}/{readiness.length}</span></header>
       <ul className="readiness-list">
-        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.label}>
+        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.readyLabel}>
           <CheckCircle2 size={16} />
-          <span>{item.label}</span>
+          <span>{item.ready ? item.readyLabel : item.blockedLabel}</span>
         </li>)}
       </ul>
     </article>
