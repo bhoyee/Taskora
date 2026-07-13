@@ -28,6 +28,7 @@ public sealed class PersonalTodo
         UserId = userId;
         Title = NormalizeTitle(title);
         TodoDate = todoDate;
+        OriginalTodoDate = todoDate;
         Notes = NormalizeNotes(notes);
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
@@ -40,6 +41,12 @@ public sealed class PersonalTodo
     public string Title { get; private set; }
 
     public DateOnly TodoDate { get; private set; }
+
+    public DateOnly OriginalTodoDate { get; private set; }
+
+    public DateOnly? CarriedOverFromDate { get; private set; }
+
+    public bool IsCarriedOver => CarriedOverFromDate.HasValue;
 
     public string? Notes { get; private set; }
 
@@ -68,8 +75,25 @@ public sealed class PersonalTodo
     {
         Title = NormalizeTitle(title);
         TodoDate = todoDate;
+        if (todoDate <= OriginalTodoDate)
+        {
+            CarriedOverFromDate = null;
+        }
+
         Notes = NormalizeNotes(notes);
         UpdatedAt = updatedAt;
+    }
+
+    public void CarryOverTo(DateOnly nextDate, DateTimeOffset carriedAt)
+    {
+        if (IsCompleted || nextDate <= TodoDate)
+        {
+            return;
+        }
+
+        CarriedOverFromDate ??= TodoDate;
+        TodoDate = nextDate;
+        UpdatedAt = carriedAt;
     }
 
     public void Complete(DateTimeOffset completedAt)

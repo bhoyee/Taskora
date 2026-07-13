@@ -18,6 +18,8 @@ internal sealed class PersonalTodoConfiguration
         builder.Property(todo => todo.Notes)
             .HasMaxLength(1000);
         builder.Property(todo => todo.TodoDate).IsRequired();
+        builder.Property(todo => todo.OriginalTodoDate).IsRequired();
+        builder.Property(todo => todo.CarriedOverFromDate);
         builder.Property(todo => todo.IsCompleted).IsRequired();
         builder.Property(todo => todo.CreatedAt)
             .HasConversion(
@@ -46,5 +48,6 @@ internal sealed class PersonalTodoConfiguration
             .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(todo => new { todo.UserId, todo.TodoDate });
         builder.HasIndex(todo => new { todo.UserId, todo.IsCompleted });
+        builder.Ignore(todo => todo.IsCarriedOver);
     }
 }

@@ -64,4 +64,23 @@ public sealed class PersonalTodoTests
         Assert.Null(todo.CompletedAt);
         Assert.Equal(Now.AddHours(2), todo.UpdatedAt);
     }
+
+    [Fact]
+    public void CarryOverTo_WhenTodoIsIncomplete_MovesTodoAndKeepsOriginalDate()
+    {
+        var todo = PersonalTodo.Create(
+            TodoId,
+            UserId,
+            "Review PR",
+            new DateOnly(2026, 7, 13),
+            null,
+            Now);
+
+        todo.CarryOverTo(new DateOnly(2026, 7, 14), Now.AddDays(1));
+
+        Assert.Equal(new DateOnly(2026, 7, 14), todo.TodoDate);
+        Assert.Equal(new DateOnly(2026, 7, 13), todo.OriginalTodoDate);
+        Assert.Equal(new DateOnly(2026, 7, 13), todo.CarriedOverFromDate);
+        Assert.True(todo.IsCarriedOver);
+    }
 }

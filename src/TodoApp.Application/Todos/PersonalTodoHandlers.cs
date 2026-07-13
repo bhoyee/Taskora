@@ -8,26 +8,66 @@ namespace TodoApp.Application.Todos;
 
 public sealed class ListPersonalTodosHandler(
     IPersonalTodoRepository todos,
+    IUnitOfWork unitOfWork,
+    IClock clock,
     ICurrentUser currentUser)
 {
-    public async Task<Result<IReadOnlyList<PersonalTodoDto>>> HandleAsync(
+    public async Task<Result<PagedResult<PersonalTodoDto>>> HandleAsync(
         ListPersonalTodosQuery query,
         CancellationToken cancellationToken)
     {
         var authorization = RequireAuthenticatedUser(currentUser);
         if (!authorization.IsSuccess)
         {
-            return Result<IReadOnlyList<PersonalTodoDto>>.Failure(
+            return Result<PagedResult<PersonalTodoDto>>.Failure(
                 authorization.Error);
         }
 
-        var items = await todos.ListForUserAsync(
+        if (query.PageNumber < 1)
+        {
+            return Validation<PagedResult<PersonalTodoDto>>(
+                "Page number must be at least 1.");
+        }
+
+        if (query.PageSize is < 1 or > 100)
+        {
+            return Validation<PagedResult<PersonalTodoDto>>(
+                "Page size must be between 1 and 100.");
+        }
+
+        var targetDate = query.Date ??
+            DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var carried = await todos.ListIncompleteBeforeAsync(
             currentUser.UserId,
-            query.Date,
+            targetDate,
+            cancellationToken);
+        foreach (var todo in carried)
+        {
+            todo.CarryOverTo(targetDate, clock.UtcNow);
+        }
+
+        if (carried.Count > 0)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var searchResult = await todos.SearchAsync(
+            new PersonalTodoSearchCriteria(
+                currentUser.UserId,
+                targetDate,
+                string.IsNullOrWhiteSpace(query.Search)
+                    ? null
+                    : query.Search.Trim(),
+                query.PageNumber,
+                query.PageSize),
             cancellationToken);
 
-        return Result<IReadOnlyList<PersonalTodoDto>>.Success(
-            items.Select(ToDto).ToArray());
+        return Result<PagedResult<PersonalTodoDto>>.Success(
+            new PagedResult<PersonalTodoDto>(
+                searchResult.Items.Select(ToDto).ToArray(),
+                searchResult.TotalCount,
+                query.PageNumber,
+                query.PageSize));
     }
 }
 
@@ -177,6 +217,8 @@ internal static class PersonalTodoMapping
             todo.Id,
             todo.Title,
             todo.TodoDate,
+            todo.OriginalTodoDate,
+            todo.CarriedOverFromDate,
             todo.Notes,
             todo.IsCompleted,
             todo.CreatedAt,

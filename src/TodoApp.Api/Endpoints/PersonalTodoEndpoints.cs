@@ -32,11 +32,18 @@ internal static class PersonalTodoEndpoints
 
     private static async Task<IResult> ListTodosAsync(
         DateOnly? date,
+        string? search,
+        int? pageNumber,
+        int? pageSize,
         ListPersonalTodosHandler handler,
         CancellationToken cancellationToken) =>
         ApiResult.From(
             await handler.HandleAsync(
-                new ListPersonalTodosQuery(date),
+                new ListPersonalTodosQuery(
+                    date,
+                    search,
+                    pageNumber is null or 0 ? 1 : pageNumber.Value,
+                    pageSize is null or 0 ? 10 : pageSize.Value),
                 cancellationToken));
 
     private static async Task<IResult> CreateTodoAsync(

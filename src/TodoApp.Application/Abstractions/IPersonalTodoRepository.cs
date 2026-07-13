@@ -2,6 +2,17 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Application.Abstractions;
 
+public sealed record PersonalTodoSearchCriteria(
+    Guid UserId,
+    DateOnly? Date,
+    string? Search,
+    int PageNumber,
+    int PageSize);
+
+public sealed record PersonalTodoSearchResult(
+    IReadOnlyList<PersonalTodo> Items,
+    int TotalCount);
+
 public interface IPersonalTodoRepository
 {
     Task AddAsync(
@@ -12,9 +23,13 @@ public interface IPersonalTodoRepository
         Guid todoId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<PersonalTodo>> ListForUserAsync(
+    Task<PersonalTodoSearchResult> SearchAsync(
+        PersonalTodoSearchCriteria criteria,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
         Guid userId,
-        DateOnly? date,
+        DateOnly targetDate,
         CancellationToken cancellationToken);
 
     Task RemoveAsync(
