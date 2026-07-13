@@ -746,13 +746,14 @@ export default function App() {
       <main id="workspace">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setNavOpen(!navOpen)} aria-label="Toggle navigation"><Menu /></button>
-          <div><p className="eyebrow">{workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
+          <div className="topbar-title"><p className="eyebrow">{view === 'home' ? 'Workspace' : workspace?.name ?? 'Workspace'}</p><h1>{viewTitle(view)}</h1></div>
           <WorkspaceSwitcher
             workspaces={workspaces}
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
+          {view === 'home' && <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>}
           <NotificationBell
             notifications={notificationItems}
             open={notificationsOpen}
@@ -771,11 +772,18 @@ export default function App() {
         {error && <div className="error-state"><AlertTriangle /> <span>{error}</span><button onClick={() => void load()}>Retry</button><button onClick={resetSession}>Reset session</button></div>}
 
         {view === 'home' && <>
+          <section className="home-heading">
+            <div>
+              <p className="eyebrow">Workspace Health</p>
+              <h2>{workspace?.name ?? 'Workspace'} overview</h2>
+            </div>
+            <span>{projects.length} project{projects.length === 1 ? '' : 's'} tracked</span>
+          </section>
           <section className="metrics" aria-label="Portfolio health">
-            <Metric label="Active work" value={dashboard.activeTaskCount} icon={<Clock3 />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Critical" value={dashboard.criticalTaskCount} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Blocked" value={dashboard.blockedTaskCount} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
-            <Metric label="Overdue" value={dashboard.overdueTaskCount} icon={<CheckCircle2 />} tone="danger" selected={drilldown === 'overdue'} onClick={() => { setDrilldown('overdue'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Projects" value={dashboard.projectCount} detail={`${projects.filter((item) => item.archivedAt === null).length} active`} icon={<FolderPlus />} selected={false} onClick={() => openView('projects')} />
+            <Metric label="Active work" value={dashboard.activeTaskCount} detail={`${dashboard.overdueTaskCount} overdue`} icon={<LayoutList />} selected={drilldown === 'active'} onClick={() => { setDrilldown('active'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Critical" value={dashboard.criticalTaskCount} detail={dashboard.criticalTaskCount ? 'Needs attention' : 'No critical tasks'} icon={<AlertTriangle />} tone="danger" selected={drilldown === 'critical'} onClick={() => { setDrilldown('critical'); setPageNumber(1); openView('tasks') }} />
+            <Metric label="Blocked" value={dashboard.blockedTaskCount} detail={dashboard.blockedTaskCount ? 'Workflow blocked' : 'No blocked work'} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
           </section>
 
           <DashboardAnalytics dashboard={dashboard} />
@@ -1792,6 +1800,7 @@ function adjustBreakdownCount(
 function Metric({
   label,
   value,
+  detail,
   icon,
   tone = '',
   selected = false,
@@ -1799,6 +1808,7 @@ function Metric({
 }: {
   label: string
   value: number | string
+  detail?: string
   icon: ReactNode
   tone?: string
   selected?: boolean
@@ -1807,7 +1817,7 @@ function Metric({
   const className = `metric ${tone} ${onClick ? 'interactive' : ''} ${selected ? 'selected' : ''}`
   const content = <>
     <span className="metric-icon">{icon}</span>
-    <div><strong>{value}</strong><span>{label}</span></div>
+    <div><span className="metric-label">{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</div>
   </>
   return onClick
     ? <button className={className} onClick={onClick} aria-pressed={selected} type="button">{content}</button>
