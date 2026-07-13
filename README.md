@@ -57,8 +57,9 @@ real workspace application:
   archive support, pinning, pagination, and quick access to project tasks or
   sprint planning.
 - `Sprints`: dedicated project sprint page for creating planned delivery
-  cycles, starting active work, completing or cancelling sprints, and opening
-  the matching project task list.
+  cycles, starting active work, completing or cancelling sprints, opening the
+  matching project task list, and drilling into Sprint 1/Sprint 2 style detail
+  views with project, sprint, and task status information.
 - `Board`: drag-and-drop delivery board across Backlog, Ready, In Progress,
   Blocked, and Completed, with guarded assignment rules, pinned tasks, and
   quick task notes.

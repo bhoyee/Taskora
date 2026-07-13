@@ -945,6 +945,7 @@ export default function App() {
           onArchive={archiveProject}
         />}
         {view === 'sprints' && <SprintsPage
+          workspaceId={workspace?.id ?? selectedWorkspaceId}
           projects={projects}
           selectedProjectId={project?.id ?? selectedProjectId}
           workspaceRole={workspace?.role ?? null}
@@ -1728,6 +1729,7 @@ function ProjectsPage({
 }
 
 function SprintsPage({
+  workspaceId,
   projects,
   selectedProjectId,
   workspaceRole,
@@ -1742,6 +1744,7 @@ function SprintsPage({
   onUpdateSprint,
   onChangeSprintStatus,
 }: {
+  workspaceId: string
   projects: ProjectDetails[]
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
@@ -1823,6 +1826,7 @@ function SprintsPage({
     {selectedProject
       ? <>
           <SprintPanel
+            workspaceId={workspaceId}
             project={selectedProject}
             workspaceRole={workspaceRole}
             composerToken={sprintComposerToken}
@@ -1839,6 +1843,7 @@ function SprintsPage({
 }
 
 function SprintPanel({
+  workspaceId,
   project,
   workspaceRole,
   composerToken,
@@ -1846,6 +1851,7 @@ function SprintPanel({
   onUpdate,
   onChangeStatus,
 }: {
+  workspaceId: string
   project: ProjectDetails
   workspaceRole: Workspace['role'] | null
   composerToken?: number
@@ -1873,8 +1879,11 @@ function SprintPanel({
   const canManage = workspaceRole === 'Owner' || workspaceRole === 'Manager'
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Sprint | null>(null)
+  const [selectedSprint, setSelectedSprint] = useState<{ sprint: Sprint; number: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const orderedSprints = [...project.sprints].sort((left, right) =>
+    left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
   const activeSprint = project.sprints.find((sprint) => sprint.status === 'Active')
   const plannedCount = project.sprints.filter((sprint) => sprint.status === 'Planned').length
 
@@ -1954,17 +1963,20 @@ function SprintPanel({
         <button className="primary" disabled={busy}>{busy ? 'Saving...' : editing ? 'Save sprint' : 'Create sprint'}</button>
       </footer>
     </form>}
-    {project.sprints.length
+    {orderedSprints.length
       ? <div className="sprint-list">
-          {project.sprints.map((sprint) => <article className={`sprint-card ${sprint.status.toLowerCase()}`} key={sprint.id}>
-            <header>
-              <div>
-                <strong>{sprint.name}</strong>
-                <span className={`sprint-status ${sprint.status.toLowerCase()}`}>{sprint.status}</span>
-              </div>
-              <small>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</small>
-            </header>
-            <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+          {orderedSprints.map((sprint, index) => <article className={`sprint-card ${sprint.status.toLowerCase()}`} key={sprint.id}>
+            <button type="button" className="sprint-card-open" onClick={() => setSelectedSprint({ sprint, number: index + 1 })}>
+              <header>
+                <div>
+                  <span className="sprint-number">Sprint {index + 1}</span>
+                  <strong>{sprint.name}</strong>
+                  <span className={`sprint-status ${sprint.status.toLowerCase()}`}>{sprint.status}</span>
+                </div>
+                <small>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</small>
+              </header>
+              <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+            </button>
             {canManage && <footer>
               {sprint.status === 'Planned' && <button className="secondary" disabled={busy} onClick={() => setEditing(sprint)}><Pencil size={15} /> Edit</button>}
               {sprint.status === 'Planned' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'start')}><Clock3 size={15} /> Start</button>}
@@ -1974,7 +1986,118 @@ function SprintPanel({
           </article>)}
         </div>
       : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create a sprint to group tasks into short delivery cycles.</p>{canManage && <button className="primary" onClick={() => setCreating(true)}><Plus size={16} /> Add first sprint</button>}</div>}
+    {selectedSprint && <SprintDetailsDialog
+      workspaceId={workspaceId}
+      project={project}
+      sprint={selectedSprint.sprint}
+      sprintNumber={selectedSprint.number}
+      onClose={() => setSelectedSprint(null)}
+    />}
   </section>
+}
+
+function SprintDetailsDialog({
+  workspaceId,
+  project,
+  sprint,
+  sprintNumber,
+  onClose,
+}: {
+  workspaceId: string
+  project: ProjectDetails
+  sprint: Sprint
+  sprintNumber: number
+  onClose: () => void
+}) {
+  const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    setError('')
+    api.tasks(workspaceId, '', 1, 100, project.id, sprint.id)
+      .then((page) => {
+        if (mounted) setTasks(page.items)
+      })
+      .catch((reason) => {
+        if (mounted) setError(reason instanceof Error ? reason.message : 'Sprint tasks could not be loaded.')
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [workspaceId, project.id, sprint.id])
+
+  const statusCounts = tasks.reduce<Record<TaskStatus, number>>((counts, task) => {
+    counts[task.status] += 1
+    return counts
+  }, { Backlog: 0, Ready: 0, InProgress: 0, Blocked: 0, Completed: 0 })
+  const openTasks = tasks.length - statusCounts.Completed
+
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="sprint-details-dialog" aria-labelledby="sprint-detail-title">
+      <header>
+        <div>
+          <p className="eyebrow">{project.name}</p>
+          <h2 id="sprint-detail-title">Sprint {sprintNumber}: {sprint.name}</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="sprint-detail-body">
+        <div className="sprint-detail-grid">
+          <article>
+            <span>Project delivery</span>
+            <strong>{project.targetDate ? formatDate(project.targetDate) : 'Not set'}</strong>
+          </article>
+          <article>
+            <span>Sprint window</span>
+            <strong>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</strong>
+          </article>
+          <article>
+            <span>Sprint status</span>
+            <strong>{sprint.status}</strong>
+          </article>
+          <article>
+            <span>Open sprint work</span>
+            <strong>{openTasks}</strong>
+          </article>
+        </div>
+        <section className="sprint-goal">
+          <span>Goal</span>
+          <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+        </section>
+        <section className="sprint-status-summary" aria-label="Sprint task status summary">
+          {Object.entries(statusCounts).map(([status, count]) =>
+            <span key={status}><i className={`status-dot ${status.toLowerCase()}`} /> {statusLabels[status as TaskStatus]} <strong>{count}</strong></span>)}
+        </section>
+        <section className="sprint-task-table">
+          <header>
+            <h3>Tasks under this sprint</h3>
+            <span>{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+          </header>
+          {loading && <div className="loading compact">Loading sprint tasks...</div>}
+          {error && <p className="field-error">{error}</p>}
+          {!loading && !error && (tasks.length
+            ? <div className="sprint-task-list">
+                {tasks.map((task) => <article key={task.id}>
+                  <div>
+                    <strong>{task.title}</strong>
+                    <span>{task.tags.length ? task.tags.join(', ') : 'No tags'}</span>
+                  </div>
+                  <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+                  <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No deadline'}</span>
+                </article>)}
+              </div>
+            : <div className="empty compact"><LayoutList /><h2>No tasks in this sprint</h2><p>Assign tasks to this sprint from the task create or edit form.</p></div>)}
+        </section>
+      </section>
+    </dialog>
+  </div>
 }
 
 function nextWeekInput() {
