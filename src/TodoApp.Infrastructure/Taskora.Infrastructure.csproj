@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\TodoApp.Application\TodoApp.Application.csproj" />
+    <ProjectReference Include="..\TodoApp.Application\Taskora.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

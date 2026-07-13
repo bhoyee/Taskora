@@ -12,7 +12,7 @@ operational cost of microservices before the product needs them.
 ## Proposed Solution Structure
 
 ```text
-TodoApp.sln
+Taskora.sln
 src/
   TodoApp.Domain/
   TodoApp.Application/

@@ -61,13 +61,13 @@ stages:
             displayName: Restore packages
             inputs:
               command: restore
-              projects: TodoApp.sln
+              projects: Taskora.sln
 
           - task: DotNetCoreCLI@2
             displayName: Build solution
             inputs:
               command: build
-              projects: TodoApp.sln
+              projects: Taskora.sln
               arguments: --configuration $(buildConfiguration) --no-restore
 
           - script: dotnet tool restore
@@ -79,8 +79,8 @@ stages:
               --idempotent
               --configuration $(buildConfiguration)
               --no-build
-              --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj
-              --startup-project src/TodoApp.Api/TodoApp.Api.csproj
+              --project src/TodoApp.Infrastructure/Taskora.Infrastructure.csproj
+              --startup-project src/TodoApp.Api/Taskora.Api.csproj
               --output $(Build.ArtifactStagingDirectory)/database/migrations.sql
             displayName: Generate database migration script
             env:
@@ -110,7 +110,7 @@ stages:
             inputs:
               command: publish
               publishWebProjects: false
-              projects: src/TodoApp.Api/TodoApp.Api.csproj
+              projects: src/TodoApp.Api/Taskora.Api.csproj
               arguments: >-
                 --configuration $(buildConfiguration)
                 --no-build

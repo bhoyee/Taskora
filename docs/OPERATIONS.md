@@ -47,9 +47,9 @@ flowchart LR
 ## Local Verification
 
 ```powershell
-dotnet restore TodoApp.sln
-dotnet build TodoApp.sln --configuration Release --no-restore
-dotnet test TodoApp.sln --configuration Release --no-build --collect:"XPlat Code Coverage"
+dotnet restore Taskora.sln
+dotnet build Taskora.sln --configuration Release --no-restore
+dotnet test Taskora.sln --configuration Release --no-build --collect:"XPlat Code Coverage"
 
 Push-Location src/TodoApp.Web
 npm ci

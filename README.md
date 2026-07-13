@@ -200,9 +200,9 @@ The project follows TDD for core behaviour and uses focused tests at each layer:
 Run backend validation:
 
 ```powershell
-dotnet restore TodoApp.sln
-dotnet build TodoApp.sln --configuration Release
-dotnet test TodoApp.sln --configuration Release --no-build
+dotnet restore Taskora.sln
+dotnet build Taskora.sln --configuration Release
+dotnet test Taskora.sln --configuration Release --no-build
 ```
 
 Run frontend validation from `src/TodoApp.Web`:
@@ -232,7 +232,7 @@ DemoData__SeedOnStartup=true
 Start the API:
 
 ```powershell
-dotnet run --project src/TodoApp.Api/TodoApp.Api.csproj --launch-profile http
+dotnet run --project src/TodoApp.Api/Taskora.Api.csproj --launch-profile http
 ```
 
 Start the web app:
@@ -307,8 +307,8 @@ Apply local migrations:
 
 ```powershell
 dotnet tool run dotnet-ef database update `
-  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
-  --startup-project src/TodoApp.Api/TodoApp.Api.csproj
+  --project src/TodoApp.Infrastructure/Taskora.Infrastructure.csproj `
+  --startup-project src/TodoApp.Api/Taskora.Api.csproj
 ```
 
 For production, prefer an idempotent SQL migration script reviewed before
@@ -316,8 +316,8 @@ deployment:
 
 ```powershell
 dotnet tool run dotnet-ef migrations script --idempotent `
-  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
-  --startup-project src/TodoApp.Api/TodoApp.Api.csproj `
+  --project src/TodoApp.Infrastructure/Taskora.Infrastructure.csproj `
+  --startup-project src/TodoApp.Api/Taskora.Api.csproj `
   --output database/migrations.sql
 ```
 
