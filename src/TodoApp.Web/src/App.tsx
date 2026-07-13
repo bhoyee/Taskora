@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'settings' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'settings', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -51,21 +51,9 @@ interface UserProfile {
   email: string
 }
 
-interface UserSettings {
-  defaultView: 'list' | 'board'
-  compactMode: boolean
-  emailDigest: boolean
-}
-
 const defaultProfile: UserProfile = {
   displayName: 'Jadesola Aliu',
   email: 'jadesola@example.com',
-}
-
-const defaultSettings: UserSettings = {
-  defaultView: 'list',
-  compactMode: false,
-  emailDigest: true,
 }
 
 const defaultAccount: AccountSession | null = null
@@ -210,8 +198,6 @@ export default function App() {
   const [activityType, setActivityType] = useState<(typeof activityTypes)[number]>('All')
   const [profile, setProfile] = useState<UserProfile>(() =>
     readLocal('todoapp_profile', defaultProfile))
-  const [settings, setSettings] = useState<UserSettings>(() =>
-    readLocal('todoapp_settings', defaultSettings))
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
   const [currentUserId, setCurrentUserId] = useState(() =>
@@ -675,7 +661,6 @@ export default function App() {
           <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
-          <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
@@ -891,13 +876,6 @@ export default function App() {
             await load()
           }}
         />}
-        {view === 'settings' && <SettingsPage
-          settings={settings}
-          onSave={(next) => {
-          setSettings(next)
-          localStorage.setItem('todoapp_settings', JSON.stringify(next))
-          setNotice('Settings saved.')
-        }} />}
         {view === 'profile' && <ProfilePage
           profile={profile}
           account={account}
@@ -945,7 +923,6 @@ function viewTitle(view: View) {
     calendar: 'Calendar',
     activity: 'Activity timeline',
     team: 'Team',
-    settings: 'Workspace settings',
     profile: 'Profile',
     operations: 'Operations',
   }[view]
@@ -2790,35 +2767,6 @@ function TeamPage({
         {!invitations.length && <p className="muted">No pending invitations for this workspace.</p>}
       </div>
     </section>}
-  </section>
-}
-
-function SettingsPage({
-  settings,
-  onSave,
-}: {
-  settings: UserSettings
-  onSave: (settings: UserSettings) => void
-}) {
-  const [draft, setDraft] = useState(settings)
-  useEffect(() => setDraft(settings), [settings])
-
-  return <section className="settings-grid">
-    <form className="panel-page settings-form" onSubmit={(event) => {
-      event.preventDefault()
-      onSave(draft)
-    }}>
-      <div className="settings-section">
-        <div>
-          <h2>Workspace preferences</h2>
-          <p>Choose the default landing view and notification behaviour for this browser session.</p>
-        </div>
-        <label>Default view<select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as 'list' | 'board' })}><option value="list">Tasks list</option><option value="board">Board</option></select><ChevronDown /></label>
-      </div>
-      <label className="toggle-row"><input type="checkbox" checked={draft.compactMode} onChange={(event) => setDraft({ ...draft, compactMode: event.target.checked })} /><span><strong>Compact task rows</strong><small>Prepare the UI for dense operational dashboards.</small></span></label>
-      <label className="toggle-row"><input type="checkbox" checked={draft.emailDigest} onChange={(event) => setDraft({ ...draft, emailDigest: event.target.checked })} /><span><strong>Email digest</strong><small>Keep the preference ready for a production notification service.</small></span></label>
-      <footer><button className="primary"><Save size={16} /> Save settings</button></footer>
-    </form>
   </section>
 }
 

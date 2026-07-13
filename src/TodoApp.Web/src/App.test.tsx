@@ -522,7 +522,7 @@ describe('delivery workspace', () => {
     expect(screen.getByRole('button', { name: 'Complete task' })).toBeInTheDocument()
   })
 
-  it('opens activity, settings, and profile pages from the sidebar', async () => {
+  it('opens activity, team, and profile pages from the sidebar', async () => {
     mockApi()
     const user = userEvent.setup()
     render(<App />)
@@ -535,11 +535,9 @@ describe('delivery workspace', () => {
     await user.selectOptions(screen.getByLabelText('Filter'), 'StatusChanged')
     expect(screen.getByText('Status Changed')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /settings/i }))
-    expect(screen.getByRole('heading', { name: 'Workspace settings' })).toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Default view'), 'board')
-    await user.click(screen.getByRole('button', { name: /save settings/i }))
-    expect(screen.getByText('Settings saved.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /team/i }))
+    expect(screen.getByRole('heading', { name: 'Team' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Team members' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /profile/i }))
     expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
