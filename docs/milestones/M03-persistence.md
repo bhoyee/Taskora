@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Complete
 
 ## Objective
 
@@ -77,3 +77,25 @@ As a user, I want task lists to remain responsive as data grows.
 7. `test: verify repository queries and transactions`
 8. `feat: configure SQLite and Azure SQL providers`
 9. `docs: complete persistence milestone`
+
+## Current Progress
+
+Delivered:
+
+- `TodoApp.Infrastructure` and integration-test projects.
+- EF Core 10.0.9 with SQLite and SQL Server providers.
+- Secured SQLite native bundle without known vulnerable packages.
+- Project, task, planning, priority, dependency, and activity mappings.
+- Repository implementations for commands, task search, and project boards.
+- Server-side filters, ordering, pagination, and dashboard aggregation.
+- Restricted deletes, transaction rollback, and concurrency tokens.
+- Initial SQLite migration and local EF tool manifest.
+- Idempotent development seed data.
+- File-backed restart and provider-selection tests.
+- 16 passing Infrastructure integration tests.
+
+Deferred to later milestones:
+
+- API startup migration and development-seed invocation.
+- Azure SQL deployment migrations and smoke tests.
+- Production secret provisioning through Azure configuration.
