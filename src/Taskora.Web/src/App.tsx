@@ -2340,41 +2340,43 @@ function DonutChart({
   const circumference = 2 * Math.PI * radius
   let offset = 0
 
-  return <article className="analytics-card">
+  return <article className="analytics-card donut-card">
     <header><h2>{title}</h2><span>{total} tasks</span></header>
-    <div className="donut-wrap">
-      <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={`${title}: ${total} tasks`}>
-        <circle cx="60" cy="60" r={radius} className="donut-track" />
-        {total > 0 && items.filter((item) => item.count > 0).map((item) => {
-          const length = item.count / total * circumference
-          const percentage = chartPercentage(item.count, total)
-          const detail = `${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${percentage}%)`
-          const segment = <circle
-            key={item.label}
-            cx="60"
-            cy="60"
-            r={radius}
-            className="donut-segment"
-            aria-label={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'}, ${percentage}% of ${title.toLowerCase()}`}
-            tabIndex={0}
-            onMouseEnter={() => setActiveSegment(detail)}
-            onFocus={() => setActiveSegment(detail)}
-            onMouseLeave={() => setActiveSegment(null)}
-            onBlur={() => setActiveSegment(null)}
-            stroke={colors[item.label] ?? '#73808d'}
-            strokeDasharray={`${length} ${circumference - length}`}
-            strokeDashoffset={-offset}
-          >
-            <title>{detail}</title>
-          </circle>
-          offset += length
-          return segment
-        })}
-      </svg>
-      {activeSegment && <div className="donut-tooltip" role="status">{activeSegment}</div>}
-      <div className="donut-center"><strong>{total ? Math.round((items.find((item) => item.label === 'Completed')?.count ?? 0) * 100 / total) : 0}%</strong><span>done</span></div>
+    <div className="donut-layout">
+      <div className="donut-wrap">
+        <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={`${title}: ${total} tasks`}>
+          <circle cx="60" cy="60" r={radius} className="donut-track" />
+          {total > 0 && items.filter((item) => item.count > 0).map((item) => {
+            const length = item.count / total * circumference
+            const percentage = chartPercentage(item.count, total)
+            const detail = `${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'} (${percentage}%)`
+            const segment = <circle
+              key={item.label}
+              cx="60"
+              cy="60"
+              r={radius}
+              className="donut-segment"
+              aria-label={`${friendlyChartLabel(item.label)}: ${item.count} task${item.count === 1 ? '' : 's'}, ${percentage}% of ${title.toLowerCase()}`}
+              tabIndex={0}
+              onMouseEnter={() => setActiveSegment(detail)}
+              onFocus={() => setActiveSegment(detail)}
+              onMouseLeave={() => setActiveSegment(null)}
+              onBlur={() => setActiveSegment(null)}
+              stroke={colors[item.label] ?? '#73808d'}
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={-offset}
+            >
+              <title>{detail}</title>
+            </circle>
+            offset += length
+            return segment
+          })}
+        </svg>
+        {activeSegment && <div className="donut-tooltip" role="status">{activeSegment}</div>}
+        <div className="donut-center"><strong>{total}</strong><span>Total</span></div>
+      </div>
+      <ChartLegend items={items} colors={colors} showPercent />
     </div>
-    <ChartLegend items={items} colors={colors} />
   </article>
 }
 
@@ -2412,8 +2414,10 @@ function BarChart({
 function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
   const points = buildTasksOverTimePoints(tasks)
   const max = Math.max(1, ...points.flatMap((point) => [point.created, point.completed]))
-  const createdPath = buildLinePath(points.map((point) => point.created), max)
-  const completedPath = buildLinePath(points.map((point) => point.completed), max)
+  const yAxis = buildTrendYAxis(max)
+  const axisMax = yAxis[0]
+  const createdPath = buildLinePath(points.map((point) => point.created), axisMax)
+  const completedPath = buildLinePath(points.map((point) => point.completed), axisMax)
   const latest = points[points.length - 1]
   return <article className="analytics-card trend-card">
     <header>
@@ -2425,27 +2429,31 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
       data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
       title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
     >
-      <svg viewBox="0 0 280 150" role="img" aria-label="Tasks created and completed over time">
-        {[0, 1, 2, 3].map((line) => <line key={line} x1="0" x2="280" y1={20 + line * 34} y2={20 + line * 34} />)}
-        <path className="trend-area created" d={`${createdPath} L 268 132 L 12 132 Z`} />
+      <svg viewBox="0 0 320 190" role="img" aria-label="Tasks created and completed over time">
+        {yAxis.map((value) => {
+          const y = trendY(value, axisMax)
+          return <g key={value}>
+            <text className="trend-y-label" x="7" y={y + 4}>{value}</text>
+            <line x1="42" x2="304" y1={y} y2={y} />
+          </g>
+        })}
+        <line className="trend-axis-line" x1="42" x2="304" y1="142" y2="142" />
+        <path className="trend-area created" d={`${createdPath} L 304 142 L 42 142 Z`} />
         <path className="trend-line created" d={createdPath} />
         <path className="trend-line completed" d={completedPath} />
         {points.map((point, index) => {
           const x = trendX(index, points.length)
           return <g className="trend-point" key={point.key}>
-            <circle cx={x} cy={trendY(point.created, max)} r="3" />
+            <circle cx={x} cy={trendY(point.created, axisMax)} r="3" />
             <title>{`${point.label}: ${point.created} created, ${point.completed} completed`}</title>
           </g>
         })}
+        {points.map((point, index) => <text className="trend-x-label" key={`${point.key}-label`} x={trendX(index, points.length)} y="166">{point.label}</text>)}
       </svg>
-      <div className="trend-axis">
-        <span>{points[0].label}</span>
-        <span>{latest.label}</span>
-      </div>
     </div>
     <div className="chart-legend compact">
-      <span><i style={{ backgroundColor: '#2875d1' }} /> Created <strong>{latest.created}</strong></span>
-      <span><i style={{ backgroundColor: '#159b74' }} /> Completed <strong>{latest.completed}</strong></span>
+      <span><i style={{ backgroundColor: '#159b74' }} /> Completed</span>
+      <span><i style={{ backgroundColor: '#2875d1' }} /> Created</span>
     </div>
   </article>
 }
@@ -2480,14 +2488,18 @@ function WorkloadChart({
 function ChartLegend({
   items,
   colors,
+  showPercent = false,
 }: {
   items: DashboardBreakdownItem[]
   colors: Record<string, string>
+  showPercent?: boolean
 }) {
+  const total = items.reduce((sum, item) => sum + item.count, 0)
   return <div className="chart-legend">
     {items.map((item) => <span key={item.label}>
       <i style={{ backgroundColor: colors[item.label] ?? '#73808d' }} />
-      {friendlyChartLabel(item.label)} <strong>{item.count}</strong>
+      <span>{friendlyChartLabel(item.label)}</span>
+      <strong>{item.count}{showPercent ? ` (${chartPercentage(item.count, total)}%)` : ''}</strong>
     </span>)}
   </div>
 }
@@ -2520,11 +2532,17 @@ function buildLinePath(values: number[], max: number) {
 }
 
 function trendX(index: number, total: number) {
-  return total <= 1 ? 12 : 12 + index * (256 / (total - 1))
+  return total <= 1 ? 42 : 42 + index * (262 / (total - 1))
 }
 
 function trendY(value: number, max: number) {
-  return 132 - value / max * 104
+  return 142 - value / max * 118
+}
+
+function buildTrendYAxis(max: number) {
+  const step = Math.max(5, Math.ceil(max / 4 / 5) * 5)
+  const top = step * 4
+  return [top, step * 3, step * 2, step, 0]
 }
 
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
