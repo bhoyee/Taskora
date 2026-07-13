@@ -5,23 +5,23 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Domain", "src\TodoApp.Domain\Taskora.Domain.csproj", "{CCDA490A-15FE-40BA-99D6-7A5B6DF8F68F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Domain", "src\Taskora.Domain\Taskora.Domain.csproj", "{CCDA490A-15FE-40BA-99D6-7A5B6DF8F68F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Domain.Tests", "tests\TodoApp.Domain.Tests\Taskora.Domain.Tests.csproj", "{60B8A51F-7CA0-49C8-A9EE-46C6B78B0400}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Domain.Tests", "tests\Taskora.Domain.Tests\Taskora.Domain.Tests.csproj", "{60B8A51F-7CA0-49C8-A9EE-46C6B78B0400}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Application", "src\TodoApp.Application\Taskora.Application.csproj", "{9F6BE8EE-E4FA-4139-BA50-FF8C01FFDEC8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Application", "src\Taskora.Application\Taskora.Application.csproj", "{9F6BE8EE-E4FA-4139-BA50-FF8C01FFDEC8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Application.Tests", "tests\TodoApp.Application.Tests\Taskora.Application.Tests.csproj", "{1A9F137F-49B6-445E-B6FF-E7AA3DB0C78E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Application.Tests", "tests\Taskora.Application.Tests\Taskora.Application.Tests.csproj", "{1A9F137F-49B6-445E-B6FF-E7AA3DB0C78E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Infrastructure", "src\TodoApp.Infrastructure\Taskora.Infrastructure.csproj", "{920EF5A5-1D1B-447C-9FA4-7376562FE524}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Infrastructure", "src\Taskora.Infrastructure\Taskora.Infrastructure.csproj", "{920EF5A5-1D1B-447C-9FA4-7376562FE524}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Infrastructure.IntegrationTests", "tests\TodoApp.Infrastructure.IntegrationTests\Taskora.Infrastructure.IntegrationTests.csproj", "{75196E31-D963-454D-A898-F1C7084F5C94}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Infrastructure.IntegrationTests", "tests\Taskora.Infrastructure.IntegrationTests\Taskora.Infrastructure.IntegrationTests.csproj", "{75196E31-D963-454D-A898-F1C7084F5C94}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Api", "src\TodoApp.Api\Taskora.Api.csproj", "{9ADF6DF9-C710-4C05-AC30-5A934F5B7460}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Api", "src\Taskora.Api\Taskora.Api.csproj", "{9ADF6DF9-C710-4C05-AC30-5A934F5B7460}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Api.IntegrationTests", "tests\TodoApp.Api.IntegrationTests\Taskora.Api.IntegrationTests.csproj", "{A9149851-D8BB-462B-BC0C-B18B5676C9FF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Taskora.Api.IntegrationTests", "tests\Taskora.Api.IntegrationTests\Taskora.Api.IntegrationTests.csproj", "{A9149851-D8BB-462B-BC0C-B18B5676C9FF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

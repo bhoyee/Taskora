@@ -3,7 +3,7 @@
 ## Problem Statement
 
 Traditional todo applications capture what must be done but provide little
-help deciding what deserves attention. TodoApp will help users plan and explain
+help deciding what deserves attention. Taskora will help users plan and explain
 priorities using value, urgency, risk, effort, deadlines, and dependencies.
 
 ## Personas

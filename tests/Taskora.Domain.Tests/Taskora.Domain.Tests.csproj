@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TodoApp.Application\Taskora.Application.csproj" />
+    <ProjectReference Include="..\..\src\Taskora.Domain\Taskora.Domain.csproj" />
   </ItemGroup>
 
 </Project>

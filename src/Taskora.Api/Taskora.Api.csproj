@@ -18,12 +18,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TodoApp.Application\Taskora.Application.csproj" />
-    <ProjectReference Include="..\TodoApp.Infrastructure\Taskora.Infrastructure.csproj" />
+    <ProjectReference Include="..\Taskora.Application\Taskora.Application.csproj" />
+    <ProjectReference Include="..\Taskora.Infrastructure\Taskora.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('..\TodoApp.Web\dist')">
-    <Content Include="..\TodoApp.Web\dist\**\*"
+  <ItemGroup Condition="Exists('..\Taskora.Web\dist')">
+    <Content Include="..\Taskora.Web\dist\**\*"
              Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

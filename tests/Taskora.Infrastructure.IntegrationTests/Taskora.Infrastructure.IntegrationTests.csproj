@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TodoApp.Infrastructure\Taskora.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Taskora.Infrastructure\Taskora.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

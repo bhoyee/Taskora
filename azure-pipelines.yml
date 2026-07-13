@@ -47,15 +47,15 @@ stages:
 
           - script: npm ci
             displayName: Restore frontend packages
-            workingDirectory: src/TodoApp.Web
+            workingDirectory: src/Taskora.Web
 
           - script: npm run test
             displayName: Run frontend component tests
-            workingDirectory: src/TodoApp.Web
+            workingDirectory: src/Taskora.Web
 
           - script: npm run build
             displayName: Build frontend
-            workingDirectory: src/TodoApp.Web
+            workingDirectory: src/Taskora.Web
 
           - task: DotNetCoreCLI@2
             displayName: Restore packages
@@ -79,8 +79,8 @@ stages:
               --idempotent
               --configuration $(buildConfiguration)
               --no-build
-              --project src/TodoApp.Infrastructure/Taskora.Infrastructure.csproj
-              --startup-project src/TodoApp.Api/Taskora.Api.csproj
+              --project src/Taskora.Infrastructure/Taskora.Infrastructure.csproj
+              --startup-project src/Taskora.Api/Taskora.Api.csproj
               --output $(Build.ArtifactStagingDirectory)/database/migrations.sql
             displayName: Generate database migration script
             env:
@@ -110,7 +110,7 @@ stages:
             inputs:
               command: publish
               publishWebProjects: false
-              projects: src/TodoApp.Api/Taskora.Api.csproj
+              projects: src/Taskora.Api/Taskora.Api.csproj
               arguments: >-
                 --configuration $(buildConfiguration)
                 --no-build

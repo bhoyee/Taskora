@@ -27,7 +27,7 @@ As a user, I want task lists to remain responsive as data grows.
 
 ## Technical Tasks
 
-- Create `TodoApp.Infrastructure` and integration-test projects.
+- Create `Taskora.Infrastructure` and integration-test projects.
 - Add EF Core with SQLite for local development.
 - Implement `TodoAppDbContext` and explicit entity configurations.
 - Map entities, value objects, dependencies, and domain events safely.
@@ -82,7 +82,7 @@ As a user, I want task lists to remain responsive as data grows.
 
 Delivered:
 
-- `TodoApp.Infrastructure` and integration-test projects.
+- `Taskora.Infrastructure` and integration-test projects.
 - EF Core 10.0.9 with SQLite and SQL Server providers.
 - Secured SQLite native bundle without known vulnerable packages.
 - Project, task, planning, priority, dependency, and activity mappings.

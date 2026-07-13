@@ -997,22 +997,6 @@ export default function App() {
   )
 }
 
-function viewTitle(view: View) {
-  return {
-    home: 'Delivery workspace',
-    tasks: 'Tasks',
-    myday: 'My Day',
-    projects: 'Projects',
-    board: 'Board',
-    reports: 'Reports',
-    calendar: 'Calendar',
-    activity: 'Activity timeline',
-    team: 'Team',
-    profile: 'Profile',
-    operations: 'Operations',
-  }[view]
-}
-
 function initials(name: string) {
   return name
     .split(' ')
@@ -2213,8 +2197,6 @@ function ProjectGovernance({
   const openTasks = Math.max(0, dashboard.projectProgress.totalTasks - dashboard.projectProgress.completedTasks)
   const hasOverdue = dashboard.overdueTaskCount > 0
   const hasBlocked = dashboard.blockedTaskCount > 0
-  const hasCritical = dashboard.criticalTaskCount > 0
-  const deliveryAtRisk = delivery?.tone === 'critical' || delivery?.tone === 'warning'
   const healthScore = Math.max(0, Math.min(100,
     100 -
     dashboard.overdueTaskCount * 18 -
@@ -2631,8 +2613,6 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
   const api = check('API running')
   const database = check('Database')
   const email = check('Email notifications')
-  const cors = check('CORS configuration')
-  const auth = check('Authentication configuration')
   const reminders = check('Due date reminder runner')
   const statusText = (item?: OperationHealthCheck) =>
     item?.description ?? item?.status ?? 'Not reported'

@@ -2,7 +2,7 @@
 
 ## Product Vision
 
-TodoApp will become a priority-intelligence workspace that helps individuals
+Taskora will become a priority-intelligence workspace that helps individuals
 and teams decide what to work on, not only record tasks. It will combine task
 delivery, dependencies, risk, effort, and business value in one workflow.
 

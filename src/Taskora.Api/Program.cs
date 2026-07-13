@@ -218,7 +218,7 @@ var developmentIndex = Path.GetFullPath(
     Path.Combine(
         app.Environment.ContentRootPath,
         "..",
-        "TodoApp.Web",
+        "Taskora.Web",
         "dist",
         "index.html"));
 var webIndex = File.Exists(publishedIndex)

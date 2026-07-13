@@ -28,14 +28,14 @@ so that failures can be detected and diagnosed.
 
 ## Technical Tasks
 
-- Move the root prototype into `src/TodoApp.Api`.
+- Move the root prototype into `src/Taskora.Api`.
 - Add API request and response contracts separate from domain entities.
 - Add versioned controllers or focused endpoint modules.
 - Map application outcomes to HTTP status codes.
 - Add central exception handling using Problem Details.
 - Add request validation, OpenAPI metadata, and examples.
 - Add health endpoints, structured logging, and correlation identifiers.
-- Create `TodoApp.Api.IntegrationTests` with an in-process test server.
+- Create `Taskora.Api.IntegrationTests` with an in-process test server.
 - Update Docker and Azure pipeline project paths.
 
 ## Acceptance Criteria

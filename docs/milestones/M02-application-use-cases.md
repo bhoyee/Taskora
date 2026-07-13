@@ -28,7 +28,7 @@ understand progress and blockers.
 
 ## Technical Tasks
 
-- Create `TodoApp.Application` and `TodoApp.Application.Tests`.
+- Create `Taskora.Application` and `Taskora.Application.Tests`.
 - Reference Domain from Application without referencing Infrastructure or API.
 - Add commands for create, edit, move, block, complete, and reopen.
 - Add commands for dependency and planning-factor changes.
