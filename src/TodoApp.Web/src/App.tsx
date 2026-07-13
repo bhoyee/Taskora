@@ -724,23 +724,27 @@ export default function App() {
           onDateChange={setTodoDate}
           onReload={() => void loadTodos()}
           onCreate={async (title, date, notes) => {
+            setTodoError('')
             const created = await api.createTodo(title, date, notes)
             setTodos((items) => [created, ...items])
             setNotice(`Todo ${created.title} created.`)
           }}
           onUpdate={async (todo, title, date, notes) => {
+            setTodoError('')
             const updated = await api.updateTodo(todo.id, title, date, notes)
             setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
             if (updated.todoDate !== todoDate) void loadTodos(todoDate)
             setNotice(`Todo ${updated.title} updated.`)
           }}
           onToggle={async (todo) => {
+            setTodoError('')
             const updated = todo.isCompleted
               ? await api.reopenTodo(todo.id)
               : await api.completeTodo(todo.id)
             setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
           }}
           onDelete={async (todo) => {
+            setTodoError('')
             await api.deleteTodo(todo.id)
             setTodos((items) => items.filter((item) => item.id !== todo.id))
             setNotice(`Todo ${todo.title} deleted.`)
