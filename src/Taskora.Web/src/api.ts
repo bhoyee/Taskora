@@ -17,6 +17,7 @@ export interface TaskItem {
   createdByUserId: string | null
   assignedUserId: string | null
   createdAt: string
+  sprintId: string | null
   categoryId: string | null
   title: string
   status: TaskStatus
@@ -165,6 +166,19 @@ export interface ProjectCategory {
   name: string
 }
 
+export type SprintStatus = 'Planned' | 'Active' | 'Completed' | 'Cancelled'
+
+export interface Sprint {
+  id: string
+  projectId: string
+  name: string
+  goal: string | null
+  startDate: string
+  endDate: string
+  status: SprintStatus
+  closedAt: string | null
+}
+
 export interface ProjectDetails {
   id: string
   name: string
@@ -173,6 +187,7 @@ export interface ProjectDetails {
   isArchived: boolean
   archivedAt: string | null
   categories: ProjectCategory[]
+  sprints: Sprint[]
 }
 
 export interface TaskNote {
@@ -502,11 +517,13 @@ export const api = {
     pageNumber = 1,
     pageSize = 10,
     projectId?: string,
+    sprintId?: string,
   ) =>
     request<TaskPage>(
       `/api/v1/tasks?${new URLSearchParams({
         workspaceId,
         ...(projectId ? { projectId } : {}),
+        ...(sprintId ? { sprintId } : {}),
         search,
         pageNumber: String(pageNumber),
         pageSize: String(pageSize),
@@ -520,6 +537,7 @@ export const api = {
     businessValue: number,
     urgency: number,
     riskReduction: number,
+    sprintId?: string,
   ) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {
       method: 'POST',
@@ -530,13 +548,25 @@ export const api = {
         businessValue,
         urgency,
         riskReduction,
+        sprintId: sprintId || null,
       }),
     }),
   task: (id: string) => request<TaskItem>(`/api/v1/tasks/${id}`),
-  updateTask: (id: string, title: string, dueDate: string, effort: number) =>
+  updateTask: (
+    id: string,
+    title: string,
+    dueDate: string,
+    effort: number,
+    sprintId?: string,
+  ) =>
     request(`/api/v1/tasks/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
+      body: JSON.stringify({
+        title,
+        dueDate: dueDate || null,
+        effort,
+        sprintId: sprintId || null,
+      }),
     }),
   deleteTask: (id: string) =>
     request<boolean>(`/api/v1/tasks/${id}`, {
@@ -569,6 +599,51 @@ export const api = {
     request<ProjectCategory>(`/api/v1/projects/${projectId}/categories`, {
       method: 'POST',
       body: JSON.stringify({ name }),
+    }),
+  createSprint: (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) =>
+    request<Sprint>(`/api/v1/projects/${projectId}/sprints`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        goal: goal || null,
+        startDate,
+        endDate,
+      }),
+    }),
+  updateSprint: (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) =>
+    request<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name,
+        goal: goal || null,
+        startDate,
+        endDate,
+      }),
+    }),
+  startSprint: (projectId: string, sprintId: string) =>
+    request<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}/start`, {
+      method: 'POST',
+    }),
+  completeSprint: (projectId: string, sprintId: string) =>
+    request<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}/complete`, {
+      method: 'POST',
+    }),
+  cancelSprint: (projectId: string, sprintId: string) =>
+    request<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}/cancel`, {
+      method: 'POST',
     }),
   updateCategory: (id: string, categoryId: string | null) =>
     request<string | null>(`/api/v1/tasks/${id}/category`, {

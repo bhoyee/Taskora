@@ -14,7 +14,7 @@ import {
 import { api, streamWorkspaceEvents } from './api'
 import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
-  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
+  Sprint, TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
@@ -202,6 +202,8 @@ export default function App() {
   const [project, setProject] = useState<ProjectDetails | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     localStorage.getItem('todoapp_project_id') ?? '')
+  const [selectedSprintId, setSelectedSprintId] = useState(() =>
+    localStorage.getItem('todoapp_sprint_id') ?? '')
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
@@ -275,6 +277,13 @@ export default function App() {
       const selectedProject = projects.find((item) => item.id === selectedProjectId) ??
         projects[0] ??
         null
+      const nextSprintId = selectedProject?.sprints.some((sprint) => sprint.id === selectedSprintId)
+        ? selectedSprintId
+        : ''
+      if (nextSprintId !== selectedSprintId) {
+        setSelectedSprintId(nextSprintId)
+        localStorage.removeItem('todoapp_sprint_id')
+      }
       if (selectedProject && selectedProject.id !== selectedProjectId) {
         setSelectedProjectId(selectedProject.id)
         localStorage.setItem('todoapp_project_id', selectedProject.id)
@@ -287,7 +296,7 @@ export default function App() {
         api.dashboard(selected.id),
         api.report(selected.id, undefined, undefined, selectedProject?.id),
         selectedProject
-          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
+          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id, nextSprintId)
           : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
@@ -348,7 +357,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
@@ -357,7 +366,7 @@ export default function App() {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
-  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (!selectedWorkspaceId || loading || loggedOut) return undefined
 
@@ -384,7 +393,7 @@ export default function App() {
       window.clearTimeout(refreshTimer)
       controller.abort()
     }
-  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, activityPageNumber, activityType])
+  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -509,12 +518,23 @@ export default function App() {
     localStorage.setItem('todoapp_workspace_id', workspaceId)
     setSelectedProjectId('')
     localStorage.removeItem('todoapp_project_id')
+    setSelectedSprintId('')
+    localStorage.removeItem('todoapp_sprint_id')
     setPageNumber(1)
     setDrilldown('all')
   }
   const switchProject = (projectId: string) => {
     setSelectedProjectId(projectId)
     localStorage.setItem('todoapp_project_id', projectId)
+    setSelectedSprintId('')
+    localStorage.removeItem('todoapp_sprint_id')
+    setPageNumber(1)
+    setDrilldown('all')
+  }
+  const switchSprint = (sprintId: string) => {
+    setSelectedSprintId(sprintId)
+    if (sprintId) localStorage.setItem('todoapp_sprint_id', sprintId)
+    else localStorage.removeItem('todoapp_sprint_id')
     setPageNumber(1)
     setDrilldown('all')
   }
@@ -536,7 +556,9 @@ export default function App() {
         .sort((left, right) => left.name.localeCompare(right.name)))
       setProject(created)
       setSelectedProjectId(created.id)
+      setSelectedSprintId('')
       localStorage.setItem('todoapp_project_id', created.id)
+      localStorage.removeItem('todoapp_sprint_id')
       setPageNumber(1)
       setNotice(`Project ${created.name} created.`)
     } catch (reason) {
@@ -606,8 +628,10 @@ export default function App() {
     setDashboard(emptyDashboard)
     setSelectedWorkspaceId(created.id)
     setSelectedProjectId('')
+    setSelectedSprintId('')
     localStorage.setItem('todoapp_workspace_id', created.id)
     localStorage.removeItem('todoapp_project_id')
+    localStorage.removeItem('todoapp_sprint_id')
       setNotice(`Workspace ${created.name} created.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Workspace could not be created.')
@@ -694,6 +718,60 @@ export default function App() {
   const openPinnedProject = (projectId: string) => {
     switchProject(projectId)
     openView('board')
+  }
+  const createSprint = async (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => {
+    try {
+      setError('')
+      const sprint = await api.createSprint(projectId, name, goal, startDate, endDate)
+      setNotice(`Sprint ${sprint.name} created.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be created.')
+      throw reason
+    }
+  }
+  const updateSprint = async (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => {
+    try {
+      setError('')
+      const sprint = await api.updateSprint(projectId, sprintId, name, goal, startDate, endDate)
+      setNotice(`Sprint ${sprint.name} updated.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be updated.')
+      throw reason
+    }
+  }
+  const changeSprintStatus = async (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => {
+    try {
+      setError('')
+      const sprint = action === 'start'
+        ? await api.startSprint(projectId, sprintId)
+        : action === 'complete'
+          ? await api.completeSprint(projectId, sprintId)
+          : await api.cancelSprint(projectId, sprintId)
+      setNotice(`Sprint ${sprint.name} ${action === 'start' ? 'started' : action === 'complete' ? 'completed' : 'cancelled'}.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint status could not be changed.')
+      throw reason
+    }
   }
   const deleteTask = async (task: TaskItem) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
@@ -812,7 +890,9 @@ export default function App() {
             selectedProjectId={project?.id ?? selectedProjectId}
             workspaceRole={workspace?.role ?? null}
             pinnedProjectIds={pinnedProjectIds}
+            selectedSprintId={selectedSprintId}
             onSwitch={switchProject}
+            onSprintSwitch={switchSprint}
             onTogglePin={togglePinnedProject}
             onCreate={createProject}
             onUpdate={updateProject}
@@ -833,8 +913,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               view === 'tasks'
-                ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
+                ? <TaskList tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
+                : <Board tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -858,6 +938,9 @@ export default function App() {
           onCreate={createProject}
           onUpdate={updateProject}
           onArchive={archiveProject}
+          onCreateSprint={createSprint}
+          onUpdateSprint={updateSprint}
+          onChangeSprintStatus={changeSprintStatus}
         />}
         {view === 'myday' && <TodoPage
           todos={todos}
@@ -993,8 +1076,8 @@ export default function App() {
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
@@ -1356,7 +1439,9 @@ function ProjectBar({
   selectedProjectId,
   workspaceRole,
   pinnedProjectIds,
+  selectedSprintId,
   onSwitch,
+  onSprintSwitch,
   onTogglePin,
   onCreate,
   onUpdate,
@@ -1366,7 +1451,9 @@ function ProjectBar({
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
   pinnedProjectIds?: Set<string>
+  selectedSprintId?: string
   onSwitch: (projectId: string) => void
+  onSprintSwitch?: (sprintId: string) => void
   onTogglePin?: (projectId: string) => void
   onCreate: (
     name: string,
@@ -1389,6 +1476,7 @@ function ProjectBar({
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
   const selectedPinned = selectedProject ? pinnedProjectIds?.has(selectedProject.id) : false
+  const activeSprints = selectedProject?.sprints.filter((sprint) => sprint.status !== 'Cancelled') ?? []
 
   if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
@@ -1466,6 +1554,14 @@ function ProjectBar({
       </select>
       <ChevronDown />
     </label>}
+    {selectedProject && onSprintSwitch && <label>
+      <span>Sprint</span>
+      <select value={selectedSprintId ?? ''} onChange={(event) => onSprintSwitch(event.target.value)}>
+        <option value="">All sprints</option>
+        {activeSprints.map((sprint) => <option value={sprint.id} key={sprint.id}>{sprint.name} ({sprint.status})</option>)}
+      </select>
+      <ChevronDown />
+    </label>}
     {(canCreateProject || selectedProject) && <div className="project-actions">
       {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
       {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
@@ -1516,6 +1612,9 @@ function ProjectsPage({
   onCreate,
   onUpdate,
   onArchive,
+  onCreateSprint,
+  onUpdateSprint,
+  onChangeSprintStatus,
 }: {
   projects: ProjectDetails[]
   selectedProjectId: string
@@ -1536,9 +1635,30 @@ function ProjectsPage({
     deliveryDate: string,
   ) => Promise<void>
   onArchive: (projectId: string) => Promise<void>
+  onCreateSprint: (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onUpdateSprint: (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onChangeSprintStatus: (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => Promise<void>
 }) {
   const projectPageSize = 6
   const [projectPage, setProjectPage] = useState(1)
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
   const visibleProjects = projects.slice(
     (projectPage - 1) * projectPageSize,
@@ -1562,6 +1682,13 @@ function ProjectsPage({
       onUpdate={onUpdate}
       onArchive={onArchive}
     />
+    {selectedProject && <SprintPanel
+      project={selectedProject}
+      workspaceRole={workspaceRole}
+      onCreate={onCreateSprint}
+      onUpdate={onUpdateSprint}
+      onChangeStatus={onChangeSprintStatus}
+    />}
     {projects.length
       ? <>
           <div className="project-grid" aria-label="Workspace projects">
@@ -1603,6 +1730,138 @@ function ProjectsPage({
         </>
       : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
   </section>
+}
+
+function SprintPanel({
+  project,
+  workspaceRole,
+  onCreate,
+  onUpdate,
+  onChangeStatus,
+}: {
+  project: ProjectDetails
+  workspaceRole: Workspace['role'] | null
+  onCreate: (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onChangeStatus: (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => Promise<void>
+}) {
+  const canManage = workspaceRole === 'Owner' || workspaceRole === 'Manager'
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<Sprint | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const activeSprint = project.sprints.find((sprint) => sprint.status === 'Active')
+  const plannedCount = project.sprints.filter((sprint) => sprint.status === 'Planned').length
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const data = new FormData(event.currentTarget)
+    const name = String(data.get('name')).trim()
+    const goal = String(data.get('goal') ?? '').trim()
+    const startDate = String(data.get('startDate'))
+    const endDate = String(data.get('endDate'))
+
+    try {
+      if (editing) {
+        await onUpdate(project.id, editing.id, name, goal, startDate, endDate)
+        setEditing(null)
+      } else {
+        await onCreate(project.id, name, goal, startDate, endDate)
+        setCreating(false)
+      }
+      event.currentTarget.reset()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be saved.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changeStatus = async (
+    sprint: Sprint,
+    action: 'start' | 'complete' | 'cancel',
+  ) => {
+    setBusy(true)
+    setError('')
+    try {
+      await onChangeStatus(project.id, sprint.id, action)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint status could not be changed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="sprint-panel panel-page" aria-label="Sprint planning">
+    <header>
+      <div>
+        <p className="eyebrow">Sprint planning</p>
+        <h2>{activeSprint ? activeSprint.name : 'No active sprint'}</h2>
+        <p>{plannedCount} planned sprint{plannedCount === 1 ? '' : 's'} for {project.name}.</p>
+      </div>
+      {canManage && <button className="primary" onClick={() => {
+        setCreating(true)
+        setEditing(null)
+      }}><Plus size={16} /> New sprint</button>}
+    </header>
+    {error && <p className="field-error">{error}</p>}
+    {(creating || editing) && <form className="sprint-form" onSubmit={(event) => void submit(event)}>
+      <label>Sprint name<input name="name" required maxLength={160} defaultValue={editing?.name ?? ''} autoFocus /></label>
+      <label>Goal<input name="goal" maxLength={1000} defaultValue={editing?.goal ?? ''} placeholder="What should be true at the end of this sprint?" /></label>
+      <label>Start date<input name="startDate" type="date" required defaultValue={editing?.startDate ?? todayInput} /></label>
+      <label>End date<input name="endDate" type="date" required defaultValue={editing?.endDate ?? nextWeekInput()} /></label>
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => {
+          setCreating(false)
+          setEditing(null)
+        }}>Cancel</button>
+        <button className="primary" disabled={busy}>{busy ? 'Saving...' : editing ? 'Save sprint' : 'Create sprint'}</button>
+      </footer>
+    </form>}
+    {project.sprints.length
+      ? <div className="sprint-list">
+          {project.sprints.map((sprint) => <article className={`sprint-card ${sprint.status.toLowerCase()}`} key={sprint.id}>
+            <header>
+              <div>
+                <strong>{sprint.name}</strong>
+                <span className={`sprint-status ${sprint.status.toLowerCase()}`}>{sprint.status}</span>
+              </div>
+              <small>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</small>
+            </header>
+            <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+            {canManage && <footer>
+              {sprint.status === 'Planned' && <button className="secondary" disabled={busy} onClick={() => setEditing(sprint)}><Pencil size={15} /> Edit</button>}
+              {sprint.status === 'Planned' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'start')}><Clock3 size={15} /> Start</button>}
+              {sprint.status === 'Active' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'complete')}><CheckCircle2 size={15} /> Complete</button>}
+              {(sprint.status === 'Planned' || sprint.status === 'Active') && <button className="secondary danger-action" disabled={busy} onClick={() => void changeStatus(sprint, 'cancel')}><X size={15} /> Cancel</button>}
+            </footer>}
+          </article>)}
+        </div>
+      : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create a sprint to group tasks into short delivery cycles.</p></div>}
+  </section>
+}
+
+function nextWeekInput() {
+  return new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 }
 
 function CalendarPage({
@@ -3124,14 +3383,15 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, sprints, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; sprints: Sprint[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
+  const sprintNames = new Map(sprints.map((sprint) => [sprint.id, sprint.name]))
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Created</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
-      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} sprintName={task.sprintId ? sprintNames.get(task.sprintId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className="created-date">{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
@@ -3141,15 +3401,16 @@ function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete 
   </div>
 }
 
-function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; assigneeName?: string; currentUserId?: string }) {
+function TaskMetadataLine({ task, categoryName, sprintName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; sprintName?: string; assigneeName?: string; currentUserId?: string }) {
   const assigneeLabel = task.assignedUserId
     ? task.assignedUserId === currentUserId
       ? 'Assigned to you'
       : `Assigned to ${assigneeName ?? 'workspace member'}`
     : 'Unassigned'
-  if (!categoryName && !task.tags.length && !assigneeLabel) return null
+  if (!categoryName && !sprintName && !task.tags.length && !assigneeLabel) return null
   return <span className="metadata-line">
     <span className={`assignee-pill ${task.assignedUserId ? 'assigned' : 'unassigned'}`}>{assigneeLabel}</span>
+    {sprintName && <span className="sprint-pill"><Clock3 size={12} /> {sprintName}</span>}
     {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
     {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
   </span>
@@ -3158,6 +3419,7 @@ function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: {
 function Board({
   tasks,
   categories,
+  sprints,
   members,
   currentUserId,
   workspaceRole,
@@ -3171,6 +3433,7 @@ function Board({
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  sprints: Sprint[]
   members: WorkspaceMember[]
   currentUserId: string
   workspaceRole: Workspace['role'] | null
@@ -3219,6 +3482,7 @@ function Board({
         key={status}
         status={status}
         categories={categories}
+        sprints={sprints}
         members={members}
         pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
@@ -3234,7 +3498,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} sprints={sprints} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -3243,6 +3507,7 @@ function BoardColumn({
   status,
   tasks,
   categories,
+  sprints,
   members,
   pinnedTaskIds,
   currentUserId,
@@ -3258,6 +3523,7 @@ function BoardColumn({
   status: TaskStatus
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  sprints: Sprint[]
   members: WorkspaceMember[]
   pinnedTaskIds: Set<string>
   currentUserId: string
@@ -3288,7 +3554,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {orderedTasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
+        <BoardCard task={task} categories={categories} sprints={sprints} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -3297,6 +3563,7 @@ function BoardColumn({
 function BoardCard({
   task,
   categories,
+  sprints = [],
   members = [],
   currentUserId,
   workspaceRole,
@@ -3310,6 +3577,7 @@ function BoardCard({
 }: {
   task: TaskItem
   categories?: ProjectCategory[]
+  sprints?: Sprint[]
   members?: WorkspaceMember[]
   currentUserId?: string
   workspaceRole?: Workspace['role'] | null
@@ -3323,6 +3591,7 @@ function BoardCard({
 }) {
   const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId, workspaceRole).length > 0
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
+  const sprintNames = new Map(sprints.map((sprint) => [sprint.id, sprint.name]))
   const lockedAssigneeName = task.assignedUserId
     ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
     : null
@@ -3409,6 +3678,7 @@ function BoardCard({
     <TaskMetadataLine
       task={task}
       categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+      sprintName={task.sprintId ? sprintNames.get(task.sprintId) : undefined}
       assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined}
       currentUserId={currentUserId}
     />
@@ -3489,7 +3759,7 @@ function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { t
   </div>
 }
 
-function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, sprints, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -3509,7 +3779,8 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
       const title = isMember ? task.title : String(data.get('title'))
       const dueDate = isMember ? task.dueDate ?? '' : String(data.get('dueDate'))
       const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? task.effort ?? 3
-      await api.updateTask(task.id, title, dueDate, effort)
+      const sprintId = isMember ? task.sprintId ?? '' : String(data.get('sprintId') ?? '')
+      await api.updateTask(task.id, title, dueDate, effort, sprintId)
       if (canEditPlanning) {
         await api.updatePlanning(
           task.id,
@@ -3564,6 +3835,7 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
       {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} readOnly={isMember} autoFocus={!isMember} /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} readOnly={isMember} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? task.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <label>Sprint<select name="sprintId" defaultValue={task.sprintId ?? ''} disabled={isMember}><option value="">No sprint</option>{sprints.filter((sprint) => sprint.status !== 'Cancelled').map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} - {sprint.status}</option>)}</select><ChevronDown /></label>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''} disabled={isMember}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
@@ -3583,7 +3855,7 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
   </dialog></div>
 }
 
-function TaskDialog({ projectId, isMember, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, isMember, members, categories, sprints, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -3595,6 +3867,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
       const data = new FormData(event.currentTarget)
       const assignee = String(data.get('assignedUserId') ?? '')
       const categoryId = String(data.get('categoryId') ?? '')
+      const sprintId = String(data.get('sprintId') ?? '')
       const tag = String(data.get('tag') ?? '').trim()
       const note = String(data.get('note') ?? '').trim()
       if (tag && tag.replace(/^#/, '').trim().length < 2) {
@@ -3609,6 +3882,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
         Number(data.get('businessValue')),
         Number(data.get('urgency')),
         Number(data.get('riskReduction')),
+        sprintId,
       )
       if (assignee) await api.assign(task.id, assignee)
       if (categoryId) await api.updateCategory(task.id, categoryId)
@@ -3644,6 +3918,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
         <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
       </div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label>
+      <label>Sprint<select name="sprintId" defaultValue=""><option value="">No sprint</option>{sprints.filter((sprint) => sprint.status !== 'Cancelled').map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} - {sprint.status}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Priority inputs</legend><PriorityInputGuide /><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label>
