@@ -1828,6 +1828,13 @@ const priorityChartColors: Record<string, string> = {
   Critical: '#c33f35',
 }
 
+const trendPlot = {
+  left: 34,
+  right: 352,
+  top: 18,
+  bottom: 166,
+}
+
 function DashboardAnalytics({
   dashboard,
   report,
@@ -2429,16 +2436,16 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
       data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
       title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
     >
-      <svg viewBox="0 0 320 190" role="img" aria-label="Tasks created and completed over time">
+      <svg viewBox="0 0 364 216" role="img" aria-label="Tasks created and completed over time">
         {yAxis.map((value) => {
           const y = trendY(value, axisMax)
           return <g key={value}>
             <text className="trend-y-label" x="7" y={y + 4}>{value}</text>
-            <line x1="42" x2="304" y1={y} y2={y} />
+            <line x1={trendPlot.left} x2={trendPlot.right} y1={y} y2={y} />
           </g>
         })}
-        <line className="trend-axis-line" x1="42" x2="304" y1="142" y2="142" />
-        <path className="trend-area created" d={`${createdPath} L 304 142 L 42 142 Z`} />
+        <line className="trend-axis-line" x1={trendPlot.left} x2={trendPlot.right} y1={trendPlot.bottom} y2={trendPlot.bottom} />
+        <path className="trend-area created" d={`${createdPath} L ${trendPlot.right} ${trendPlot.bottom} L ${trendPlot.left} ${trendPlot.bottom} Z`} />
         <path className="trend-line created" d={createdPath} />
         <path className="trend-line completed" d={completedPath} />
         {points.map((point, index) => {
@@ -2532,11 +2539,13 @@ function buildLinePath(values: number[], max: number) {
 }
 
 function trendX(index: number, total: number) {
-  return total <= 1 ? 42 : 42 + index * (262 / (total - 1))
+  return total <= 1
+    ? trendPlot.left
+    : trendPlot.left + index * ((trendPlot.right - trendPlot.left) / (total - 1))
 }
 
 function trendY(value: number, max: number) {
-  return 142 - value / max * 118
+  return trendPlot.bottom - value / max * (trendPlot.bottom - trendPlot.top)
 }
 
 function buildTrendYAxis(max: number) {
