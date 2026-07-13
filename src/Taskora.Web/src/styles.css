@@ -169,8 +169,15 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .progress-card .progress-track i { background: #147d68; }
 .progress-card p { margin: auto 0 0; color: #667281; font-size: 13px; line-height: 1.45; }
 .flow-card { min-height: 272px; }
-.flow-chart { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; min-height: 196px; margin: 0 -2px 4px; padding: 14px 0 0; border-bottom: 1px solid #d8dee6; background: linear-gradient(to bottom, transparent 0 24%, #edf1f4 24% calc(24% + 1px), transparent calc(24% + 1px) 49%, #edf1f4 49% calc(49% + 1px), transparent calc(49% + 1px) 74%, #edf1f4 74% calc(74% + 1px), transparent calc(74% + 1px)); }
-.flow-group { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; align-items: end; min-width: 0; }
+.flow-chart { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; min-height: 196px; margin: 0 -2px 4px; }
+.flow-y-axis { display: grid; grid-template-rows: repeat(5, 1fr); height: 158px; padding-top: 2px; color: #7a8591; font-size: 11px; font-weight: 800; }
+.flow-y-axis span { line-height: 1; transform: translateY(-5px); }
+.flow-y-axis span:last-child { align-self: end; transform: translateY(5px); }
+.flow-plot { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; min-width: 0; padding-top: 14px; border-bottom: 1px solid #d8dee6; }
+.flow-grid { position: absolute; inset: 14px 0 23px; z-index: 0; display: grid; grid-template-rows: repeat(4, 1fr); pointer-events: none; }
+.flow-grid span { border-top: 1px solid #edf1f4; }
+.flow-grid span:last-child { border-bottom: 1px solid #edf1f4; }
+.flow-group { position: relative; z-index: 1; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; align-items: end; min-width: 0; }
 .flow-bars { display: flex; align-items: end; justify-content: center; gap: 6px; height: 158px; min-width: 0; }
 .flow-bar { position: relative; width: min(28px, 42%); min-height: 5px; border-radius: 7px 7px 3px 3px; box-shadow: 0 8px 15px #18202b12; transition: height .2s ease, transform .16s ease, filter .16s ease; }
 .flow-bar.completed { background: linear-gradient(180deg, #23b88f, #159b74); }

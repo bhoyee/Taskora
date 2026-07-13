@@ -2414,6 +2414,8 @@ function BarChart({
 function WeeklyFlowChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
   const weeks = buildWeeklyFlowPoints(tasks)
   const max = Math.max(1, ...weeks.flatMap((week) => [week.created, week.completed]))
+  const yAxis = buildFlowYAxis(max)
+  const axisMax = yAxis[0]
   const totals = weeks.reduce(
     (summary, week) => ({
       created: summary.created + week.created,
@@ -2427,24 +2429,32 @@ function WeeklyFlowChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
       <span>{totals.created} created</span>
     </header>
     <div className="flow-chart" role="img" aria-label="Weekly created and completed tasks">
-      {weeks.map((week) => <div
-        className="flow-group chart-hover-target"
-        data-tooltip={`${week.label}: ${week.created} created, ${week.completed} completed`}
-        title={`${week.label}: ${week.created} created, ${week.completed} completed`}
-        key={week.key}
-      >
-        <div className="flow-bars">
-          <span
-            className="flow-bar completed"
-            style={{ height: `${flowBarHeight(week.completed, max)}%` }}
-          ><strong>{week.completed}</strong></span>
-          <span
-            className="flow-bar created"
-            style={{ height: `${flowBarHeight(week.created, max)}%` }}
-          ><strong>{week.created}</strong></span>
+      <div className="flow-y-axis" aria-hidden="true">
+        {yAxis.map((tick) => <span key={tick}>{tick}</span>)}
+      </div>
+      <div className="flow-plot">
+        <div className="flow-grid" aria-hidden="true">
+          {yAxis.map((tick) => <span key={tick} />)}
         </div>
-        <small>{week.label}</small>
-      </div>)}
+        {weeks.map((week) => <div
+          className="flow-group chart-hover-target"
+          data-tooltip={`${week.label}: ${week.created} created, ${week.completed} completed`}
+          title={`${week.label}: ${week.created} created, ${week.completed} completed`}
+          key={week.key}
+        >
+          <div className="flow-bars">
+            <span
+              className="flow-bar completed"
+              style={{ height: `${flowBarHeight(week.completed, axisMax)}%` }}
+            ><strong>{week.completed}</strong></span>
+            <span
+              className="flow-bar created"
+              style={{ height: `${flowBarHeight(week.created, axisMax)}%` }}
+            ><strong>{week.created}</strong></span>
+          </div>
+          <small>{week.label}</small>
+        </div>)}
+      </div>
     </div>
     <div className="chart-legend compact">
       <span><i style={{ backgroundColor: '#159b74' }} /> Completed <strong>{totals.completed}</strong></span>
@@ -2527,6 +2537,12 @@ function buildWeeklyFlowPoints(tasks: WorkspaceReport['tasks']) {
 
 function flowBarHeight(value: number, max: number) {
   return value === 0 ? 4 : Math.max(18, value / max * 100)
+}
+
+function buildFlowYAxis(max: number) {
+  const step = max <= 4 ? 1 : Math.ceil(max / 4)
+  const top = Math.max(step * 4, max)
+  return [top, top - step, top - step * 2, top - step * 3, 0]
 }
 
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
