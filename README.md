@@ -4,7 +4,7 @@ Taskora is a workspace-based task and project delivery platform built with
 .NET, C#, React, TypeScript, and Entity Framework Core. It started as a todo
 project, but now demonstrates a portfolio-ready modular monolith with
 workspaces, projects, tasks, assignment, reporting, reminders, operations
-monitoring, and CI/CD.
+monitoring, sprint planning, and CI/CD.
 
 ## What It Does
 
@@ -15,6 +15,9 @@ monitoring, and CI/CD.
   notifications only show data for the selected workspace.
 - Project CRUD with required delivery dates, archive rules, delivery countdowns,
   and project-level health indicators.
+- Sprint planning inside projects, including sprint goals, date windows,
+  Planned/Active/Completed/Cancelled lifecycle, sprint filters, and task
+  assignment to a sprint.
 - Tasks created under active projects only.
 - Task workflow: Backlog, Ready, In Progress, Blocked, and Completed.
 - Drag-and-drop board with guarded workflow rules and assignment awareness.
@@ -47,11 +50,12 @@ real workspace application:
   readiness, and deadline warnings.
 - `My Day`: personal daily todos with CRUD, search, pagination, completion,
   mobile-friendly layout, and automatic carry-over for unfinished work.
-- `Tasks`: searchable and paginated task list with project context, assignee,
-  category, tags, priority score, due date, created date, edit/delete actions,
-  and creator/member permission handling.
+- `Tasks`: searchable and paginated task list with project/sprint context,
+  assignee, category, tags, priority score, due date, created date,
+  edit/delete actions, and creator/member permission handling.
 - `Projects`: project CRUD, required delivery dates, delivery countdown badges,
-  archive support, pinning, pagination, and quick access to project tasks.
+  archive support, sprint planning, pinning, pagination, and quick access to
+  project tasks.
 - `Board`: drag-and-drop delivery board across Backlog, Ready, In Progress,
   Blocked, and Completed, with guarded assignment rules, pinned tasks, and
   quick task notes.
@@ -146,6 +150,17 @@ of becoming a loose global todo list.
 
 Workspace owners and managers can create and manage projects. Members can view
 project context and work on assigned or available tasks.
+
+### Sprint Planning
+
+Sprints group project work into short delivery cycles. Owners and managers can
+create a sprint with a goal, start date, and end date; start planned sprints;
+complete active sprints; or cancel a sprint when the plan changes. Tasks can be
+created or edited into a sprint, and the task list/board can be filtered to one
+sprint at a time.
+
+This gives the portfolio project a more corporate delivery shape: work is not
+only tracked by status, but also by project outcome and active delivery window.
 
 ### Task Workflow
 
