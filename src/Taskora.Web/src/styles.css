@@ -129,10 +129,10 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .analytics-card header { display: flex; justify-content: space-between; gap: 10px; align-items: start; margin-bottom: 14px; }
 .analytics-card h2 { margin: 0; font-size: 15px; }
 .analytics-card header span { color: #73808d; font-size: 12px; font-weight: 800; white-space: nowrap; }
-.donut-card { min-height: 252px; }
-.donut-layout { display: grid; grid-template-columns: 142px minmax(0, 1fr); gap: 18px; align-items: center; }
-.donut-wrap { position: relative; width: 142px; height: 142px; margin: 2px 0; }
-.donut-chart { width: 142px; height: 142px; transform: rotate(-90deg); }
+.donut-card { min-height: 272px; }
+.donut-layout { display: grid; grid-template-columns: 174px minmax(0, 1fr); gap: 18px; align-items: center; }
+.donut-wrap { position: relative; width: 174px; height: 174px; margin: 2px 0; }
+.donut-chart { width: 174px; height: 174px; transform: rotate(-90deg); }
 .donut-track, .donut-segment { fill: none; stroke-width: 14; }
 .donut-track { stroke: #edf1f4; }
 .donut-segment { cursor: pointer; outline: none; pointer-events: stroke; transition: stroke-dasharray .2s ease, stroke-width .18s ease, opacity .18s ease; }
@@ -140,7 +140,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .analytics-card:hover .donut-segment { stroke-width: 16; opacity: .92; }
 .analytics-card:hover .donut-segment:hover, .analytics-card:hover .donut-segment:focus-visible { stroke-width: 18; opacity: 1; }
 .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
-.donut-center strong, .progress-card > strong { display: block; font-size: 28px; line-height: 1; color: #17202b; }
+.donut-center strong, .progress-card > strong { display: block; font-size: 34px; line-height: 1; color: #17202b; }
 .donut-center span { color: #73808d; font-size: 12px; font-weight: 800; }
 .donut-tooltip { position: absolute; left: 50%; top: -6px; z-index: 4; width: max-content; max-width: min(240px, 70vw); transform: translate(-50%, -100%); pointer-events: none; border: 1px solid #243142; border-radius: 6px; background: #18202b; color: white; padding: 7px 9px; box-shadow: 0 12px 28px #18202b33; font-size: 12px; font-weight: 800; line-height: 1.35; }
 .donut-tooltip::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: #18202b; }
@@ -187,7 +187,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .flow-group:hover .flow-bar strong { opacity: 1; }
 .flow-group small { color: #7a8591; font-size: 11px; font-weight: 800; text-align: center; white-space: nowrap; }
 .workload-card { min-height: 252px; }
-.workload-list { display: grid; gap: 12px; }
+.workload-list { display: grid; gap: 9px; }
 .workload-row { display: grid; grid-template-columns: minmax(72px, .9fr) minmax(0, 1.4fr) 26px; gap: 10px; align-items: center; }
 .workload-row span { color: #314151; font-size: 12px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workload-row strong { color: #26313d; font-size: 12px; text-align: right; }

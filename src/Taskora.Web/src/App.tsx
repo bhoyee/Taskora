@@ -2567,7 +2567,7 @@ function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceM
   })
   return [...grouped.values()]
     .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
-    .slice(0, 5)
+    .slice(0, 8)
 }
 
 function ActivityPage({
