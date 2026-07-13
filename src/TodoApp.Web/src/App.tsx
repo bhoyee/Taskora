@@ -473,12 +473,24 @@ export default function App() {
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
     if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
+    const previousTasks = tasks
+    const userId = currentUserId || account?.userId || ''
 
     try {
       setError('')
+      setTasks((items) => items.map((item) => item.id === task.id
+        ? {
+            ...item,
+            status: target,
+            assignedUserId: target === 'InProgress' && !item.assignedUserId
+              ? userId
+              : item.assignedUserId,
+          }
+        : item))
       await api.transition(task.id, transition.action, transition.body)
-      await load()
+      await load({ silent: true })
     } catch (reason) {
+      setTasks(previousTasks)
       setError(reason instanceof Error ? reason.message : 'The task could not be moved.')
       throw reason
     }
