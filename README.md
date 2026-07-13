@@ -34,7 +34,7 @@ monitoring, sprint planning, and CI/CD.
   project health, risk register, decision log, release readiness, activity, and
   reports.
 - In-app notifications and SMTP-backed email notifications.
-- First-run onboarding tour with replayable help guidance from the sidebar.
+- First-run onboarding tour with replayable help guidance from the avatar menu.
 - Super-admin-only Operations page for API health, database health, scheduler
   status, log settings, and recent application logs.
 - Seed/demo data mode for portfolio walkthroughs.
@@ -73,14 +73,13 @@ real workspace application:
   pagination, and notification read actions.
 - `Team`: workspace members, roles, invitation links, pending invites, and
   owner/manager membership controls.
-- `Profile`: email update, password change, and logout.
 - `Operations`: super-admin-only application monitoring for API health,
   database health, reminder scheduler status, log settings, and recent logs.
 - `Pinned projects`: sidebar shortcut area for important projects.
 - `Notifications`: top-bar notification feed with unread count, mark-as-read,
   mark-all-as-read, and view-all behaviour.
-- `Help tour`: replayable onboarding slides that explain workspaces, projects,
-  sprints, board workflow, reporting, and notifications.
+- `Account menu`: top-right avatar dropdown for My profile, replayable Help
+  tour, and Logout.
 
 ## Architecture
 
