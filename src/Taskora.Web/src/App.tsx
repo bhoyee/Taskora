@@ -1828,13 +1828,6 @@ const priorityChartColors: Record<string, string> = {
   Critical: '#c33f35',
 }
 
-const trendPlot = {
-  left: 24,
-  right: 388,
-  top: 10,
-  bottom: 172,
-}
-
 function DashboardAnalytics({
   dashboard,
   report,
@@ -1846,7 +1839,7 @@ function DashboardAnalytics({
 }) {
   return <section className="analytics-grid" aria-label="Dashboard analytics">
     <DonutChart title="Task Progress" items={dashboard.statusBreakdown} colors={statusChartColors} />
-    <TasksOverTimeChart tasks={report?.tasks ?? []} />
+    <WeeklyFlowChart tasks={report?.tasks ?? []} />
     <WorkloadChart tasks={report?.tasks ?? []} members={members} />
   </section>
 }
@@ -2418,49 +2411,44 @@ function BarChart({
   </article>
 }
 
-function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
-  const points = buildTasksOverTimePoints(tasks)
-  const values = points.flatMap((point) => [point.created, point.completed])
-  const scale = buildTrendScale(values)
-  const yAxis = buildTrendYAxis(scale)
-  const createdPath = buildLinePath(points.map((point) => point.created), scale)
-  const completedPath = buildLinePath(points.map((point) => point.completed), scale)
-  const latest = points[points.length - 1]
-  return <article className="analytics-card trend-card">
+function WeeklyFlowChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
+  const weeks = buildWeeklyFlowPoints(tasks)
+  const max = Math.max(1, ...weeks.flatMap((week) => [week.created, week.completed]))
+  const totals = weeks.reduce(
+    (summary, week) => ({
+      created: summary.created + week.created,
+      completed: summary.completed + week.completed,
+    }),
+    { created: 0, completed: 0 },
+  )
+  return <article className="analytics-card flow-card">
     <header>
-      <h2>Tasks Over Time</h2>
-      <span>{latest.created} created</span>
+      <h2>Weekly Flow</h2>
+      <span>{totals.created} created</span>
     </header>
-    <div
-      className="trend-chart chart-hover-target"
-      data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
-      title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
-    >
-      <svg viewBox="0 0 400 210" role="img" aria-label="Tasks created and completed over time">
-        {yAxis.map((value) => {
-          const y = trendY(value, scale)
-          return <g key={value}>
-            <text className="trend-y-label" x="7" y={y + 4}>{value}</text>
-            <line x1={trendPlot.left} x2={trendPlot.right} y1={y} y2={y} />
-          </g>
-        })}
-        <line className="trend-axis-line" x1={trendPlot.left} x2={trendPlot.right} y1={trendPlot.bottom} y2={trendPlot.bottom} />
-        <path className="trend-area created" d={`${createdPath} L ${trendPlot.right} ${trendPlot.bottom} L ${trendPlot.left} ${trendPlot.bottom} Z`} />
-        <path className="trend-line created" d={createdPath} />
-        <path className="trend-line completed" d={completedPath} />
-        {points.map((point, index) => {
-          const x = trendX(index, points.length)
-          return <g className="trend-point" key={point.key}>
-            <circle cx={x} cy={trendY(point.created, scale)} r="3" />
-            <title>{`${point.label}: ${point.created} created, ${point.completed} completed`}</title>
-          </g>
-        })}
-        {points.map((point, index) => <text className="trend-x-label" key={`${point.key}-label`} x={trendX(index, points.length)} y="194">{point.label}</text>)}
-      </svg>
+    <div className="flow-chart" role="img" aria-label="Weekly created and completed tasks">
+      {weeks.map((week) => <div
+        className="flow-group chart-hover-target"
+        data-tooltip={`${week.label}: ${week.created} created, ${week.completed} completed`}
+        title={`${week.label}: ${week.created} created, ${week.completed} completed`}
+        key={week.key}
+      >
+        <div className="flow-bars">
+          <span
+            className="flow-bar completed"
+            style={{ height: `${flowBarHeight(week.completed, max)}%` }}
+          ><strong>{week.completed}</strong></span>
+          <span
+            className="flow-bar created"
+            style={{ height: `${flowBarHeight(week.created, max)}%` }}
+          ><strong>{week.created}</strong></span>
+        </div>
+        <small>{week.label}</small>
+      </div>)}
     </div>
     <div className="chart-legend compact">
-      <span><i style={{ backgroundColor: '#159b74' }} /> Completed</span>
-      <span><i style={{ backgroundColor: '#2875d1' }} /> Created</span>
+      <span><i style={{ backgroundColor: '#159b74' }} /> Completed <strong>{totals.completed}</strong></span>
+      <span><i style={{ backgroundColor: '#2875d1' }} /> Created <strong>{totals.created}</strong></span>
     </div>
   </article>
 }
@@ -2519,57 +2507,26 @@ function chartPercentage(count: number, total: number) {
   return total > 0 ? Math.round(count * 100 / total) : 0
 }
 
-function buildTasksOverTimePoints(tasks: WorkspaceReport['tasks']) {
+function buildWeeklyFlowPoints(tasks: WorkspaceReport['tasks']) {
   const today = new Date()
   return Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(today)
-    date.setDate(today.getDate() - (5 - index) * 7)
-    const cutoff = date.toISOString().slice(0, 10)
+    const end = new Date(today)
+    end.setDate(today.getDate() - (5 - index) * 7)
+    const start = new Date(end)
+    start.setDate(end.getDate() - 6)
+    const startKey = start.toISOString().slice(0, 10)
+    const endKey = end.toISOString().slice(0, 10)
     return {
-      key: cutoff,
-      label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      created: tasks.filter((task) => task.createdAt.slice(0, 10) <= cutoff).length,
-      completed: tasks.filter((task) => task.completedAt && task.completedAt.slice(0, 10) <= cutoff).length,
+      key: endKey,
+      label: end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      created: tasks.filter((task) => task.createdAt.slice(0, 10) >= startKey && task.createdAt.slice(0, 10) <= endKey).length,
+      completed: tasks.filter((task) => task.completedAt && task.completedAt.slice(0, 10) >= startKey && task.completedAt.slice(0, 10) <= endKey).length,
     }
   })
 }
 
-function buildLinePath(values: number[], scale: TrendScale) {
-  return values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${trendX(index, values.length)} ${trendY(value, scale)}`).join(' ')
-}
-
-function trendX(index: number, total: number) {
-  return total <= 1
-    ? trendPlot.left
-    : trendPlot.left + index * ((trendPlot.right - trendPlot.left) / (total - 1))
-}
-
-interface TrendScale {
-  min: number
-  max: number
-}
-
-function trendY(value: number, scale: TrendScale) {
-  const range = Math.max(1, scale.max - scale.min)
-  return trendPlot.bottom - (value - scale.min) / range * (trendPlot.bottom - trendPlot.top)
-}
-
-function buildTrendScale(values: number[]): TrendScale {
-  const rawMin = Math.min(...values)
-  const rawMax = Math.max(...values)
-  if (rawMax <= 0) return { min: 0, max: 1 }
-  const range = Math.max(1, rawMax - rawMin)
-  const padding = Math.max(0.25, range * 0.12)
-  const min = rawMin <= 1 ? 0 : Math.max(0, rawMin - padding)
-  const max = rawMax + padding
-  return { min, max }
-}
-
-function buildTrendYAxis(scale: TrendScale) {
-  return Array.from({ length: 5 }, (_, index) => {
-    const value = scale.max - ((scale.max - scale.min) / 4) * index
-    return Math.round(value * 10) / 10
-  })
+function flowBarHeight(value: number, max: number) {
+  return value === 0 ? 4 : Math.max(18, value / max * 100)
 }
 
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
