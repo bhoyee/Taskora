@@ -265,18 +265,43 @@ export interface OperationLogRecord {
   eventId: string | null
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export interface WorkspaceRealtimeEvent {
+  eventType: string
+  workspaceId: string
+  entityType: string
+  entityId: string | null
+  actorId: string | null
+  occurredAt: string
+}
+
+export interface PersonalTodo {
+  id: string
+  title: string
+  todoDate: string
+  originalTodoDate: string
+  carriedOverFromDate: string | null
+  notes: string | null
+  isCompleted: boolean
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
+function identityHeaders(): Record<string, string> {
   const accessToken = localStorage.getItem('todoapp_access_token')
-  const identityHeaders: Record<string, string> = accessToken
+  return accessToken
     ? { Authorization: `Bearer ${accessToken}` }
     : import.meta.env.DEV
       ? { 'X-User-Id': '30000000-0000-0000-0000-000000000001' }
       : {}
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...identityHeaders,
+      ...identityHeaders(),
       ...init?.headers,
     },
   })
@@ -307,6 +332,49 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+export async function streamWorkspaceEvents(
+  workspaceId: string,
+  onEvent: (event: WorkspaceRealtimeEvent) => void,
+  signal: AbortSignal,
+) {
+  const response = await fetch(
+    `/api/v1/workspaces/${workspaceId}/events`,
+    {
+      headers: {
+        Accept: 'text/event-stream',
+        ...identityHeaders(),
+      },
+      signal,
+    },
+  )
+
+  if (!response.ok || !response.body) {
+    throw new Error('Realtime workspace updates could not be started.')
+  }
+
+  const reader = response.body
+    .pipeThrough(new TextDecoderStream())
+    .getReader()
+  let buffer = ''
+
+  while (!signal.aborted) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    const messages = buffer.split('\n\n')
+    buffer = messages.pop() ?? ''
+
+    for (const message of messages) {
+      const data = message
+        .split('\n')
+        .find((line) => line.startsWith('data: '))
+        ?.slice(6)
+      if (!data) continue
+      onEvent(JSON.parse(data) as WorkspaceRealtimeEvent)
+    }
+  }
 }
 
 export const api = {
@@ -523,6 +591,47 @@ export const api = {
     }),
   activity: (id: string) =>
     request<TaskActivity[]>(`/api/v1/tasks/${id}/activity`),
+  todos: (
+    date?: string,
+    search = '',
+    pageNumber = 1,
+    pageSize = 10,
+  ) =>
+    request<PagedResponse<PersonalTodo>>(
+      `/api/v1/todos?${new URLSearchParams({
+        ...(date ? { date } : {}),
+        search,
+        pageNumber: String(pageNumber),
+        pageSize: String(pageSize),
+      })}`,
+    ),
+  createTodo: (title: string, todoDate: string, notes: string) =>
+    request<PersonalTodo>('/api/v1/todos', {
+      method: 'POST',
+      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+    }),
+  updateTodo: (
+    id: string,
+    title: string,
+    todoDate: string,
+    notes: string,
+  ) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+    }),
+  completeTodo: (id: string) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}/complete`, {
+      method: 'POST',
+    }),
+  reopenTodo: (id: string) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}/reopen`, {
+      method: 'POST',
+    }),
+  deleteTodo: (id: string) =>
+    request<boolean>(`/api/v1/todos/${id}`, {
+      method: 'DELETE',
+    }),
   login: (email: string, password: string) =>
     request<AccountSession>('/api/v1/account/login', {
       method: 'POST',

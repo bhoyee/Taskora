@@ -1,6 +1,8 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.Maintenance;
+using TodoApp.Domain.Collaboration;
+using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Tasks.Maintenance;
@@ -8,8 +10,10 @@ namespace TodoApp.Application.Tests.Tasks.Maintenance;
 public sealed class TaskMaintenanceHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
+    private static readonly Guid WorkspaceId = Guid.NewGuid();
     private static readonly Guid UserId = Guid.NewGuid();
     private static readonly Guid OtherUserId = Guid.NewGuid();
+    private static readonly Guid ManagerId = Guid.NewGuid();
 
     [Fact]
     public async Task MoveToReady_WhenTaskIsInBacklog_ChangesStatus()
@@ -80,6 +84,8 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new UnblockTaskHandler(
                 context.Tasks,
+                context.Projects,
+                context.Workspaces,
                 context.UnitOfWork,
                 new TestCurrentUser(UserId))
             .HandleAsync(
@@ -88,6 +94,96 @@ public sealed class TaskMaintenanceHandlerTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(TaskItemStatus.Ready, task.Status);
+    }
+
+    [Fact]
+    public async Task Unblock_WhenCurrentUserIsWorkspaceManager_ReturnsTaskToReady()
+    {
+        var task = CreateInProgressTask();
+        task.RecordCreator(OtherUserId);
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new UnblockTaskHandler(
+                context.Tasks,
+                context.Projects,
+                context.Workspaces,
+                context.UnitOfWork,
+                new TestCurrentUser(ManagerId))
+            .HandleAsync(
+                new UnblockTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TaskItemStatus.Ready, task.Status);
+    }
+
+    [Fact]
+    public async Task Unblock_WhenCurrentUserIsNeitherOwnerManagerCreatorNorAssignee_ReturnsForbidden()
+    {
+        var task = CreateInProgressTask();
+        task.RecordCreator(Guid.NewGuid());
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new UnblockTaskHandler(
+                context.Tasks,
+                context.Projects,
+                context.Workspaces,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new UnblockTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.unblock_forbidden", result.Error.Code);
+        Assert.Equal(TaskItemStatus.Blocked, task.Status);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Resume_WhenTaskIsBlocked_ReturnsTaskToInProgress()
+    {
+        var task = CreateInProgressTask();
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new ResumeTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new ResumeTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Null(task.BlockedReason);
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Resume_WhenCurrentUserIsNotAssignee_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateInProgressTask();
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new ResumeTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new ResumeTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.assignee_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.Blocked, task.Status);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
     [Fact]
@@ -284,8 +380,19 @@ public sealed class TaskMaintenanceHandlerTests
         Assert.Equal("task.not_found", result.Error.Code);
     }
 
-    private static TestContext CreateContext(params TaskItem[] tasks) =>
-        new(new InMemoryTaskRepository(tasks), new RecordingUnitOfWork());
+    private static TestContext CreateContext(params TaskItem[] tasks)
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio delivery", UserId);
+        workspace.AddMember(UserId, ManagerId, WorkspaceRole.Manager);
+        workspace.AddMember(UserId, OtherUserId, WorkspaceRole.Member);
+        var project = Project.Create(ProjectId, "Portfolio launch", workspaceId: WorkspaceId);
+
+        return new(
+            new InMemoryTaskRepository(tasks),
+            new StubProjectRepository(project),
+            new StubWorkspaceRepository(workspace),
+            new RecordingUnitOfWork());
+    }
 
     private static TaskItem CreateTask() =>
         TaskItem.Create(Guid.NewGuid(), ProjectId, "Publish portfolio");
@@ -301,6 +408,8 @@ public sealed class TaskMaintenanceHandlerTests
 
     private sealed record TestContext(
         InMemoryTaskRepository Tasks,
+        StubProjectRepository Projects,
+        StubWorkspaceRepository Workspaces,
         RecordingUnitOfWork UnitOfWork);
 
     private sealed class InMemoryTaskRepository(params TaskItem[] tasks)
@@ -334,6 +443,50 @@ public sealed class TaskMaintenanceHandlerTests
         }
 
         public bool WasRemoved(Guid taskId) => !_tasks.ContainsKey(taskId);
+    }
+
+    private sealed class StubProjectRepository(Project? project)
+        : IProjectRepository
+    {
+        public Task AddAsync(
+            Project projectToAdd,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<Project?> GetByIdAsync(
+            Guid projectId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(project?.Id == projectId ? project : null);
+
+        public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Project>>(
+                project is not null && project.WorkspaceId == workspaceId
+                    ? [project]
+                    : []);
+    }
+
+    private sealed class StubWorkspaceRepository(Workspace? workspace)
+        : IWorkspaceRepository
+    {
+        public Task AddAsync(
+            Workspace workspaceToAdd,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<Workspace?> GetByIdAsync(
+            Guid workspaceId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(workspace?.Id == workspaceId ? workspace : null);
+
+        public Task<IReadOnlyList<Workspace>> ListForUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Workspace>>(
+                workspace is not null && workspace.HasMember(userId)
+                    ? [workspace]
+                    : []);
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork

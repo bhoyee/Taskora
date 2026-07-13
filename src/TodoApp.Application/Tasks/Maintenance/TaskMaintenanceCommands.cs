@@ -12,6 +12,8 @@ public sealed record BlockTaskCommand(Guid TaskId, string Reason);
 
 public sealed record UnblockTaskCommand(Guid TaskId);
 
+public sealed record ResumeTaskCommand(Guid TaskId);
+
 public sealed record ReopenTaskCommand(Guid TaskId);
 
 public sealed record DeleteTaskCommand(Guid TaskId);

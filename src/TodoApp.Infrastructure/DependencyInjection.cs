@@ -45,6 +45,8 @@ public static class DependencyInjection
             provider => provider.GetRequiredService<TaskRepository>());
         services.AddScoped<ITaskReadRepository>(
             provider => provider.GetRequiredService<TaskRepository>());
+        services.AddScoped<IPersonalTodoRepository,
+            PersonalTodoRepository>();
         services.AddScoped<IProjectBoardReadRepository,
             ProjectBoardReadRepository>();
         services.AddScoped<ITaskActivityReadRepository,
@@ -111,7 +113,7 @@ public static class DependencyInjection
             FromAddress = configuration["Email:Smtp:FromAddress"] ?? string.Empty,
             FromName = string.IsNullOrWhiteSpace(
                 configuration["Email:Smtp:FromName"])
-                ? "Todo Intelligence"
+                ? "Taskora"
                 : configuration["Email:Smtp:FromName"]!
         };
 

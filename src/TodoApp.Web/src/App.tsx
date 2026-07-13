@@ -6,14 +6,14 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, Bell, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
+  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
+  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
-import { api } from './api'
+import { api, streamWorkspaceEvents } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, ProjectCategory, ProjectDetails,
+  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import './styles.css'
@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
+type View = 'workspace' | 'tasks' | 'todos' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'reports', 'activity', 'settings', 'profile', 'operations']
+const views: View[] = ['workspace', 'tasks', 'todos', 'reports', 'activity', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -101,28 +101,42 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
     },
     Completed: { action: 'complete' },
   },
-  Blocked: { Ready: { action: 'unblock' } },
+  Blocked: {
+    Ready: { action: 'unblock' },
+    InProgress: { action: 'resume' },
+  },
   Completed: { Ready: { action: 'reopen' } },
 }
 
-function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) {
+function canMoveTask(
+  task: TaskItem,
+  target: TaskStatus,
+  currentUserId: string,
+  workspaceRole?: Workspace['role'] | null,
+) {
   if (!boardTransitions[task.status]?.[target]) return false
   const isAssignee = !!task.assignedUserId && task.assignedUserId === currentUserId
   const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
+  const isCoordinator = workspaceRole === 'Owner' || workspaceRole === 'Manager'
 
   if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
   if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
-  if (task.status === 'Blocked' && target === 'Ready') return isAssignee
-  if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
+  if (task.status === 'Blocked' && target === 'Ready') return isAssignee || isCreator || isCoordinator
+  if (task.status === 'Blocked' && target === 'InProgress') return isAssignee
+  if (task.status === 'Backlog' && target === 'Ready') return isCreator || isCoordinator || !task.createdByUserId
   if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
 
   return false
 }
 
-function allowedTaskTargets(task: TaskItem, currentUserId: string) {
+function allowedTaskTargets(
+  task: TaskItem,
+  currentUserId: string,
+  workspaceRole?: Workspace['role'] | null,
+) {
   return Object.keys(boardTransitions[task.status] ?? {})
     .filter((status): status is TaskStatus =>
-      canMoveTask(task, status as TaskStatus, currentUserId))
+      canMoveTask(task, status as TaskStatus, currentUserId, workspaceRole))
 }
 
 const activityTypes = [
@@ -141,6 +155,14 @@ const activityTypes = [
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
+  const [todos, setTodos] = useState<PersonalTodo[]>([])
+  const [todoTotal, setTodoTotal] = useState(0)
+  const [todoDate, setTodoDate] = useState(todayInput)
+  const [todoSearch, setTodoSearch] = useState('')
+  const [todoPageNumber, setTodoPageNumber] = useState(1)
+  const [todoLoading, setTodoLoading] = useState(false)
+  const [todoError, setTodoError] = useState('')
+  const todoPageSize = 10
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -262,12 +284,65 @@ export default function App() {
     }
   }
 
+  const loadTodos = async (
+    date = todoDate,
+    search = todoSearch,
+    pageNumber = todoPageNumber,
+  ) => {
+    try {
+      setTodoLoading(true)
+      setTodoError('')
+      const page = await api.todos(
+        date,
+        search,
+        pageNumber,
+        todoPageSize)
+      setTodos(page.items)
+      setTodoTotal(page.totalCount)
+    } catch (reason) {
+      setTodoError(reason instanceof Error ? reason.message : 'Todos could not be loaded.')
+    } finally {
+      setTodoLoading(false)
+    }
+  }
+
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (loggedOut) return
+    void loadTodos(todoDate, todoSearch, todoPageNumber)
+  }, [todoDate, todoSearch, todoPageNumber, loggedOut])
   useEffect(() => {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
   }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (!selectedWorkspaceId || loading || loggedOut) return undefined
+
+    const controller = new AbortController()
+    let refreshTimer = 0
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(
+        () => void load({ silent: true }),
+        150)
+    }
+
+    void streamWorkspaceEvents(
+      selectedWorkspaceId,
+      scheduleRefresh,
+      controller.signal)
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          window.clearTimeout(refreshTimer)
+        }
+      })
+
+    return () => {
+      window.clearTimeout(refreshTimer)
+      controller.abort()
+    }
+  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -472,13 +547,30 @@ export default function App() {
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
-    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
+    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '', workspace?.role ?? null)) return
+    const previousTasks = tasks
+    const previousDashboard = dashboard
+    const userId = currentUserId || account?.userId || ''
 
     try {
       setError('')
+      setTasks((items) => items.map((item) => item.id === task.id
+        ? {
+            ...item,
+            status: target,
+            isBlocked: target === 'Blocked',
+            deadlineHealth: target === 'Completed' ? 'Completed' : item.deadlineHealth,
+            assignedUserId: target === 'InProgress' && !item.assignedUserId
+              ? userId
+              : item.assignedUserId,
+          }
+        : item))
+      setDashboard((current) => applyTaskMoveToDashboard(current, task, target))
       await api.transition(task.id, transition.action, transition.body)
-      await load()
+      await load({ silent: true })
     } catch (reason) {
+      setTasks(previousTasks)
+      setDashboard(previousDashboard)
       setError(reason instanceof Error ? reason.message : 'The task could not be moved.')
       throw reason
     }
@@ -541,10 +633,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+        <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
+          <button className={view === 'todos' ? 'active' : ''} onClick={() => openView('todos')}><ListChecks size={18} /> Todos</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
@@ -627,7 +720,7 @@ export default function App() {
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
                 ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -637,6 +730,53 @@ export default function App() {
             />}
           </section>
         </>}
+        {view === 'todos' && <TodoPage
+          todos={todos}
+          totalCount={todoTotal}
+          selectedDate={todoDate}
+          search={todoSearch}
+          pageNumber={todoPageNumber}
+          pageSize={todoPageSize}
+          loading={todoLoading}
+          error={todoError}
+          onDateChange={(date) => {
+            setTodoDate(date)
+            setTodoPageNumber(1)
+          }}
+          onSearchChange={(nextSearch) => {
+            setTodoSearch(nextSearch)
+            setTodoPageNumber(1)
+          }}
+          onPageChange={setTodoPageNumber}
+          onReload={() => void loadTodos()}
+          onCreate={async (title, date, notes) => {
+            setTodoError('')
+            const created = await api.createTodo(title, date, notes)
+            setNotice(`Todo ${created.title} created.`)
+            setTodoPageNumber(1)
+            await loadTodos(date, todoSearch, 1)
+          }}
+          onUpdate={async (todo, title, date, notes) => {
+            setTodoError('')
+            const updated = await api.updateTodo(todo.id, title, date, notes)
+            setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
+            if (updated.todoDate !== todoDate) await loadTodos(todoDate, todoSearch, todoPageNumber)
+            setNotice(`Todo ${updated.title} updated.`)
+          }}
+          onToggle={async (todo) => {
+            setTodoError('')
+            const updated = todo.isCompleted
+              ? await api.reopenTodo(todo.id)
+              : await api.completeTodo(todo.id)
+            setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
+          }}
+          onDelete={async (todo) => {
+            setTodoError('')
+            await api.deleteTodo(todo.id)
+            setNotice(`Todo ${todo.title} deleted.`)
+            await loadTodos(todoDate, todoSearch, todoPageNumber)
+          }}
+        />}
         {view === 'activity' && <ActivityPage
           activity={activity}
           tasks={tasks}
@@ -727,7 +867,7 @@ export default function App() {
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
@@ -737,6 +877,7 @@ function viewTitle(view: View) {
   return {
     workspace: 'Delivery workspace',
     tasks: 'Tasks',
+    todos: 'Today todos',
     reports: 'Reports',
     activity: 'Activity timeline',
     settings: 'Workspace settings',
@@ -787,7 +928,7 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSessi
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">Account access</p>
         <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
@@ -868,7 +1009,7 @@ function InvitationPage({
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       {declined ? <>
         <div><p className="eyebrow">Workspace invitation</p><h1>Invitation declined</h1></div>
         <p className="muted">The workspace owner can send a new invitation later.</p>
@@ -1107,6 +1248,107 @@ function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
   return tasks
 }
 
+function applyTaskMoveToDashboard(
+  current: Dashboard,
+  task: TaskItem,
+  target: TaskStatus,
+): Dashboard {
+  if (task.status === target) return current
+
+  const oldActive = task.status !== 'Completed'
+  const newActive = target !== 'Completed'
+  const oldBlocked = task.status === 'Blocked' || task.isBlocked
+  const newBlocked = target === 'Blocked'
+  const oldCompleted = task.status === 'Completed'
+  const newCompleted = target === 'Completed'
+  const oldCritical = task.priorityBand === 'Critical' && oldActive
+  const newCritical = task.priorityBand === 'Critical' && newActive
+  const oldOverdue = task.deadlineHealth === 'Overdue' && oldActive
+  const newOverdue = task.deadlineHealth === 'Overdue' && newActive
+  const completedTasks = Math.max(
+    0,
+    current.projectProgress.completedTasks +
+      (newCompleted ? 1 : 0) -
+      (oldCompleted ? 1 : 0),
+  )
+  const totalTasks = current.projectProgress.totalTasks
+  const completionPercentage = totalTasks === 0
+    ? 0
+    : Math.round(completedTasks * 100 / totalTasks)
+
+  return {
+    ...current,
+    activeTaskCount: Math.max(
+      0,
+      current.activeTaskCount + (newActive ? 1 : 0) - (oldActive ? 1 : 0),
+    ),
+    blockedTaskCount: Math.max(
+      0,
+      current.blockedTaskCount + (newBlocked ? 1 : 0) - (oldBlocked ? 1 : 0),
+    ),
+    criticalTaskCount: Math.max(
+      0,
+      current.criticalTaskCount + (newCritical ? 1 : 0) - (oldCritical ? 1 : 0),
+    ),
+    overdueTaskCount: Math.max(
+      0,
+      current.overdueTaskCount + (newOverdue ? 1 : 0) - (oldOverdue ? 1 : 0),
+    ),
+    statusBreakdown: moveBreakdownCount(
+      current.statusBreakdown,
+      task.status,
+      target,
+    ),
+    priorityBreakdown: task.priorityBand === 'Critical' && oldCritical !== newCritical
+      ? adjustBreakdownCount(
+          current.priorityBreakdown,
+          'Critical',
+          newCritical ? 1 : -1,
+        )
+      : current.priorityBreakdown,
+    deadlineBreakdown: task.deadlineHealth === 'Overdue' && oldOverdue !== newOverdue
+      ? adjustBreakdownCount(
+          current.deadlineBreakdown,
+          'Overdue',
+          newOverdue ? 1 : -1,
+        )
+      : current.deadlineBreakdown,
+    projectProgress: {
+      ...current.projectProgress,
+      completedTasks,
+      completionPercentage,
+    },
+  }
+}
+
+function moveBreakdownCount(
+  items: DashboardBreakdownItem[],
+  from: TaskStatus,
+  to: TaskStatus,
+) {
+  return items.map((item) => {
+    if (item.label === from) {
+      return { ...item, count: Math.max(0, item.count - 1) }
+    }
+
+    if (item.label === to) {
+      return { ...item, count: item.count + 1 }
+    }
+
+    return item
+  })
+}
+
+function adjustBreakdownCount(
+  items: DashboardBreakdownItem[],
+  label: string,
+  delta: number,
+) {
+  return items.map((item) => item.label === label
+    ? { ...item, count: Math.max(0, item.count + delta) }
+    : item)
+}
+
 function Metric({
   label,
   value,
@@ -1116,7 +1358,7 @@ function Metric({
   onClick,
 }: {
   label: string
-  value: number
+  value: number | string
   icon: ReactNode
   tone?: string
   selected?: boolean
@@ -1209,6 +1451,182 @@ function NotificationBell({
         : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
     </section>}
   </div>
+}
+
+function TodoPage({
+  todos,
+  totalCount,
+  selectedDate,
+  search,
+  pageNumber,
+  pageSize,
+  loading,
+  error,
+  onDateChange,
+  onSearchChange,
+  onPageChange,
+  onReload,
+  onCreate,
+  onUpdate,
+  onToggle,
+  onDelete,
+}: {
+  todos: PersonalTodo[]
+  totalCount: number
+  selectedDate: string
+  search: string
+  pageNumber: number
+  pageSize: number
+  loading: boolean
+  error: string
+  onDateChange: (date: string) => void
+  onSearchChange: (search: string) => void
+  onPageChange: (page: number) => void
+  onReload: () => void
+  onCreate: (title: string, date: string, notes: string) => Promise<void>
+  onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string) => Promise<void>
+  onToggle: (todo: PersonalTodo) => Promise<void>
+  onDelete: (todo: PersonalTodo) => Promise<void>
+}) {
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editDate, setEditDate] = useState(selectedDate)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const completedCount = todos.filter((todo) => todo.isCompleted).length
+  const openCount = todos.length - completedCount
+  const totalPages = totalCount === 0
+    ? 0
+    : Math.ceil(totalCount / pageSize)
+
+  const create = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!title.trim()) return
+    setSaving(true)
+    try {
+      await onCreate(title.trim(), selectedDate, notes.trim())
+      setTitle('')
+      setNotes('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const startEdit = (todo: PersonalTodo) => {
+    setEditingId(todo.id)
+    setEditTitle(todo.title)
+    setEditNotes(todo.notes ?? '')
+    setEditDate(todo.todoDate)
+  }
+
+  const saveEdit = async (todo: PersonalTodo) => {
+    if (!editTitle.trim()) return
+    setBusyId(todo.id)
+    try {
+      await onUpdate(todo, editTitle.trim(), editDate, editNotes.trim())
+      setEditingId(null)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const runItemAction = async (
+    todo: PersonalTodo,
+    action: (todo: PersonalTodo) => Promise<void>,
+  ) => {
+    setBusyId(todo.id)
+    try {
+      await action(todo)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return <section className="todo-page">
+    <div className="todo-hero">
+      <div>
+        <p className="eyebrow">Personal checklist</p>
+        <h2>Plan the day without creating project work.</h2>
+        <p>Use this for private reminders, calls, errands, and small follow-ups that do not belong on the team board.</p>
+      </div>
+      <label><span>Date</span><input type="date" value={selectedDate} onChange={(event) => onDateChange(event.target.value)} /></label>
+    </div>
+
+    <section className="todo-summary" aria-label="Todo summary">
+      <Metric label="Open todos" value={openCount} icon={<ListChecks />} />
+      <Metric label="Completed" value={completedCount} icon={<CheckCircle2 />} />
+      <Metric label="Total matches" value={totalCount} icon={<Search />} />
+      <Metric label="Selected date" value={new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} icon={<CalendarDays />} />
+    </section>
+
+    <form className="todo-create" onSubmit={(event) => void create(event)}>
+      <label>Todo title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} placeholder="Call client, review PR, buy domain..." /></label>
+      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context or checklist note." /></label>
+      <button className="primary" disabled={saving || !title.trim()}><Plus size={17} /> {saving ? 'Adding...' : 'Add todo'}</button>
+    </form>
+
+    <section className="todo-list-panel">
+      <header>
+        <div><h2>Todos for {new Date(`${selectedDate}T00:00:00`).toLocaleDateString()}</h2><p>{openCount} open, {completedCount} completed</p></div>
+        <div className="todo-toolbar">
+          <label className="search"><Search size={17} /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search todos" aria-label="Search todos" /></label>
+          <button className="secondary" onClick={onReload} disabled={loading}><Search size={16} /> Refresh</button>
+        </div>
+      </header>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      {loading ? <div className="loading">Loading todos...</div> :
+        todos.length
+          ? <div className="todo-list">
+            {todos.map((todo) => {
+              const editing = editingId === todo.id
+              return <article className={`todo-item ${todo.isCompleted ? 'completed' : ''}`} key={todo.id}>
+                <button
+                  className={`todo-check ${todo.isCompleted ? 'done' : ''}`}
+                  onClick={() => void runItemAction(todo, onToggle)}
+                  disabled={busyId === todo.id}
+                  aria-label={todo.isCompleted ? 'Reopen todo' : 'Complete todo'}
+                ><CheckCircle2 size={18} /></button>
+                <div className="todo-content">
+                  {editing
+                    ? <>
+                        <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={160} />
+                        <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} maxLength={1000} />
+                        <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} />
+                      </>
+                    : <>
+                        <strong>{todo.title}</strong>
+                        {todo.carriedOverFromDate && <span className="carryover-badge">Carry over from {formatDate(todo.originalTodoDate)}</span>}
+                        {todo.notes && <p>{todo.notes}</p>}
+                        <small>{todo.isCompleted && todo.completedAt ? `Completed ${new Date(todo.completedAt).toLocaleString()}` : `Updated ${new Date(todo.updatedAt).toLocaleString()}`}</small>
+                      </>}
+                </div>
+                <div className="todo-actions">
+                  {editing
+                    ? <>
+                        <button className="icon-button" onClick={() => void saveEdit(todo)} disabled={busyId === todo.id || !editTitle.trim()} aria-label="Save todo"><Save /></button>
+                        <button className="icon-button" onClick={() => setEditingId(null)} aria-label="Cancel edit"><X /></button>
+                      </>
+                    : <>
+                        <button className="icon-button" onClick={() => startEdit(todo)} aria-label={`Edit ${todo.title}`}><Pencil /></button>
+                        <button className="icon-button danger-action" onClick={() => void runItemAction(todo, onDelete)} disabled={busyId === todo.id} aria-label={`Delete ${todo.title}`}><Trash2 /></button>
+                      </>}
+                </div>
+              </article>
+            })}
+          </div>
+          : <div className="empty"><ListChecks /><h2>No todos for this date</h2><p>Add a personal todo for calls, reminders, errands, or quick follow-ups.</p></div>}
+      {!loading && <Pagination
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />}
+    </section>
+  </section>
 }
 
 function ReportsPage({
@@ -1321,7 +1739,6 @@ function ProjectGovernance({
   const hasBlocked = dashboard.blockedTaskCount > 0
   const hasCritical = dashboard.criticalTaskCount > 0
   const deliveryAtRisk = delivery?.tone === 'critical' || delivery?.tone === 'warning'
-  const riskCount = [hasOverdue, hasBlocked, hasCritical, deliveryAtRisk].filter(Boolean).length
   const healthScore = Math.max(0, Math.min(100,
     100 -
     dashboard.overdueTaskCount * 18 -
@@ -1337,15 +1754,16 @@ function ProjectGovernance({
       ? 'Needs attention'
       : 'At risk'
   const readiness = [
-    { label: 'Active project selected', ready: !!project },
-    { label: 'Delivery date confirmed', ready: !!project?.targetDate },
-    { label: 'No overdue tasks', ready: !hasOverdue },
-    { label: 'No blocked work', ready: !hasBlocked },
-    { label: 'Completion above 80%', ready: completion >= 80 || openTasks === 0 },
-    { label: 'No critical dashboard warnings', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
+    { readyLabel: 'Active project selected', blockedLabel: 'Select an active project', ready: !!project },
+    { readyLabel: 'Delivery date confirmed', blockedLabel: 'Delivery date missing', ready: !!project?.targetDate },
+    { readyLabel: 'No overdue tasks', blockedLabel: `${dashboard.overdueTaskCount} overdue task${dashboard.overdueTaskCount === 1 ? '' : 's'} remaining`, ready: !hasOverdue },
+    { readyLabel: 'No blocked work', blockedLabel: `${dashboard.blockedTaskCount} blocked task${dashboard.blockedTaskCount === 1 ? '' : 's'} remaining`, ready: !hasBlocked },
+    { readyLabel: 'Completion above 80%', blockedLabel: `${completion}% complete; ${openTasks} open task${openTasks === 1 ? '' : 's'} remaining`, ready: completion >= 80 || openTasks === 0 },
+    { readyLabel: 'No critical dashboard warnings', blockedLabel: 'Critical dashboard warning needs review', ready: dashboard.warnings.every((warning) => warning.severity !== 'critical') },
   ]
   const risks = buildRiskRegister(dashboard, delivery?.label, tasks)
-  const decisions = buildDecisionSuggestions(risks.length, completion, openTasks)
+  const activeRiskCount = risks.filter((risk) => risk.tone !== 'healthy').length
+  const decisions = buildDecisionSuggestions(activeRiskCount, completion, openTasks)
 
   return <section className="governance-grid" aria-label="Project governance">
     <article className={`governance-card health-card ${healthTone}`}>
@@ -1359,7 +1777,7 @@ function ProjectGovernance({
     </article>
 
     <article className="governance-card">
-      <header><h2>Risk register</h2><span>{riskCount} signals</span></header>
+      <header><h2>Risk register</h2><span>{activeRiskCount} signals</span></header>
       <ul className="governance-list risk-list">
         {risks.map((risk) => <li key={risk.title}>
           <span className={`risk-dot ${risk.tone}`} />
@@ -1381,9 +1799,9 @@ function ProjectGovernance({
     <article className="governance-card">
       <header><h2>Release readiness</h2><span>{readiness.filter((item) => item.ready).length}/{readiness.length}</span></header>
       <ul className="readiness-list">
-        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.label}>
+        {readiness.map((item) => <li className={item.ready ? 'ready' : 'not-ready'} key={item.readyLabel}>
           <CheckCircle2 size={16} />
-          <span>{item.label}</span>
+          <span>{item.ready ? item.readyLabel : item.blockedLabel}</span>
         </li>)}
       </ul>
     </article>
@@ -2152,6 +2570,7 @@ function Board({
   categories,
   members,
   currentUserId,
+  workspaceRole,
   pinnedTaskIds,
   onEdit,
   onDelete,
@@ -2164,6 +2583,7 @@ function Board({
   categories: ProjectCategory[]
   members: WorkspaceMember[]
   currentUserId: string
+  workspaceRole: Workspace['role'] | null
   pinnedTaskIds: Set<string>
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
@@ -2180,14 +2600,14 @@ function Board({
     useSensor(KeyboardSensor),
   )
   const validTargets = activeTask
-    ? new Set(allowedTaskTargets(activeTask, currentUserId))
+    ? new Set(allowedTaskTargets(activeTask, currentUserId, workspaceRole))
     : new Set<string>()
 
   const finishDrag = async ({ active, over }: DragEndEvent) => {
     const task = active.data.current?.task as TaskItem | undefined
     const target = over?.id as TaskStatus | undefined
     setActiveTask(null)
-    if (!task || !target || !canMoveTask(task, target, currentUserId)) return
+    if (!task || !target || !canMoveTask(task, target, currentUserId, workspaceRole)) return
 
     setMoving(true)
     try {
@@ -2213,6 +2633,7 @@ function Board({
         pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
         currentUserId={currentUserId}
+        workspaceRole={workspaceRole}
         onEdit={onEdit}
         onDelete={onDelete}
         onNote={onNote}
@@ -2223,7 +2644,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -2235,6 +2656,7 @@ function BoardColumn({
   members,
   pinnedTaskIds,
   currentUserId,
+  workspaceRole,
   onEdit,
   onDelete,
   onNote,
@@ -2249,6 +2671,7 @@ function BoardColumn({
   members: WorkspaceMember[]
   pinnedTaskIds: Set<string>
   currentUserId: string
+  workspaceRole: Workspace['role'] | null
   onEdit: (task: TaskItem) => void
   onDelete: (task: TaskItem) => void
   onNote: (task: TaskItem) => void
@@ -2275,7 +2698,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {orderedTasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -2286,6 +2709,7 @@ function BoardCard({
   categories,
   members = [],
   currentUserId,
+  workspaceRole,
   pinned = false,
   onEdit,
   onDelete,
@@ -2298,6 +2722,7 @@ function BoardCard({
   categories?: ProjectCategory[]
   members?: WorkspaceMember[]
   currentUserId?: string
+  workspaceRole?: Workspace['role'] | null
   pinned?: boolean
   onEdit: (task: TaskItem) => void
   onDelete?: (task: TaskItem) => void
@@ -2306,7 +2731,7 @@ function BoardCard({
   onLockedMoveAttempt?: (message: string) => void
   overlay?: boolean
 }) {
-  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId).length > 0
+  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId, workspaceRole).length > 0
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   const lockedAssigneeName = task.assignedUserId
     ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
@@ -2404,7 +2829,10 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Backlog: [{ label: 'Move to ready', action: 'ready' }],
   Ready: [{ label: 'Start task', action: 'start' }],
   InProgress: [{ label: 'Complete task', action: 'complete' }],
-  Blocked: [{ label: 'Unblock task', action: 'unblock' }],
+  Blocked: [
+    { label: 'Resume work', action: 'resume' },
+    { label: 'Move to ready', action: 'unblock' },
+  ],
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
@@ -2414,6 +2842,7 @@ const actionTargets: Record<string, TaskStatus> = {
   block: 'Blocked',
   complete: 'Completed',
   unblock: 'Ready',
+  resume: 'InProgress',
   reopen: 'Ready',
 }
 
@@ -2470,7 +2899,7 @@ function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { t
   </div>
 }
 
-function TaskEditor({ projectId, task, currentUserId, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -2480,7 +2909,7 @@ function TaskEditor({ projectId, task, currentUserId, isMember, members, categor
   const canEditPlanning = !isMember && (!task.createdByUserId || task.createdByUserId === currentUserId)
   const isUnscored = !explanation
   const availableActions = (nextActions[task.status] ?? [])
-    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId))
+    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId, workspaceRole))
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSaving(true)

@@ -5,6 +5,7 @@ using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 using TodoApp.Domain.Tasks.Events;
+using TodoApp.Domain.Todos;
 
 namespace TodoApp.Infrastructure.Persistence;
 
@@ -24,6 +25,8 @@ public sealed class TodoAppDbContext(
     public DbSet<TaskNote> TaskNotes => Set<TaskNote>();
 
     public DbSet<TaskActivity> TaskActivities => Set<TaskActivity>();
+
+    public DbSet<PersonalTodo> PersonalTodos => Set<PersonalTodo>();
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
 
@@ -54,6 +57,7 @@ public sealed class TodoAppDbContext(
     {
         SetConcurrencyTokens<Project>();
         SetConcurrencyTokens<TaskItem>();
+        SetConcurrencyTokens<PersonalTodo>();
         SetConcurrencyTokens<Workspace>();
 
         var tasksWithEvents = ChangeTracker

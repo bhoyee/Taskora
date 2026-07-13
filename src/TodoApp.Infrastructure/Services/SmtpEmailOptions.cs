@@ -16,5 +16,5 @@ public sealed class SmtpEmailOptions
 
     public string FromAddress { get; set; } = string.Empty;
 
-    public string FromName { get; set; } = "Todo Intelligence";
+    public string FromName { get; set; } = "Taskora";
 }

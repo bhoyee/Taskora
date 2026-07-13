@@ -67,7 +67,7 @@ public sealed class SendDueDateNotificationsHandler(
             $"""
             Hello,
 
-            This is a professional reminder from Todo Intelligence.
+            This is a professional reminder from Taskora.
 
             Task: {reminder.TaskTitle}
             Deadline: {reminder.DueDate:yyyy-MM-dd}
@@ -86,7 +86,7 @@ public sealed class SendDueDateNotificationsHandler(
             $"""
             Hello,
 
-            This is a professional project delivery-date reminder from Todo Intelligence.
+            This is a professional project delivery-date reminder from Taskora.
 
             Project: {reminder.ProjectName}
             Delivery date: {reminder.TargetDate:yyyy-MM-dd}

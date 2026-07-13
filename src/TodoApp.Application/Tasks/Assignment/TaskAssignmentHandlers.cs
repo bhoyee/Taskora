@@ -64,7 +64,7 @@ public sealed class AssignTaskHandler(
                     Task: {task.Title}
                     Due date: {(task.DueDate?.Value.ToString("yyyy-MM-dd") ?? "Not set")}
 
-                    Please sign in to Todo Intelligence to review the details.
+                    Please sign in to Taskora to review the details.
                     """),
                 cancellationToken);
         }

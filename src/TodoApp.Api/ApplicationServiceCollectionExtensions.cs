@@ -11,6 +11,7 @@ using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Application.Tasks.Maintenance;
 using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Application.Tasks.Queries;
+using TodoApp.Application.Todos;
 
 namespace TodoApp.Api;
 
@@ -60,6 +61,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<UpdateTaskHandler>();
         services.AddScoped<BlockTaskHandler>();
         services.AddScoped<UnblockTaskHandler>();
+        services.AddScoped<ResumeTaskHandler>();
         services.AddScoped<ReopenTaskHandler>();
         services.AddScoped<DeleteTaskHandler>();
         services.AddScoped<UpdatePlanningFactorsHandler>();
@@ -70,6 +72,13 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<AddTaskTagHandler>();
         services.AddScoped<RemoveTaskTagHandler>();
         services.AddScoped<AddTaskNoteHandler>();
+
+        services.AddScoped<ListPersonalTodosHandler>();
+        services.AddScoped<CreatePersonalTodoHandler>();
+        services.AddScoped<UpdatePersonalTodoHandler>();
+        services.AddScoped<CompletePersonalTodoHandler>();
+        services.AddScoped<ReopenPersonalTodoHandler>();
+        services.AddScoped<DeletePersonalTodoHandler>();
 
         return services;
     }
