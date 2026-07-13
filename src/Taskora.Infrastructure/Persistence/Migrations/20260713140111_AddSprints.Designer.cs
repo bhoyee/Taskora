@@ -216,7 +216,6 @@ namespace Taskora.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("TodoApp.Domain.Projects.Sprint", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("ClosedAt")

@@ -10,6 +10,8 @@ internal sealed class SprintConfiguration : IEntityTypeConfiguration<Sprint>
     {
         builder.ToTable("Sprints");
         builder.HasKey(sprint => sprint.Id);
+        builder.Property(sprint => sprint.Id)
+            .ValueGeneratedNever();
         builder.Property(sprint => sprint.ProjectId).IsRequired();
         builder.Property(sprint => sprint.Name)
             .HasMaxLength(160)

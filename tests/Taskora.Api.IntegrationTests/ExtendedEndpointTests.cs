@@ -42,6 +42,41 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Project_sprints_can_be_created_and_used_when_creating_tasks()
+    {
+        var projectId = await CreateProjectAsync();
+
+        var sprintResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/projects/{projectId}/sprints",
+            new
+            {
+                name = $"Sprint {Guid.NewGuid():N}",
+                goal = "Deliver a tested vertical slice.",
+                startDate = "2026-07-13",
+                endDate = "2026-07-27"
+            });
+
+        AssertSuccess(sprintResponse);
+        var sprintId = (await sprintResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id")
+            .GetGuid();
+
+        var taskResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/projects/{projectId}/tasks",
+            new
+            {
+                title = "Build sprint scope",
+                sprintId
+            });
+
+        AssertSuccess(taskResponse);
+        var task = await taskResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(
+            sprintId,
+            task.GetProperty("sprintId").GetGuid());
+    }
+
+    [Fact]
     public async Task Task_supports_planning_dependencies_and_full_maintenance()
     {
         var projectId = await CreateProjectAsync();
