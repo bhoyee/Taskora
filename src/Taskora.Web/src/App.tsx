@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -803,6 +803,7 @@ export default function App() {
           <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
           <button className={view === 'projects' ? 'active' : ''} onClick={() => openView('projects')}><FolderPlus size={18} /> Projects</button>
+          <button className={view === 'sprints' ? 'active' : ''} onClick={() => openView('sprints')}><Clock3 size={18} /> Sprints</button>
           <button className={view === 'board' ? 'active' : ''} onClick={() => openView('board')}><Columns3 size={18} /> Board</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
@@ -925,6 +926,25 @@ export default function App() {
           </section>
         </>}
         {view === 'projects' && <ProjectsPage
+          projects={projects}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          workspaceRole={workspace?.role ?? null}
+          pinnedProjectIds={pinnedProjectIds}
+          onSwitch={switchProject}
+          onOpenTasks={(projectId) => {
+            switchProject(projectId)
+            openView('tasks')
+          }}
+          onOpenSprints={(projectId) => {
+            switchProject(projectId)
+            openView('sprints')
+          }}
+          onTogglePin={togglePinnedProject}
+          onCreate={createProject}
+          onUpdate={updateProject}
+          onArchive={archiveProject}
+        />}
+        {view === 'sprints' && <SprintsPage
           projects={projects}
           selectedProjectId={project?.id ?? selectedProjectId}
           workspaceRole={workspace?.role ?? null}
@@ -1611,6 +1631,109 @@ function ProjectsPage({
   pinnedProjectIds,
   onSwitch,
   onOpenTasks,
+  onOpenSprints,
+  onTogglePin,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  pinnedProjectIds: Set<string>
+  onSwitch: (projectId: string) => void
+  onOpenTasks: (projectId: string) => void
+  onOpenSprints: (projectId: string) => void
+  onTogglePin: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+}) {
+  const projectPageSize = 6
+  const [projectPage, setProjectPage] = useState(1)
+  const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
+  const visibleProjects = projects.slice(
+    (projectPage - 1) * projectPageSize,
+    projectPage * projectPageSize)
+
+  useEffect(() => {
+    if (projectPage > totalProjectPages) {
+      setProjectPage(totalProjectPages)
+    }
+  }, [projectPage, totalProjectPages])
+
+  return <section className="projects-page">
+    <ProjectBar
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      workspaceRole={workspaceRole}
+      pinnedProjectIds={pinnedProjectIds}
+      onSwitch={onSwitch}
+      onTogglePin={onTogglePin}
+      onCreate={onCreate}
+      onUpdate={onUpdate}
+      onArchive={onArchive}
+    />
+    {projects.length
+      ? <>
+          <div className="project-grid" aria-label="Workspace projects">
+            {visibleProjects.map((project) => {
+              const delivery = deliveryStatus(project.targetDate)
+              const pinned = pinnedProjectIds.has(project.id)
+              return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
+                <header>
+                  <div>
+                    <p className="eyebrow">Project</p>
+                    <h2>{project.name}</h2>
+                  </div>
+                  <button
+                    className={`pin-button ${pinned ? 'active' : ''}`}
+                    onClick={() => onTogglePin(project.id)}
+                    aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
+                    title={pinned ? 'Unpin project' : 'Pin project'}
+                  ><Pin /></button>
+                </header>
+                <p>{project.description || 'No description recorded yet.'}</p>
+                <div className="project-card-meta">
+                  <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
+                  {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
+                </div>
+                <footer>
+                  <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
+                  <button className="secondary sprint-action" onClick={() => onOpenSprints(project.id)}><Clock3 size={16} /> Plan sprints</button>
+                  <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+                </footer>
+              </article>
+            })}
+          </div>
+          <Pagination
+            pageNumber={projectPage}
+            pageSize={projectPageSize}
+            totalCount={projects.length}
+            totalPages={totalProjectPages}
+            onPageChange={setProjectPage}
+          />
+        </>
+      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
+  </section>
+}
+
+function SprintsPage({
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  pinnedProjectIds,
+  onSwitch,
+  onOpenTasks,
   onTogglePin,
   onCreate,
   onUpdate,
@@ -1659,25 +1782,35 @@ function ProjectsPage({
     action: 'start' | 'complete' | 'cancel',
   ) => Promise<void>
 }) {
-  const projectPageSize = 6
-  const [projectPage, setProjectPage] = useState(1)
   const [sprintComposerToken, setSprintComposerToken] = useState(0)
-  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
-  const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
-  const visibleProjects = projects.slice(
-    (projectPage - 1) * projectPageSize,
-    projectPage * projectPageSize)
-
-  useEffect(() => {
-    if (projectPage > totalProjectPages) {
-      setProjectPage(totalProjectPages)
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? projects[0] ?? null
+  const sprintTotals = projects.reduce((totals, item) => {
+    for (const sprint of item.sprints) {
+      totals.total += 1
+      if (sprint.status === 'Active') totals.active += 1
+      if (sprint.status === 'Planned') totals.planned += 1
+      if (sprint.status === 'Completed') totals.completed += 1
     }
-  }, [projectPage, totalProjectPages])
+    return totals
+  }, { total: 0, active: 0, planned: 0, completed: 0 })
 
-  return <section className="projects-page">
+  return <section className="sprints-page">
+    <section className="home-heading">
+      <div>
+        <p className="eyebrow">Sprint planning</p>
+        <h2>Plan short delivery cycles inside each project</h2>
+      </div>
+      <span>{sprintTotals.total} sprint{sprintTotals.total === 1 ? '' : 's'} across workspace projects</span>
+    </section>
+    <section className="metrics sprint-metrics" aria-label="Sprint summary">
+      <Metric label="Total sprints" value={sprintTotals.total} detail={`${projects.length} project${projects.length === 1 ? '' : 's'}`} icon={<Clock3 />} />
+      <Metric label="Active" value={sprintTotals.active} detail="Currently being delivered" icon={<Activity />} />
+      <Metric label="Planned" value={sprintTotals.planned} detail="Ready for future cycles" icon={<CalendarDays />} />
+      <Metric label="Completed" value={sprintTotals.completed} detail="Closed delivery cycles" icon={<CheckCircle2 />} />
+    </section>
     <ProjectBar
       projects={projects}
-      selectedProjectId={selectedProjectId}
+      selectedProjectId={selectedProject?.id ?? selectedProjectId}
       workspaceRole={workspaceRole}
       pinnedProjectIds={pinnedProjectIds}
       onSwitch={onSwitch}
@@ -1687,54 +1820,21 @@ function ProjectsPage({
       onUpdate={onUpdate}
       onArchive={onArchive}
     />
-    {selectedProject && <SprintPanel
-      project={selectedProject}
-      workspaceRole={workspaceRole}
-      composerToken={sprintComposerToken}
-      onCreate={onCreateSprint}
-      onUpdate={onUpdateSprint}
-      onChangeStatus={onChangeSprintStatus}
-    />}
-    {projects.length
+    {selectedProject
       ? <>
-          <div className="project-grid" aria-label="Workspace projects">
-            {visibleProjects.map((project) => {
-              const delivery = deliveryStatus(project.targetDate)
-              const pinned = pinnedProjectIds.has(project.id)
-              return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
-                <header>
-                  <div>
-                    <p className="eyebrow">Project</p>
-                    <h2>{project.name}</h2>
-                  </div>
-                  <button
-                    className={`pin-button ${pinned ? 'active' : ''}`}
-                    onClick={() => onTogglePin(project.id)}
-                    aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
-                    title={pinned ? 'Unpin project' : 'Pin project'}
-                  ><Pin /></button>
-                </header>
-                <p>{project.description || 'No description recorded yet.'}</p>
-                <div className="project-card-meta">
-                  <span><CalendarDays size={14} /> {project.targetDate ? formatDate(project.targetDate) : 'No delivery date'}</span>
-                  {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
-                </div>
-                <footer>
-                  <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
-                  <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
-                </footer>
-              </article>
-            })}
-          </div>
-          <Pagination
-            pageNumber={projectPage}
-            pageSize={projectPageSize}
-            totalCount={projects.length}
-            totalPages={totalProjectPages}
-            onPageChange={setProjectPage}
+          <SprintPanel
+            project={selectedProject}
+            workspaceRole={workspaceRole}
+            composerToken={sprintComposerToken}
+            onCreate={onCreateSprint}
+            onUpdate={onUpdateSprint}
+            onChangeStatus={onChangeSprintStatus}
           />
+          <div className="sprint-page-actions">
+            <button className="primary" onClick={() => onOpenTasks(selectedProject.id)}><LayoutList size={16} /> Open project tasks</button>
+          </div>
         </>
-      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
+      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project first, then create sprints inside that project.</p></div>}
   </section>
 }
 

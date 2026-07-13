@@ -15,7 +15,7 @@ monitoring, sprint planning, and CI/CD.
   notifications only show data for the selected workspace.
 - Project CRUD with required delivery dates, archive rules, delivery countdowns,
   and project-level health indicators.
-- Sprint planning inside projects, including sprint goals, date windows,
+- Dedicated sprint planning for projects, including sprint goals, date windows,
   Planned/Active/Completed/Cancelled lifecycle, sprint filters, and task
   assignment to a sprint.
 - Tasks created under active projects only.
@@ -54,8 +54,11 @@ real workspace application:
   assignee, category, tags, priority score, due date, created date,
   edit/delete actions, and creator/member permission handling.
 - `Projects`: project CRUD, required delivery dates, delivery countdown badges,
-  archive support, sprint planning, pinning, pagination, and quick access to
-  project tasks.
+  archive support, pinning, pagination, and quick access to project tasks or
+  sprint planning.
+- `Sprints`: dedicated project sprint page for creating planned delivery
+  cycles, starting active work, completing or cancelling sprints, and opening
+  the matching project task list.
 - `Board`: drag-and-drop delivery board across Backlog, Ready, In Progress,
   Blocked, and Completed, with guarded assignment rules, pinned tasks, and
   quick task notes.
