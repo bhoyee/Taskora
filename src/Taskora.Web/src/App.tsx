@@ -253,8 +253,14 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [onboardingStep, setOnboardingStep] = useState(0)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const inviteToken = inviteTokenFromPath()
   const activeUserId = currentUserId || account?.userId || 'development'
+
+  const markOnboardingSeen = () => {
+    localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
+    setOnboardingOpen(false)
+  }
 
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
@@ -526,6 +532,7 @@ export default function App() {
     setView(next)
     window.history.pushState(null, '', `#${next}`)
     setNavOpen(false)
+    setAccountMenuOpen(false)
   }
   const switchWorkspace = (workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId)
@@ -823,12 +830,7 @@ export default function App() {
           <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
-          <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
-          <button onClick={() => {
-            setOnboardingStep(0)
-            setOnboardingOpen(true)
-          }}><HelpCircle size={18} /> Help tour</button>
         </nav>
         <PinnedProjects
           projects={projects}
@@ -836,11 +838,6 @@ export default function App() {
           selectedProjectId={project?.id ?? selectedProjectId}
           onOpen={openPinnedProject}
         />
-        <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
-        <button className="sidebar-foot" onClick={() => openView('profile')}>
-          <span className="avatar">{initials(profile.displayName)}</span>
-          <div><strong>{profile.displayName}</strong><small>{workspace?.role ?? 'Member'}</small></div>
-        </button>
       </aside>
 
       <main id="workspace">
@@ -866,9 +863,33 @@ export default function App() {
               openView('activity')
             }}
           />
-          <button className="topbar-avatar" onClick={() => openView('profile')} aria-label={`Open profile for ${profile.displayName}`}>
-            {initials(profile.displayName)}
-          </button>
+          <div className="account-menu">
+            <button
+              className="topbar-avatar"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-expanded={accountMenuOpen}
+              aria-haspopup="menu"
+              aria-label={`Open account menu for ${profile.displayName}`}
+            >
+              {initials(profile.displayName)}
+            </button>
+            {accountMenuOpen && <div className="account-dropdown" role="menu">
+              <div className="account-summary">
+                <span className="avatar">{initials(profile.displayName)}</span>
+                <div>
+                  <strong>{profile.displayName}</strong>
+                  <small>{workspace?.role ?? 'Member'}{workspace ? `, ${workspace.name}` : ''}</small>
+                </div>
+              </div>
+              <button role="menuitem" onClick={() => openView('profile')}><UserRound size={16} /> My profile</button>
+              <button role="menuitem" onClick={() => {
+                setAccountMenuOpen(false)
+                setOnboardingStep(0)
+                setOnboardingOpen(true)
+              }}><HelpCircle size={16} /> Help tour</button>
+              <button role="menuitem" className="danger-menu-action" onClick={logout}><LogOut size={16} /> Logout</button>
+            </div>}
+          </div>
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -1121,15 +1142,9 @@ export default function App() {
       {onboardingOpen && <OnboardingDialog
         step={onboardingStep}
         onStepChange={setOnboardingStep}
-        onSkip={() => {
-          localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
-          setOnboardingOpen(false)
-        }}
-        onComplete={() => {
-          localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
-          setOnboardingOpen(false)
-        }}
-        onClose={() => setOnboardingOpen(false)}
+        onSkip={markOnboardingSeen}
+        onComplete={markOnboardingSeen}
+        onClose={markOnboardingSeen}
       />}
     </div>
   )
