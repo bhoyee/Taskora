@@ -89,7 +89,7 @@ depending on HTTP, databases, or frontend frameworks.
 
 ## Milestone 2: Application Use Cases
 
-**Status:** Planned
+**Status:** Complete
 
 **Objective:** Expose the domain through testable application operations.
 
@@ -100,6 +100,19 @@ depending on HTTP, databases, or frontend frameworks.
 - DTO mapping, validation, pagination, and cancellation support.
 - Interfaces for persistence, identity, and time.
 - Application unit tests.
+
+**Progress delivered:**
+
+- Application and Application.Tests project boundaries.
+- Typed application results and errors.
+- Repository, unit-of-work, identifier, and clock ports.
+- Create, start, complete, and add-dependency task commands.
+- Task detail and filtered paginated task queries.
+- Edit, ready, block, unblock, reopen, scheduling, planning, and dependency
+  maintenance commands.
+- Project create, update, archive, details, and delivery-board use cases.
+- Architecture dependency tests.
+- 34 application tests and 62 domain tests.
 
 **Definition of done:**
 

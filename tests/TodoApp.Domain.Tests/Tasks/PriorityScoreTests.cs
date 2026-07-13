@@ -68,7 +68,10 @@ public sealed class PriorityScoreTests
     [Fact]
     public void SetPlanningFactors_WhenFactorsAreProvided_UpdatesTaskPriority()
     {
-        var task = TaskItem.Create(Guid.NewGuid(), "Resolve production risk");
+        var task = TaskItem.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Resolve production risk");
         var factors = PlanningFactors.Create(
             businessValue: 4,
             urgency: 5,

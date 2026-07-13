@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Complete
 
 ## Objective
 
@@ -76,3 +76,28 @@ understand progress and blockers.
 7. `feat: implement filtered paginated task queries`
 8. `test: enforce application dependency rules`
 9. `docs: complete application use case milestone`
+
+## Current Progress
+
+Delivered:
+
+- Application and test project boundaries.
+- Typed `Result<T>`, application errors, and pagination results.
+- Repository, unit-of-work, identifier, and clock interfaces.
+- CreateTask with project validation, scheduling, and effort.
+- StartTask and CompleteTask lifecycle commands.
+- AddTaskDependency with typed failure results.
+- GetTaskById details query.
+- Filtered, sorted, paginated task search contract.
+- Edit, move-to-ready, block, unblock, reopen, planning-factor, scheduling,
+  effort, and dependency-removal commands.
+- Project create, update, archive, and details use cases.
+- Project delivery-board summary query.
+- Application and Domain dependency architecture tests.
+- 34 passing application tests.
+
+Deferred to later milestones:
+
+- EF Core repository implementations.
+- HTTP endpoint integration.
+- Identity and authorization.

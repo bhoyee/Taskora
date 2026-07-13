@@ -14,8 +14,27 @@ users rank work using value, urgency, risk, effort, and task dependencies.
 - [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
 
 Development follows incremental delivery, TDD for core behaviour, and a
-modular monolith architecture. Milestones 0 and 1 establish the planning
-baseline and tested domain foundation.
+modular monolith architecture. The product is delivered through nine
+milestones covering planning, business rules, application workflows, data,
+HTTP APIs, product intelligence, user experience, security, and operations.
+
+## Delivery Milestones
+
+| Milestone | Status | Outcome |
+| --- | --- | --- |
+| 0. Planning and Baseline | Complete | Requirements, architecture, testing strategy, contribution workflow, and initial CI |
+| 1. Domain Foundation | Complete | Tested task lifecycle, projects, dependencies, scheduling, priority rules, and domain events |
+| 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
+| 3. Persistence | Planned | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
+| 4. Production REST API | Planned | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
+| 5. Priority Intelligence | Planned | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
+| 6. Web Experience | Planned | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
+| 7. Identity and Collaboration | Planned | Authentication, workspaces, membership, assignments, roles, and authorization |
+| 8. Delivery and Operations | Planned | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
+
+Each milestone has measurable acceptance criteria, required tests, a definition
+of done, and an expected commit sequence in the
+[product roadmap](docs/ROADMAP.md).
 
 ## Architecture
 
@@ -54,8 +73,8 @@ introduced incrementally when their milestone begins.
 
 ## Current Development
 
-Milestone 1 is complete on `feature/domain-foundation`. The domain layer
-includes:
+Milestones 1 and 2 are complete on the stacked
+`feature/application-use-cases` branch. The current solution includes:
 
 - A guarded task lifecycle from Backlog to Completed.
 - Blocking, unblocking, and reopening rules.
@@ -65,7 +84,12 @@ includes:
 - Project creation, editing, target dates, and archive restrictions.
 - Due-date and Fibonacci effort-estimate value objects.
 - Domain events for task lifecycle changes.
-- 60 xUnit domain tests.
+- Create, start, complete, and dependency application commands.
+- Task detail and filtered paginated search queries.
+- Task editing, workflow, planning, scheduling, and dependency maintenance.
+- Project create, update, archive, details, and delivery-board use cases.
+- Architecture dependency tests.
+- 62 domain tests and 34 application tests.
 
 Run the complete build and test suite with:
 
