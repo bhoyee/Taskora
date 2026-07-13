@@ -7,14 +7,14 @@ import {
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, FolderPlus, GripVertical, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api, streamWorkspaceEvents } from './api'
 import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
-  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
+  Sprint, TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'projects' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'projects', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -106,6 +106,10 @@ function notificationId(warning: DashboardWarning) {
 
 function notificationReadKey(userId: string, workspaceId: string) {
   return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
+}
+
+function onboardingSeenKey(userId: string) {
+  return `todoapp_onboarding_seen_${userId || 'development'}`
 }
 
 function readStoredNotificationIds(userId: string, workspaceId: string) {
@@ -202,6 +206,8 @@ export default function App() {
   const [project, setProject] = useState<ProjectDetails | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     localStorage.getItem('todoapp_project_id') ?? '')
+  const [selectedSprintId, setSelectedSprintId] = useState(() =>
+    localStorage.getItem('todoapp_sprint_id') ?? '')
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
@@ -245,7 +251,16 @@ export default function App() {
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState(0)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const inviteToken = inviteTokenFromPath()
+  const activeUserId = currentUserId || account?.userId || 'development'
+
+  const markOnboardingSeen = () => {
+    localStorage.setItem(onboardingSeenKey(activeUserId), 'true')
+    setOnboardingOpen(false)
+  }
 
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
@@ -257,6 +272,13 @@ export default function App() {
       currentUserId || account?.userId || '',
       workspace?.id ?? selectedWorkspaceId))
   }, [currentUserId, account?.userId, workspace?.id, selectedWorkspaceId])
+
+  useEffect(() => {
+    if (loggedOut || !activeUserId) return
+    if (localStorage.getItem(onboardingSeenKey(activeUserId)) === 'true') return
+    setOnboardingStep(0)
+    setOnboardingOpen(true)
+  }, [activeUserId, loggedOut])
 
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
@@ -275,6 +297,13 @@ export default function App() {
       const selectedProject = projects.find((item) => item.id === selectedProjectId) ??
         projects[0] ??
         null
+      const nextSprintId = selectedProject?.sprints.some((sprint) => sprint.id === selectedSprintId)
+        ? selectedSprintId
+        : ''
+      if (nextSprintId !== selectedSprintId) {
+        setSelectedSprintId(nextSprintId)
+        localStorage.removeItem('todoapp_sprint_id')
+      }
       if (selectedProject && selectedProject.id !== selectedProjectId) {
         setSelectedProjectId(selectedProject.id)
         localStorage.setItem('todoapp_project_id', selectedProject.id)
@@ -287,7 +316,7 @@ export default function App() {
         api.dashboard(selected.id),
         api.report(selected.id, undefined, undefined, selectedProject?.id),
         selectedProject
-          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
+          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id, nextSprintId)
           : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
@@ -348,7 +377,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
@@ -357,7 +386,7 @@ export default function App() {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
-  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (!selectedWorkspaceId || loading || loggedOut) return undefined
 
@@ -384,7 +413,7 @@ export default function App() {
       window.clearTimeout(refreshTimer)
       controller.abort()
     }
-  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, activityPageNumber, activityType])
+  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -503,18 +532,30 @@ export default function App() {
     setView(next)
     window.history.pushState(null, '', `#${next}`)
     setNavOpen(false)
+    setAccountMenuOpen(false)
   }
   const switchWorkspace = (workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId)
     localStorage.setItem('todoapp_workspace_id', workspaceId)
     setSelectedProjectId('')
     localStorage.removeItem('todoapp_project_id')
+    setSelectedSprintId('')
+    localStorage.removeItem('todoapp_sprint_id')
     setPageNumber(1)
     setDrilldown('all')
   }
   const switchProject = (projectId: string) => {
     setSelectedProjectId(projectId)
     localStorage.setItem('todoapp_project_id', projectId)
+    setSelectedSprintId('')
+    localStorage.removeItem('todoapp_sprint_id')
+    setPageNumber(1)
+    setDrilldown('all')
+  }
+  const switchSprint = (sprintId: string) => {
+    setSelectedSprintId(sprintId)
+    if (sprintId) localStorage.setItem('todoapp_sprint_id', sprintId)
+    else localStorage.removeItem('todoapp_sprint_id')
     setPageNumber(1)
     setDrilldown('all')
   }
@@ -536,7 +577,9 @@ export default function App() {
         .sort((left, right) => left.name.localeCompare(right.name)))
       setProject(created)
       setSelectedProjectId(created.id)
+      setSelectedSprintId('')
       localStorage.setItem('todoapp_project_id', created.id)
+      localStorage.removeItem('todoapp_sprint_id')
       setPageNumber(1)
       setNotice(`Project ${created.name} created.`)
     } catch (reason) {
@@ -606,8 +649,10 @@ export default function App() {
     setDashboard(emptyDashboard)
     setSelectedWorkspaceId(created.id)
     setSelectedProjectId('')
+    setSelectedSprintId('')
     localStorage.setItem('todoapp_workspace_id', created.id)
     localStorage.removeItem('todoapp_project_id')
+    localStorage.removeItem('todoapp_sprint_id')
       setNotice(`Workspace ${created.name} created.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Workspace could not be created.')
@@ -695,6 +740,60 @@ export default function App() {
     switchProject(projectId)
     openView('board')
   }
+  const createSprint = async (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => {
+    try {
+      setError('')
+      const sprint = await api.createSprint(projectId, name, goal, startDate, endDate)
+      setNotice(`Sprint ${sprint.name} created.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be created.')
+      throw reason
+    }
+  }
+  const updateSprint = async (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => {
+    try {
+      setError('')
+      const sprint = await api.updateSprint(projectId, sprintId, name, goal, startDate, endDate)
+      setNotice(`Sprint ${sprint.name} updated.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be updated.')
+      throw reason
+    }
+  }
+  const changeSprintStatus = async (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => {
+    try {
+      setError('')
+      const sprint = action === 'start'
+        ? await api.startSprint(projectId, sprintId)
+        : action === 'complete'
+          ? await api.completeSprint(projectId, sprintId)
+          : await api.cancelSprint(projectId, sprintId)
+      setNotice(`Sprint ${sprint.name} ${action === 'start' ? 'started' : action === 'complete' ? 'completed' : 'cancelled'}.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint status could not be changed.')
+      throw reason
+    }
+  }
   const deleteTask = async (task: TaskItem) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
 
@@ -725,12 +824,12 @@ export default function App() {
           <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
           <button className={view === 'projects' ? 'active' : ''} onClick={() => openView('projects')}><FolderPlus size={18} /> Projects</button>
+          <button className={view === 'sprints' ? 'active' : ''} onClick={() => openView('sprints')}><Clock3 size={18} /> Sprints</button>
           <button className={view === 'board' ? 'active' : ''} onClick={() => openView('board')}><Columns3 size={18} /> Board</button>
           <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
-          <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
           {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
         <PinnedProjects
@@ -739,11 +838,6 @@ export default function App() {
           selectedProjectId={project?.id ?? selectedProjectId}
           onOpen={openPinnedProject}
         />
-        <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
-        <button className="sidebar-foot" onClick={() => openView('profile')}>
-          <span className="avatar">{initials(profile.displayName)}</span>
-          <div><strong>{profile.displayName}</strong><small>{workspace?.role ?? 'Member'}</small></div>
-        </button>
       </aside>
 
       <main id="workspace">
@@ -756,7 +850,8 @@ export default function App() {
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
           />
-          {view === 'home' && <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>}
+          <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPageNumber(1) }} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>
+          {(view === 'tasks' || view === 'board') && <button className="primary topbar-page-action" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
           <NotificationBell
             notifications={notificationItems}
             open={notificationsOpen}
@@ -768,10 +863,33 @@ export default function App() {
               openView('activity')
             }}
           />
-          <button className="topbar-avatar" onClick={() => openView('profile')} aria-label={`Open profile for ${profile.displayName}`}>
-            {initials(profile.displayName)}
-          </button>
-          {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
+          <div className="account-menu">
+            <button
+              className="topbar-avatar"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-expanded={accountMenuOpen}
+              aria-haspopup="menu"
+              aria-label={`Open account menu for ${profile.displayName}`}
+            >
+              {initials(profile.displayName)}
+            </button>
+            {accountMenuOpen && <div className="account-dropdown" role="menu">
+              <div className="account-summary">
+                <span className="avatar">{initials(profile.displayName)}</span>
+                <div>
+                  <strong>{profile.displayName}</strong>
+                  <small>{workspace?.role ?? 'Member'}{workspace ? `, ${workspace.name}` : ''}</small>
+                </div>
+              </div>
+              <button role="menuitem" onClick={() => openView('profile')}><UserRound size={16} /> My profile</button>
+              <button role="menuitem" onClick={() => {
+                setAccountMenuOpen(false)
+                setOnboardingStep(0)
+                setOnboardingOpen(true)
+              }}><HelpCircle size={16} /> Help tour</button>
+              <button role="menuitem" className="danger-menu-action" onClick={logout}><LogOut size={16} /> Logout</button>
+            </div>}
+          </div>
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -812,7 +930,9 @@ export default function App() {
             selectedProjectId={project?.id ?? selectedProjectId}
             workspaceRole={workspace?.role ?? null}
             pinnedProjectIds={pinnedProjectIds}
+            selectedSprintId={selectedSprintId}
             onSwitch={switchProject}
+            onSprintSwitch={switchSprint}
             onTogglePin={togglePinnedProject}
             onCreate={createProject}
             onUpdate={updateProject}
@@ -833,8 +953,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               view === 'tasks'
-                ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
-                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
+                ? <TaskList tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
+                : <Board tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -854,10 +974,33 @@ export default function App() {
             switchProject(projectId)
             openView('tasks')
           }}
+          onOpenSprints={(projectId) => {
+            switchProject(projectId)
+            openView('sprints')
+          }}
           onTogglePin={togglePinnedProject}
           onCreate={createProject}
           onUpdate={updateProject}
           onArchive={archiveProject}
+        />}
+        {view === 'sprints' && <SprintsPage
+          workspaceId={workspace?.id ?? selectedWorkspaceId}
+          projects={projects}
+          selectedProjectId={project?.id ?? selectedProjectId}
+          workspaceRole={workspace?.role ?? null}
+          pinnedProjectIds={pinnedProjectIds}
+          onSwitch={switchProject}
+          onOpenTasks={(projectId) => {
+            switchProject(projectId)
+            openView('tasks')
+          }}
+          onTogglePin={togglePinnedProject}
+          onCreate={createProject}
+          onUpdate={updateProject}
+          onArchive={archiveProject}
+          onCreateSprint={createSprint}
+          onUpdateSprint={updateSprint}
+          onChangeSprintStatus={changeSprintStatus}
         />}
         {view === 'myday' && <TodoPage
           todos={todos}
@@ -993,9 +1136,16 @@ export default function App() {
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
+      {onboardingOpen && <OnboardingDialog
+        step={onboardingStep}
+        onStepChange={setOnboardingStep}
+        onSkip={markOnboardingSeen}
+        onComplete={markOnboardingSeen}
+        onClose={markOnboardingSeen}
+      />}
     </div>
   )
 }
@@ -1012,6 +1162,102 @@ function initials(name: string) {
 function inviteTokenFromPath() {
   const match = window.location.pathname.match(/^\/invite\/([^/]+)$/i)
   return match ? decodeURIComponent(match[1]) : ''
+}
+
+const onboardingSlides = [
+  {
+    eyebrow: 'Welcome',
+    title: 'Run delivery work from one workspace.',
+    body: 'Taskora connects workspaces, projects, sprints, tasks, reports, notifications, and personal todos so the team can see the same delivery picture.',
+    icon: <CircleGauge />,
+  },
+  {
+    eyebrow: 'Workspace first',
+    title: 'Everything follows the selected workspace.',
+    body: 'Cards, boards, lists, projects, members, activity, reports, and notifications are scoped to the workspace you switch into.',
+    icon: <UserPlus />,
+  },
+  {
+    eyebrow: 'Projects',
+    title: 'Create a project before creating tasks.',
+    body: 'Projects are delivery containers with required delivery dates. Tasks must belong to an active project so work never floats without context.',
+    icon: <FolderPlus />,
+  },
+  {
+    eyebrow: 'Sprints',
+    title: 'Plan short cycles with Sprint 1, Sprint 2, and more.',
+    body: 'Use planned and active sprints to group project tasks into focused delivery windows, then drill into each sprint to see task status and deadlines.',
+    icon: <Clock3 />,
+  },
+  {
+    eyebrow: 'Board workflow',
+    title: 'Move work from backlog to completion.',
+    body: 'Use Backlog, Ready, In Progress, Blocked, and Completed to show what is waiting, what is picked up, what is stuck, and what is done.',
+    icon: <Columns3 />,
+  },
+  {
+    eyebrow: 'Visibility',
+    title: 'Use reports and notifications to stay ahead.',
+    body: 'Dashboard charts, reports, activity, due-date reminders, and in-app notifications help the team catch blockers and delivery risk early.',
+    icon: <ChartBar />,
+  },
+]
+
+function OnboardingDialog({
+  step,
+  onStepChange,
+  onSkip,
+  onComplete,
+  onClose,
+}: {
+  step: number
+  onStepChange: (step: number) => void
+  onSkip: () => void
+  onComplete: () => void
+  onClose: () => void
+}) {
+  const current = onboardingSlides[step] ?? onboardingSlides[0]
+  const isLast = step === onboardingSlides.length - 1
+
+  return <div className="dialog-backdrop onboarding-backdrop" role="presentation">
+    <dialog open className="onboarding-dialog" aria-labelledby="onboarding-title">
+      <header>
+        <div>
+          <p className="eyebrow">{current.eyebrow}</p>
+          <h2 id="onboarding-title">Welcome to Taskora</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} aria-label="Close onboarding"><X /></button>
+      </header>
+      <section className="onboarding-body">
+        <div className="onboarding-visual">
+          <span>{current.icon}</span>
+        </div>
+        <div className="onboarding-copy">
+          <span>Step {step + 1} of {onboardingSlides.length}</span>
+          <h3>{current.title}</h3>
+          <p>{current.body}</p>
+        </div>
+        <div className="onboarding-progress" aria-label="Onboarding progress">
+          {onboardingSlides.map((slide, index) =>
+            <button
+              key={slide.eyebrow}
+              className={index === step ? 'active' : ''}
+              onClick={() => onStepChange(index)}
+              aria-label={`Show onboarding step ${index + 1}`}
+            />)}
+        </div>
+      </section>
+      <footer className="onboarding-actions">
+        <button className="secondary" onClick={onSkip}>Skip tour</button>
+        <div>
+          <button className="secondary" disabled={step === 0} onClick={() => onStepChange(Math.max(0, step - 1))}>Back</button>
+          <button className="primary" onClick={() => isLast ? onComplete() : onStepChange(step + 1)}>
+            {isLast ? 'Get started' : 'Next'}
+          </button>
+        </div>
+      </footer>
+    </dialog>
+  </div>
 }
 
 function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
@@ -1356,8 +1602,11 @@ function ProjectBar({
   selectedProjectId,
   workspaceRole,
   pinnedProjectIds,
+  selectedSprintId,
   onSwitch,
+  onSprintSwitch,
   onTogglePin,
+  onAddSprint,
   onCreate,
   onUpdate,
   onArchive,
@@ -1366,8 +1615,11 @@ function ProjectBar({
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
   pinnedProjectIds?: Set<string>
+  selectedSprintId?: string
   onSwitch: (projectId: string) => void
+  onSprintSwitch?: (sprintId: string) => void
   onTogglePin?: (projectId: string) => void
+  onAddSprint?: () => void
   onCreate: (
     name: string,
     description: string,
@@ -1389,6 +1641,7 @@ function ProjectBar({
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? null
   const delivery = deliveryStatus(selectedProject?.targetDate ?? null)
   const selectedPinned = selectedProject ? pinnedProjectIds?.has(selectedProject.id) : false
+  const activeSprints = selectedProject?.sprints.filter((sprint) => sprint.status !== 'Cancelled') ?? []
 
   if (creating && canCreateProject) {
     return <form className="project-create panel-page" onSubmit={(event) => {
@@ -1451,7 +1704,7 @@ function ProjectBar({
   }
 
   return <section className="project-bar panel-page" aria-label="Projects">
-    <div>
+    <div className="project-context">
       <p className="eyebrow">Project</p>
       <h2>{selectedProject?.name ?? 'No project yet'}</h2>
       {selectedProject && <p className="project-delivery">
@@ -1459,27 +1712,42 @@ function ProjectBar({
         {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
       </p>}
     </div>
-    {projects.length > 0 && <label>
-      <span>Project</span>
-      <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
-        {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-      </select>
-      <ChevronDown />
-    </label>}
-    {(canCreateProject || selectedProject) && <div className="project-actions">
-      {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
-      {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
-      {canCreateProject && selectedProject && <>
-        <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
-        <button className="secondary danger-action" disabled={busy} onClick={() => {
-          setBusy(true)
-          setError('')
-          onArchive(selectedProject.id)
-            .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
-            .finally(() => setBusy(false))
-        }}><Trash2 size={16} /> Archive</button>
-      </>}
-    </div>}
+    <div className="project-controls">
+      <div className="project-selectors">
+        {projects.length > 0 && <label>
+          <span>Project</span>
+          <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
+            {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+          </select>
+          <ChevronDown />
+        </label>}
+        {selectedProject && onSprintSwitch && <label>
+          <span>Sprint</span>
+          <select value={selectedSprintId ?? ''} onChange={(event) => onSprintSwitch(event.target.value)}>
+            <option value="">All sprints</option>
+            {activeSprints.map((sprint) => <option value={sprint.id} key={sprint.id}>{sprint.name} ({sprint.status})</option>)}
+          </select>
+          <ChevronDown />
+        </label>}
+      </div>
+      {(canCreateProject || selectedProject) && <div className="project-actions">
+        {canCreateProject && <button className="primary project-main-action" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
+        <div className="project-action-row">
+          {canCreateProject && selectedProject && onAddSprint && <button className="secondary sprint-action" onClick={onAddSprint}><Clock3 size={16} /> New sprint</button>}
+          {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
+        </div>
+        {canCreateProject && selectedProject && <div className="project-action-row compact">
+          <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
+          <button className="secondary danger-action" disabled={busy} onClick={() => {
+            setBusy(true)
+            setError('')
+            onArchive(selectedProject.id)
+              .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
+              .finally(() => setBusy(false))
+          }}><Trash2 size={16} /> Archive</button>
+        </div>}
+      </div>}
+    </div>
     {error && <p className="field-error">{error}</p>}
   </section>
 }
@@ -1512,6 +1780,7 @@ function ProjectsPage({
   pinnedProjectIds,
   onSwitch,
   onOpenTasks,
+  onOpenSprints,
   onTogglePin,
   onCreate,
   onUpdate,
@@ -1523,6 +1792,7 @@ function ProjectsPage({
   pinnedProjectIds: Set<string>
   onSwitch: (projectId: string) => void
   onOpenTasks: (projectId: string) => void
+  onOpenSprints: (projectId: string) => void
   onTogglePin: (projectId: string) => void
   onCreate: (
     name: string,
@@ -1588,6 +1858,7 @@ function ProjectsPage({
                 </div>
                 <footer>
                   <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
+                  <button className="secondary sprint-action" onClick={() => onOpenSprints(project.id)}><Clock3 size={16} /> Plan sprints</button>
                   <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
                 </footer>
               </article>
@@ -1603,6 +1874,382 @@ function ProjectsPage({
         </>
       : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
   </section>
+}
+
+function SprintsPage({
+  workspaceId,
+  projects,
+  selectedProjectId,
+  workspaceRole,
+  pinnedProjectIds,
+  onSwitch,
+  onOpenTasks,
+  onTogglePin,
+  onCreate,
+  onUpdate,
+  onArchive,
+  onCreateSprint,
+  onUpdateSprint,
+  onChangeSprintStatus,
+}: {
+  workspaceId: string
+  projects: ProjectDetails[]
+  selectedProjectId: string
+  workspaceRole: Workspace['role'] | null
+  pinnedProjectIds: Set<string>
+  onSwitch: (projectId: string) => void
+  onOpenTasks: (projectId: string) => void
+  onTogglePin: (projectId: string) => void
+  onCreate: (
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    name: string,
+    description: string,
+    deliveryDate: string,
+  ) => Promise<void>
+  onArchive: (projectId: string) => Promise<void>
+  onCreateSprint: (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onUpdateSprint: (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onChangeSprintStatus: (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => Promise<void>
+}) {
+  const [sprintComposerToken, setSprintComposerToken] = useState(0)
+  const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? projects[0] ?? null
+  const sprintTotals = projects.reduce((totals, item) => {
+    for (const sprint of item.sprints) {
+      totals.total += 1
+      if (sprint.status === 'Active') totals.active += 1
+      if (sprint.status === 'Planned') totals.planned += 1
+      if (sprint.status === 'Completed') totals.completed += 1
+    }
+    return totals
+  }, { total: 0, active: 0, planned: 0, completed: 0 })
+
+  return <section className="sprints-page">
+    <section className="home-heading">
+      <div>
+        <p className="eyebrow">Sprint planning</p>
+        <h2>Plan short delivery cycles inside each project</h2>
+      </div>
+      <span>{sprintTotals.total} sprint{sprintTotals.total === 1 ? '' : 's'} across workspace projects</span>
+    </section>
+    <section className="metrics sprint-metrics" aria-label="Sprint summary">
+      <Metric label="Total sprints" value={sprintTotals.total} detail={`${projects.length} project${projects.length === 1 ? '' : 's'}`} icon={<Clock3 />} />
+      <Metric label="Active" value={sprintTotals.active} detail="Currently being delivered" icon={<Activity />} />
+      <Metric label="Planned" value={sprintTotals.planned} detail="Ready for future cycles" icon={<CalendarDays />} />
+      <Metric label="Completed" value={sprintTotals.completed} detail="Closed delivery cycles" icon={<CheckCircle2 />} />
+    </section>
+    <ProjectBar
+      projects={projects}
+      selectedProjectId={selectedProject?.id ?? selectedProjectId}
+      workspaceRole={workspaceRole}
+      pinnedProjectIds={pinnedProjectIds}
+      onSwitch={onSwitch}
+      onTogglePin={onTogglePin}
+      onAddSprint={() => setSprintComposerToken((token) => token + 1)}
+      onCreate={onCreate}
+      onUpdate={onUpdate}
+      onArchive={onArchive}
+    />
+    {selectedProject
+      ? <>
+          <SprintPanel
+            workspaceId={workspaceId}
+            project={selectedProject}
+            workspaceRole={workspaceRole}
+            composerToken={sprintComposerToken}
+            onCreate={onCreateSprint}
+            onUpdate={onUpdateSprint}
+            onChangeStatus={onChangeSprintStatus}
+          />
+          <div className="sprint-page-actions">
+            <button className="primary" onClick={() => onOpenTasks(selectedProject.id)}><LayoutList size={16} /> Open project tasks</button>
+          </div>
+        </>
+      : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project first, then create sprints inside that project.</p></div>}
+  </section>
+}
+
+function SprintPanel({
+  workspaceId,
+  project,
+  workspaceRole,
+  composerToken,
+  onCreate,
+  onUpdate,
+  onChangeStatus,
+}: {
+  workspaceId: string
+  project: ProjectDetails
+  workspaceRole: Workspace['role'] | null
+  composerToken?: number
+  onCreate: (
+    projectId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onUpdate: (
+    projectId: string,
+    sprintId: string,
+    name: string,
+    goal: string,
+    startDate: string,
+    endDate: string,
+  ) => Promise<void>
+  onChangeStatus: (
+    projectId: string,
+    sprintId: string,
+    action: 'start' | 'complete' | 'cancel',
+  ) => Promise<void>
+}) {
+  const canManage = workspaceRole === 'Owner' || workspaceRole === 'Manager'
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<Sprint | null>(null)
+  const [selectedSprint, setSelectedSprint] = useState<{ sprint: Sprint; number: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const orderedSprints = [...project.sprints].sort((left, right) =>
+    left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
+  const activeSprint = project.sprints.find((sprint) => sprint.status === 'Active')
+  const plannedCount = project.sprints.filter((sprint) => sprint.status === 'Planned').length
+
+  useEffect(() => {
+    if (composerToken) {
+      setCreating(true)
+      setEditing(null)
+    }
+  }, [composerToken])
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    setBusy(true)
+    setError('')
+    const data = new FormData(form)
+    const name = String(data.get('name')).trim()
+    const goal = String(data.get('goal') ?? '').trim()
+    const startDate = String(data.get('startDate'))
+    const endDate = String(data.get('endDate'))
+
+    try {
+      if (editing) {
+        await onUpdate(project.id, editing.id, name, goal, startDate, endDate)
+        form.reset()
+        setEditing(null)
+      } else {
+        await onCreate(project.id, name, goal, startDate, endDate)
+        form.reset()
+        setCreating(false)
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be saved.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changeStatus = async (
+    sprint: Sprint,
+    action: 'start' | 'complete' | 'cancel',
+  ) => {
+    setBusy(true)
+    setError('')
+    try {
+      await onChangeStatus(project.id, sprint.id, action)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint status could not be changed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="sprint-panel panel-page" aria-label="Sprint planning">
+    <header>
+      <div>
+        <p className="eyebrow">Sprint planning</p>
+        <h2>{activeSprint ? activeSprint.name : 'No active sprint'}</h2>
+        <p>{plannedCount} planned sprint{plannedCount === 1 ? '' : 's'} for {project.name}.</p>
+      </div>
+      {canManage && <button className="primary" onClick={() => {
+        setCreating(true)
+        setEditing(null)
+      }}><Plus size={16} /> New sprint</button>}
+    </header>
+    {error && <p className="field-error">{error}</p>}
+    {(creating || editing) && <form className="sprint-form" onSubmit={(event) => void submit(event)}>
+      <label>Sprint name<input name="name" required maxLength={160} defaultValue={editing?.name ?? ''} autoFocus /></label>
+      <label>Goal<input name="goal" maxLength={1000} defaultValue={editing?.goal ?? ''} placeholder="What should be true at the end of this sprint?" /></label>
+      <label>Start date<input name="startDate" type="date" required defaultValue={editing?.startDate ?? todayInput} /></label>
+      <label>End date<input name="endDate" type="date" required defaultValue={editing?.endDate ?? nextWeekInput()} /></label>
+      <footer>
+        <button type="button" className="secondary" disabled={busy} onClick={() => {
+          setCreating(false)
+          setEditing(null)
+        }}>Cancel</button>
+        <button className="primary" disabled={busy}>{busy ? 'Saving...' : editing ? 'Save sprint' : 'Create sprint'}</button>
+      </footer>
+    </form>}
+    {orderedSprints.length
+      ? <div className="sprint-list">
+          {orderedSprints.map((sprint, index) => <article className={`sprint-card ${sprint.status.toLowerCase()}`} key={sprint.id}>
+            <button type="button" className="sprint-card-open" onClick={() => setSelectedSprint({ sprint, number: index + 1 })}>
+              <header>
+                <div>
+                  <span className="sprint-number">Sprint {index + 1}</span>
+                  <strong>{sprint.name}</strong>
+                  <span className={`sprint-status ${sprint.status.toLowerCase()}`}>{sprint.status}</span>
+                </div>
+                <small>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</small>
+              </header>
+              <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+            </button>
+            {canManage && <footer>
+              {sprint.status === 'Planned' && <button className="secondary" disabled={busy} onClick={() => setEditing(sprint)}><Pencil size={15} /> Edit</button>}
+              {sprint.status === 'Planned' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'start')}><Clock3 size={15} /> Start</button>}
+              {sprint.status === 'Active' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'complete')}><CheckCircle2 size={15} /> Complete</button>}
+              {(sprint.status === 'Planned' || sprint.status === 'Active') && <button className="secondary danger-action" disabled={busy} onClick={() => void changeStatus(sprint, 'cancel')}><X size={15} /> Cancel</button>}
+            </footer>}
+          </article>)}
+        </div>
+      : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create a sprint to group tasks into short delivery cycles.</p>{canManage && <button className="primary" onClick={() => setCreating(true)}><Plus size={16} /> Add first sprint</button>}</div>}
+    {selectedSprint && <SprintDetailsDialog
+      workspaceId={workspaceId}
+      project={project}
+      sprint={selectedSprint.sprint}
+      sprintNumber={selectedSprint.number}
+      onClose={() => setSelectedSprint(null)}
+    />}
+  </section>
+}
+
+function SprintDetailsDialog({
+  workspaceId,
+  project,
+  sprint,
+  sprintNumber,
+  onClose,
+}: {
+  workspaceId: string
+  project: ProjectDetails
+  sprint: Sprint
+  sprintNumber: number
+  onClose: () => void
+}) {
+  const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    setError('')
+    api.tasks(workspaceId, '', 1, 100, project.id, sprint.id)
+      .then((page) => {
+        if (mounted) setTasks(page.items)
+      })
+      .catch((reason) => {
+        if (mounted) setError(reason instanceof Error ? reason.message : 'Sprint tasks could not be loaded.')
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [workspaceId, project.id, sprint.id])
+
+  const statusCounts = tasks.reduce<Record<TaskStatus, number>>((counts, task) => {
+    counts[task.status] += 1
+    return counts
+  }, { Backlog: 0, Ready: 0, InProgress: 0, Blocked: 0, Completed: 0 })
+  const openTasks = tasks.length - statusCounts.Completed
+
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="sprint-details-dialog" aria-labelledby="sprint-detail-title">
+      <header>
+        <div>
+          <p className="eyebrow">{project.name}</p>
+          <h2 id="sprint-detail-title">Sprint {sprintNumber}: {sprint.name}</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="sprint-detail-body">
+        <div className="sprint-detail-grid">
+          <article>
+            <span>Project delivery</span>
+            <strong>{project.targetDate ? formatDate(project.targetDate) : 'Not set'}</strong>
+          </article>
+          <article>
+            <span>Sprint window</span>
+            <strong>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</strong>
+          </article>
+          <article>
+            <span>Sprint status</span>
+            <strong>{sprint.status}</strong>
+          </article>
+          <article>
+            <span>Open sprint work</span>
+            <strong>{openTasks}</strong>
+          </article>
+        </div>
+        <section className="sprint-goal">
+          <span>Goal</span>
+          <p>{sprint.goal || 'No sprint goal recorded yet.'}</p>
+        </section>
+        <section className="sprint-status-summary" aria-label="Sprint task status summary">
+          {Object.entries(statusCounts).map(([status, count]) =>
+            <span key={status}><i className={`status-dot ${status.toLowerCase()}`} /> {statusLabels[status as TaskStatus]} <strong>{count}</strong></span>)}
+        </section>
+        <section className="sprint-task-table">
+          <header>
+            <h3>Tasks under this sprint</h3>
+            <span>{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+          </header>
+          {loading && <div className="loading compact">Loading sprint tasks...</div>}
+          {error && <p className="field-error">{error}</p>}
+          {!loading && !error && (tasks.length
+            ? <div className="sprint-task-list">
+                {tasks.map((task) => <article key={task.id}>
+                  <div>
+                    <strong>{task.title}</strong>
+                    <span>{task.tags.length ? task.tags.join(', ') : 'No tags'}</span>
+                  </div>
+                  <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+                  <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No deadline'}</span>
+                </article>)}
+              </div>
+            : <div className="empty compact"><LayoutList /><h2>No tasks in this sprint</h2><p>Assign tasks to this sprint from the task create or edit form.</p></div>)}
+        </section>
+      </section>
+    </dialog>
+  </div>
+}
+
+function nextWeekInput() {
+  return new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 }
 
 function CalendarPage({
@@ -3124,14 +3771,15 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, sprints, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; sprints: Sprint[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
+  const sprintNames = new Map(sprints.map((sprint) => [sprint.id, sprint.name]))
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
   return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Created</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
-      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} sprintName={task.sprintId ? sprintNames.get(task.sprintId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
       <span className="created-date">{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
@@ -3141,15 +3789,16 @@ function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete 
   </div>
 }
 
-function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; assigneeName?: string; currentUserId?: string }) {
+function TaskMetadataLine({ task, categoryName, sprintName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; sprintName?: string; assigneeName?: string; currentUserId?: string }) {
   const assigneeLabel = task.assignedUserId
     ? task.assignedUserId === currentUserId
       ? 'Assigned to you'
       : `Assigned to ${assigneeName ?? 'workspace member'}`
     : 'Unassigned'
-  if (!categoryName && !task.tags.length && !assigneeLabel) return null
+  if (!categoryName && !sprintName && !task.tags.length && !assigneeLabel) return null
   return <span className="metadata-line">
     <span className={`assignee-pill ${task.assignedUserId ? 'assigned' : 'unassigned'}`}>{assigneeLabel}</span>
+    {sprintName && <span className="sprint-pill"><Clock3 size={12} /> {sprintName}</span>}
     {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
     {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
   </span>
@@ -3158,6 +3807,7 @@ function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: {
 function Board({
   tasks,
   categories,
+  sprints,
   members,
   currentUserId,
   workspaceRole,
@@ -3171,6 +3821,7 @@ function Board({
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  sprints: Sprint[]
   members: WorkspaceMember[]
   currentUserId: string
   workspaceRole: Workspace['role'] | null
@@ -3219,6 +3870,7 @@ function Board({
         key={status}
         status={status}
         categories={categories}
+        sprints={sprints}
         members={members}
         pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
@@ -3234,7 +3886,7 @@ function Board({
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} sprints={sprints} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -3243,6 +3895,7 @@ function BoardColumn({
   status,
   tasks,
   categories,
+  sprints,
   members,
   pinnedTaskIds,
   currentUserId,
@@ -3258,6 +3911,7 @@ function BoardColumn({
   status: TaskStatus
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  sprints: Sprint[]
   members: WorkspaceMember[]
   pinnedTaskIds: Set<string>
   currentUserId: string
@@ -3288,7 +3942,7 @@ function BoardColumn({
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
       {orderedTasks.map((task) =>
-        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
+        <BoardCard task={task} categories={categories} sprints={sprints} members={members} currentUserId={currentUserId} workspaceRole={workspaceRole} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -3297,6 +3951,7 @@ function BoardColumn({
 function BoardCard({
   task,
   categories,
+  sprints = [],
   members = [],
   currentUserId,
   workspaceRole,
@@ -3310,6 +3965,7 @@ function BoardCard({
 }: {
   task: TaskItem
   categories?: ProjectCategory[]
+  sprints?: Sprint[]
   members?: WorkspaceMember[]
   currentUserId?: string
   workspaceRole?: Workspace['role'] | null
@@ -3323,6 +3979,7 @@ function BoardCard({
 }) {
   const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId, workspaceRole).length > 0
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
+  const sprintNames = new Map(sprints.map((sprint) => [sprint.id, sprint.name]))
   const lockedAssigneeName = task.assignedUserId
     ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
     : null
@@ -3409,6 +4066,7 @@ function BoardCard({
     <TaskMetadataLine
       task={task}
       categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+      sprintName={task.sprintId ? sprintNames.get(task.sprintId) : undefined}
       assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined}
       currentUserId={currentUserId}
     />
@@ -3489,7 +4147,7 @@ function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { t
   </div>
 }
 
-function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, sprints, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
@@ -3509,7 +4167,8 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
       const title = isMember ? task.title : String(data.get('title'))
       const dueDate = isMember ? task.dueDate ?? '' : String(data.get('dueDate'))
       const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? task.effort ?? 3
-      await api.updateTask(task.id, title, dueDate, effort)
+      const sprintId = isMember ? task.sprintId ?? '' : String(data.get('sprintId') ?? '')
+      await api.updateTask(task.id, title, dueDate, effort, sprintId)
       if (canEditPlanning) {
         await api.updatePlanning(
           task.id,
@@ -3564,6 +4223,7 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
       {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
       <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} readOnly={isMember} autoFocus={!isMember} /></label>
       <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} readOnly={isMember} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? task.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      <label>Sprint<select name="sprintId" defaultValue={task.sprintId ?? ''} disabled={isMember}><option value="">No sprint</option>{sprints.filter((sprint) => sprint.status !== 'Cancelled').map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} - {sprint.status}</option>)}</select><ChevronDown /></label>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
         <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''} disabled={isMember}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
@@ -3583,7 +4243,7 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
   </dialog></div>
 }
 
-function TaskDialog({ projectId, isMember, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, isMember, members, categories, sprints, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -3595,6 +4255,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
       const data = new FormData(event.currentTarget)
       const assignee = String(data.get('assignedUserId') ?? '')
       const categoryId = String(data.get('categoryId') ?? '')
+      const sprintId = String(data.get('sprintId') ?? '')
       const tag = String(data.get('tag') ?? '').trim()
       const note = String(data.get('note') ?? '').trim()
       if (tag && tag.replace(/^#/, '').trim().length < 2) {
@@ -3609,6 +4270,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
         Number(data.get('businessValue')),
         Number(data.get('urgency')),
         Number(data.get('riskReduction')),
+        sprintId,
       )
       if (assignee) await api.assign(task.id, assignee)
       if (categoryId) await api.updateCategory(task.id, categoryId)
@@ -3644,6 +4306,7 @@ function TaskDialog({ projectId, isMember, members, categories, onCategoryCreate
         <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
       </div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label>
+      <label>Sprint<select name="sprintId" defaultValue=""><option value="">No sprint</option>{sprints.filter((sprint) => sprint.status !== 'Cancelled').map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} - {sprint.status}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Priority inputs</legend><PriorityInputGuide /><div className="planning-grid">
         <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label>
         <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label>

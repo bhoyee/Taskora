@@ -39,6 +39,13 @@ internal sealed class ProjectConfiguration
             .OnDelete(DeleteBehavior.Cascade);
         builder.Navigation("_categories")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.HasMany<Sprint>("_sprints")
+            .WithOne()
+            .HasForeignKey(sprint => sprint.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation("_sprints")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(project => project.Categories);
+        builder.Ignore(project => project.Sprints);
     }
 }

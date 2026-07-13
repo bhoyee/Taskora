@@ -35,7 +35,8 @@ public sealed class SearchTasksHandler(
                 : query.Search.Trim(),
             query.SortBy,
             query.PageNumber,
-            query.PageSize);
+            query.PageSize,
+            query.SprintId);
         var searchResult = await tasks.SearchAsync(
             criteria,
             cancellationToken);

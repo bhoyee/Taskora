@@ -61,6 +61,8 @@ public sealed class TaskItem
 
     public Guid? CategoryId { get; private set; }
 
+    public Guid? SprintId { get; private set; }
+
     public DueDate? DueDate { get; private set; }
 
     public EffortEstimate? EffortEstimate { get; private set; }
@@ -245,6 +247,17 @@ public sealed class TaskItem
         }
 
         CategoryId = categoryId;
+    }
+
+    public void AssignSprint(Guid? sprintId)
+    {
+        if (sprintId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Sprint identifier is required.");
+        }
+
+        SprintId = sprintId;
     }
 
     public void AddTag(string name)

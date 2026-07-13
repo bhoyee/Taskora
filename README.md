@@ -4,7 +4,7 @@ Taskora is a workspace-based task and project delivery platform built with
 .NET, C#, React, TypeScript, and Entity Framework Core. It started as a todo
 project, but now demonstrates a portfolio-ready modular monolith with
 workspaces, projects, tasks, assignment, reporting, reminders, operations
-monitoring, and CI/CD.
+monitoring, sprint planning, and CI/CD.
 
 ## What It Does
 
@@ -15,6 +15,9 @@ monitoring, and CI/CD.
   notifications only show data for the selected workspace.
 - Project CRUD with required delivery dates, archive rules, delivery countdowns,
   and project-level health indicators.
+- Dedicated sprint planning for projects, including sprint goals, date windows,
+  Planned/Active/Completed/Cancelled lifecycle, sprint filters, and task
+  assignment to a sprint.
 - Tasks created under active projects only.
 - Task workflow: Backlog, Ready, In Progress, Blocked, and Completed.
 - Drag-and-drop board with guarded workflow rules and assignment awareness.
@@ -27,14 +30,56 @@ monitoring, and CI/CD.
 - Categories, tags, and task notes with writer name and timestamp.
 - Personal Todo page for daily private work with CRUD, search, pagination,
   complete/reopen, mobile layout, and automatic carry-over after midnight.
-- Dashboard cards, charts, project health, risk register, decision log, release
-  readiness, activity, and reports.
+- Dashboard cards, task progress donut, weekly flow chart, workload chart,
+  project health, risk register, decision log, release readiness, activity, and
+  reports.
 - In-app notifications and SMTP-backed email notifications.
+- First-run onboarding tour with replayable help guidance from the avatar menu.
 - Super-admin-only Operations page for API health, database health, scheduler
   status, log settings, and recent application logs.
 - Seed/demo data mode for portfolio walkthroughs.
 - Azure DevOps pipeline for restore, build, tests, frontend build, migrations,
   packaging, and optional deployment.
+
+## Application Navigation
+
+Taskora is organized around the same menus a delivery team would expect in a
+real workspace application:
+
+- `Home`: workspace health cards, Task Progress donut chart, Weekly Flow chart,
+  top workload chart, project health, risk register, decision log, release
+  readiness, and deadline warnings.
+- `My Day`: personal daily todos with CRUD, search, pagination, completion,
+  mobile-friendly layout, and automatic carry-over for unfinished work.
+- `Tasks`: searchable and paginated task list with project/sprint context,
+  assignee, category, tags, priority score, due date, created date,
+  edit/delete actions, and creator/member permission handling.
+- `Projects`: project CRUD, required delivery dates, delivery countdown badges,
+  archive support, pinning, pagination, and quick access to project tasks or
+  sprint planning.
+- `Sprints`: dedicated project sprint page for creating planned delivery
+  cycles, starting active work, completing or cancelling sprints, opening the
+  matching project task list, and drilling into Sprint 1/Sprint 2 style detail
+  views with project, sprint, and task status information.
+- `Board`: drag-and-drop delivery board across Backlog, Ready, In Progress,
+  Blocked, and Completed, with guarded assignment rules, pinned tasks, and
+  quick task notes.
+- `Reports`: date-range reporting for completed tasks, active work, closed
+  projects, critical work, project progress, executive summary, and paginated
+  report tasks.
+- `Calendar`: project delivery dates and task due dates in a schedule-focused
+  view.
+- `Activity`: audit-style timeline of task and workspace events, with filters,
+  pagination, and notification read actions.
+- `Team`: workspace members, roles, invitation links, pending invites, and
+  owner/manager membership controls.
+- `Operations`: super-admin-only application monitoring for API health,
+  database health, reminder scheduler status, log settings, and recent logs.
+- `Pinned projects`: sidebar shortcut area for important projects.
+- `Notifications`: top-bar notification feed with unread count, mark-as-read,
+  mark-all-as-read, and view-all behaviour.
+- `Account menu`: top-right avatar dropdown for My profile, replayable Help
+  tour, and Logout.
 
 ## Architecture
 
@@ -78,17 +123,17 @@ flowchart LR
 
 ```text
 src/
-├── Taskora.Api             HTTP API, auth, health checks, SSE, startup
-├── Taskora.Application     Commands, queries, DTOs, ports, use cases
-├── Taskora.Domain          Entities, value objects, domain rules, events
-├── Taskora.Infrastructure  EF Core, repositories, email, logging, seed data
-└── Taskora.Web             React + TypeScript frontend
+|-- Taskora.Api             HTTP API, auth, health checks, SSE, startup
+|-- Taskora.Application     Commands, queries, DTOs, ports, use cases
+|-- Taskora.Domain          Entities, value objects, domain rules, events
+|-- Taskora.Infrastructure  EF Core, repositories, email, logging, seed data
+`-- Taskora.Web             React + TypeScript frontend
 
 tests/
-├── Taskora.Domain.Tests
-├── Taskora.Application.Tests
-├── Taskora.Infrastructure.Tests
-└── Taskora.Api.IntegrationTests
+|-- Taskora.Domain.Tests
+|-- Taskora.Application.Tests
+|-- Taskora.Infrastructure.IntegrationTests
+`-- Taskora.Api.IntegrationTests
 ```
 
 ## Key Product Workflows
@@ -111,6 +156,17 @@ of becoming a loose global todo list.
 
 Workspace owners and managers can create and manage projects. Members can view
 project context and work on assigned or available tasks.
+
+### Sprint Planning
+
+Sprints group project work into short delivery cycles. Owners and managers can
+create a sprint with a goal, start date, and end date; start planned sprints;
+complete active sprints; or cancel a sprint when the plan changes. Tasks can be
+created or edited into a sprint, and the task list/board can be filtered to one
+sprint at a time.
+
+This gives the portfolio project a more corporate delivery shape: work is not
+only tracked by status, but also by project outcome and active delivery window.
 
 ### Task Workflow
 

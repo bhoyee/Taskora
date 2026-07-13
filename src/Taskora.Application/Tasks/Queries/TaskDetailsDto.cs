@@ -8,6 +8,7 @@ public sealed record TaskDetailsDto(
     Guid ProjectId,
     Guid? CreatedByUserId,
     Guid? AssignedUserId,
+    Guid? SprintId,
     DateTimeOffset CreatedAt,
     string Title,
     Guid? CategoryId,

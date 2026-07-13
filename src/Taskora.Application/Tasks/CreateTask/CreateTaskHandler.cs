@@ -33,6 +33,15 @@ public sealed class CreateTaskHandler(
         try
         {
             project.EnsureCanAcceptTasks();
+            if (command.SprintId.HasValue &&
+                !project.HasSprint(command.SprintId.Value))
+            {
+                return Result<TaskDto>.Failure(
+                    new ApplicationError(
+                        "sprint.not_found",
+                        "The sprint was not found for this project.",
+                        ErrorType.NotFound));
+            }
 
             var task = TaskItem.Create(
                 identifiers.NewId(),
@@ -53,6 +62,8 @@ public sealed class CreateTaskHandler(
             {
                 task.Estimate(EffortEstimate.Create(command.Effort.Value));
             }
+
+            task.AssignSprint(command.SprintId);
 
             if (command.BusinessValue.HasValue &&
                 command.Urgency.HasValue &&
@@ -95,6 +106,7 @@ public sealed class CreateTaskHandler(
             task.Id,
             task.ProjectId,
             task.CreatedByUserId,
+            task.SprintId,
             task.CreatedAt,
             task.Title,
             task.Status,

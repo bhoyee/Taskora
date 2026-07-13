@@ -23,30 +23,56 @@ public sealed class MoveTaskToReadyHandler(
 
 public sealed class UpdateTaskHandler(
     ITaskRepository tasks,
+    IProjectRepository projects,
     IUnitOfWork unitOfWork)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         UpdateTaskCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
-            command.TaskId,
-            tasks,
-            unitOfWork,
-            task =>
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        if (command.SprintId.HasValue)
+        {
+            var project = await projects.GetByIdAsync(
+                task.ProjectId,
+                cancellationToken);
+            if (project is null || !project.HasSprint(command.SprintId.Value))
             {
-                task.Rename(command.Title);
+                return Result<TaskItemStatus>.Failure(
+                    new ApplicationError(
+                        "sprint.not_found",
+                        "The sprint was not found for this project.",
+                        ErrorType.NotFound));
+            }
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
+            command.TaskId,
+            unitOfWork,
+            item =>
+            {
+                item.Rename(command.Title);
 
                 if (command.DueDate.HasValue)
                 {
-                    task.Schedule(DueDate.Create(command.DueDate.Value));
+                    item.Schedule(DueDate.Create(command.DueDate.Value));
                 }
 
                 if (command.Effort.HasValue)
                 {
-                    task.Estimate(EffortEstimate.Create(command.Effort.Value));
+                    item.Estimate(EffortEstimate.Create(command.Effort.Value));
                 }
+
+                item.AssignSprint(command.SprintId);
             },
             cancellationToken);
+    }
 }
 
 public sealed class BlockTaskHandler(

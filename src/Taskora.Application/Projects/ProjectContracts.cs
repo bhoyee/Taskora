@@ -32,4 +32,34 @@ public sealed record ProjectDto(
     DateOnly? TargetDate,
     bool IsArchived,
     DateTimeOffset? ArchivedAt,
-    IReadOnlyCollection<ProjectCategoryDto> Categories);
+    IReadOnlyCollection<ProjectCategoryDto> Categories,
+    IReadOnlyCollection<SprintDto> Sprints);
+
+public sealed record SprintDto(
+    Guid Id,
+    Guid ProjectId,
+    string Name,
+    string? Goal,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string Status,
+    DateTimeOffset? ClosedAt);
+
+public sealed record CreateSprintCommand(
+    Guid ProjectId,
+    string Name,
+    string? Goal,
+    DateOnly StartDate,
+    DateOnly EndDate);
+
+public sealed record UpdateSprintCommand(
+    Guid ProjectId,
+    Guid SprintId,
+    string Name,
+    string? Goal,
+    DateOnly StartDate,
+    DateOnly EndDate);
+
+public sealed record ChangeSprintStatusCommand(
+    Guid ProjectId,
+    Guid SprintId);

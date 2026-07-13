@@ -30,6 +30,7 @@ internal sealed class TaskItemConfiguration
         builder.Property(task => task.AssignedUserId);
         builder.Property(task => task.CreatedByUserId);
         builder.Property(task => task.CategoryId);
+        builder.Property(task => task.SprintId);
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
         builder.Property(task => task.DueDate)
@@ -90,11 +91,16 @@ internal sealed class TaskItemConfiguration
             .WithMany()
             .HasForeignKey(task => task.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Sprint>()
+            .WithMany()
+            .HasForeignKey(task => task.SprintId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(task => new { task.ProjectId, task.Status });
         builder.HasIndex(task => task.DueDate);
         builder.HasIndex(task => task.CreatedAt);
         builder.HasIndex(task => task.AssignedUserId);
         builder.HasIndex(task => task.CategoryId);
+        builder.HasIndex(task => task.SprintId);
 
         builder.HasMany<TaskItem>("_dependencies")
             .WithMany()

@@ -31,6 +31,12 @@ public static class DevelopmentDataSeeder
         Guid.Parse("50000000-0000-0000-0000-000000000001");
     private static readonly Guid ReleaseCategoryId =
         Guid.Parse("50000000-0000-0000-0000-000000000002");
+    private static readonly Guid ActiveSprintId =
+        Guid.Parse("70000000-0000-0000-0000-000000000001");
+    private static readonly Guid PlannedSprintId =
+        Guid.Parse("70000000-0000-0000-0000-000000000002");
+    private static readonly Guid OnboardingSprintId =
+        Guid.Parse("70000000-0000-0000-0000-000000000003");
 
     public static async Task SeedAsync(
         TodoAppDbContext context,
@@ -86,6 +92,19 @@ public static class DevelopmentDataSeeder
                 DateTime.UtcNow.AddDays(30))));
         project.AddCategory(OperationsCategoryId, "Operations");
         project.AddCategory(ReleaseCategoryId, "Release");
+        var activeSprint = project.AddSprint(
+            ActiveSprintId,
+            "Portfolio hardening sprint",
+            "Stabilise collaboration, sprint planning, reminders, and dashboard readiness.",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-3)),
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(8)));
+        activeSprint.Start();
+        project.AddSprint(
+            PlannedSprintId,
+            "Deployment polish sprint",
+            "Prepare the final Azure deployment story, production settings, and portfolio walkthrough.",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(9)),
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20)));
 
         var backlog = TaskItem.Create(
             Guid.Parse("20000000-0000-0000-0000-000000000001"),
@@ -98,6 +117,7 @@ public static class DevelopmentDataSeeder
             DateTime.UtcNow.AddDays(14))));
         backlog.Estimate(EffortEstimate.Create(3));
         backlog.SetPlanningFactors(PlanningFactors.Create(3, 2, 2, 3));
+        backlog.AssignSprint(PlannedSprintId);
         backlog.AddTag("planning");
         backlog.AddNote(
             Guid.Parse("60000000-0000-0000-0000-000000000001"),
@@ -117,6 +137,7 @@ public static class DevelopmentDataSeeder
         ready.Estimate(EffortEstimate.Create(2));
         ready.SetPlanningFactors(
             PlanningFactors.Create(4, 4, 3, 3));
+        ready.AssignSprint(ActiveSprintId);
         ready.MoveToReady();
         ready.AddTag("deployment");
         ready.AddNote(
@@ -137,6 +158,7 @@ public static class DevelopmentDataSeeder
         blocked.Estimate(EffortEstimate.Create(5));
         blocked.SetPlanningFactors(
             PlanningFactors.Create(5, 5, 4, 3));
+        blocked.AssignSprint(ActiveSprintId);
         blocked.MoveToReady();
         blocked.Start();
         blocked.Block("Waiting for deployment approval");
@@ -159,6 +181,7 @@ public static class DevelopmentDataSeeder
             DateTime.UtcNow.AddDays(-1))));
         inProgress.Estimate(EffortEstimate.Create(3));
         inProgress.SetPlanningFactors(PlanningFactors.Create(5, 5, 4, 3));
+        inProgress.AssignSprint(ActiveSprintId);
         inProgress.MoveToReady();
         inProgress.Start();
         inProgress.AddTag("analytics");
@@ -175,6 +198,7 @@ public static class DevelopmentDataSeeder
             DateTime.UtcNow.AddDays(-3))));
         completed.Estimate(EffortEstimate.Create(2));
         completed.SetPlanningFactors(PlanningFactors.Create(3, 3, 2, 2));
+        completed.AssignSprint(ActiveSprintId);
         completed.MoveToReady();
         completed.Start();
         completed.Complete(DateTimeOffset.UtcNow.AddDays(-1));
@@ -188,6 +212,13 @@ public static class DevelopmentDataSeeder
         sprintProject.SetTargetDate(
             DueDate.Create(DateOnly.FromDateTime(
                 DateTime.UtcNow.AddDays(1))));
+        var onboardingSprint = sprintProject.AddSprint(
+            OnboardingSprintId,
+            "Client activation sprint",
+            "Finish onboarding assets and handover notes before the client launch date.",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2)),
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5)));
+        onboardingSprint.Start();
         var sprintTask = TaskItem.Create(
             Guid.Parse("20000000-0000-0000-0000-000000000006"),
             SprintProjectId,
@@ -198,6 +229,7 @@ public static class DevelopmentDataSeeder
             DateTime.UtcNow.AddDays(1))));
         sprintTask.Estimate(EffortEstimate.Create(2));
         sprintTask.SetPlanningFactors(PlanningFactors.Create(4, 4, 2, 2));
+        sprintTask.AssignSprint(OnboardingSprintId);
         sprintTask.MoveToReady();
         sprintTask.Start();
         sprintTask.AddTag("client");

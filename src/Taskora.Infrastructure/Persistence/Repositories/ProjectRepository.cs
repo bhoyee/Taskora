@@ -19,6 +19,7 @@ public sealed class ProjectRepository(TodoAppDbContext context)
         CancellationToken cancellationToken) =>
         context.Projects
             .Include("_categories")
+            .Include("_sprints")
             .SingleOrDefaultAsync(
             project => project.Id == projectId,
             cancellationToken);
@@ -29,6 +30,7 @@ public sealed class ProjectRepository(TodoAppDbContext context)
         await context.Projects
             .AsNoTracking()
             .Include("_categories")
+            .Include("_sprints")
             .Where(project => project.WorkspaceId == workspaceId)
             .OrderBy(project => project.Name)
             .ToArrayAsync(cancellationToken);

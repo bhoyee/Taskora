@@ -12,4 +12,5 @@ public sealed record SearchTasksQuery(
     string? Search = null,
     TaskSortBy SortBy = TaskSortBy.CreatedDescending,
     int PageNumber = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    Guid? SprintId = null);

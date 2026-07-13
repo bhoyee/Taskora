@@ -6,7 +6,8 @@ public sealed record UpdateTaskCommand(
     Guid TaskId,
     string Title,
     DateOnly? DueDate,
-    int? Effort);
+    int? Effort,
+    Guid? SprintId = null);
 
 public sealed record BlockTaskCommand(Guid TaskId, string Reason);
 
