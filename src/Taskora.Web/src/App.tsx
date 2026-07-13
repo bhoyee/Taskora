@@ -193,6 +193,7 @@ export default function App() {
   const [todoError, setTodoError] = useState('')
   const todoPageSize = 10
   const [dashboard, setDashboard] = useState(emptyDashboard)
+  const [dashboardReport, setDashboardReport] = useState<WorkspaceReport | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
@@ -281,9 +282,10 @@ export default function App() {
         setSelectedProjectId('')
         localStorage.removeItem('todoapp_project_id')
       }
-      const [summary, workspaceSummary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
+      const [summary, workspaceSummary, reportSnapshot, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
         api.dashboard(selected.id, selectedProject?.id),
         api.dashboard(selected.id),
+        api.report(selected.id, undefined, undefined, selectedProject?.id),
         selectedProject
           ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
           : Promise.resolve({ items: [], totalCount: 0 }),
@@ -310,6 +312,7 @@ export default function App() {
       setInvitations(workspaceInvitations)
       setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
+      setDashboardReport(reportSnapshot)
       setNotifications(workspaceSummary.warnings)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
@@ -789,7 +792,7 @@ export default function App() {
             <Metric label="Blocked" value={dashboard.blockedTaskCount} detail={dashboard.blockedTaskCount ? 'Workflow blocked' : 'No blocked work'} icon={<Columns3 />} tone="warn" selected={drilldown === 'blocked'} onClick={() => { setDrilldown('blocked'); setPageNumber(1); openView('tasks') }} />
           </section>
 
-          <DashboardAnalytics dashboard={dashboard} />
+          <DashboardAnalytics dashboard={dashboard} report={dashboardReport} members={members} />
           <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
 
           {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
@@ -1825,24 +1828,19 @@ const priorityChartColors: Record<string, string> = {
   Critical: '#c33f35',
 }
 
-const deadlineChartColors: Record<string, string> = {
-  Overdue: '#c33f35',
-  'Due today': '#b7791f',
-  'Due in 7 days': '#4388c7',
-  Healthy: '#4d9b78',
-}
-
-function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
+function DashboardAnalytics({
+  dashboard,
+  report,
+  members,
+}: {
+  dashboard: Dashboard
+  report: WorkspaceReport | null
+  members: WorkspaceMember[]
+}) {
   return <section className="analytics-grid" aria-label="Dashboard analytics">
-    <DonutChart title="Task status" items={dashboard.statusBreakdown} colors={statusChartColors} />
-    <BarChart title="Priority mix" items={dashboard.priorityBreakdown} colors={priorityChartColors} />
-    <BarChart title="Due date risk" items={dashboard.deadlineBreakdown} colors={deadlineChartColors} />
-    <ProgressChart
-      title="Project completion"
-      completed={dashboard.projectProgress.completedTasks}
-      total={dashboard.projectProgress.totalTasks}
-      percentage={dashboard.projectProgress.completionPercentage}
-    />
+    <DonutChart title="Task Progress" items={dashboard.statusBreakdown} colors={statusChartColors} />
+    <TasksOverTimeChart tasks={report?.tasks ?? []} />
+    <WorkloadChart tasks={report?.tasks ?? []} members={members} />
   </section>
 }
 
@@ -2411,29 +2409,71 @@ function BarChart({
   </article>
 }
 
-function ProgressChart({
-  title,
-  completed,
-  total,
-  percentage,
-}: {
-  title: string
-  completed: number
-  total: number
-  percentage: number
-}) {
-  const open = Math.max(0, total - completed)
-  return <article
-    className="analytics-card progress-card chart-hover-target"
-    data-tooltip={`${completed} completed, ${open} open, ${percentage}% complete`}
-    title={`${completed} completed, ${open} open, ${percentage}% complete`}
-  >
-    <header><h2>{title}</h2><span>{completed}/{total} tasks</span></header>
-    <strong>{percentage}%</strong>
-    <div className="progress-track" aria-label={`${title}: ${percentage}% complete`}>
-      <i style={{ width: `${percentage}%` }} />
+function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
+  const points = buildTasksOverTimePoints(tasks)
+  const max = Math.max(1, ...points.flatMap((point) => [point.created, point.completed]))
+  const createdPath = buildLinePath(points.map((point) => point.created), max)
+  const completedPath = buildLinePath(points.map((point) => point.completed), max)
+  const latest = points[points.length - 1]
+  return <article className="analytics-card trend-card">
+    <header>
+      <h2>Tasks Over Time</h2>
+      <span>{latest.created} created</span>
+    </header>
+    <div
+      className="trend-chart chart-hover-target"
+      data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
+      title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
+    >
+      <svg viewBox="0 0 280 150" role="img" aria-label="Tasks created and completed over time">
+        {[0, 1, 2, 3].map((line) => <line key={line} x1="0" x2="280" y1={20 + line * 34} y2={20 + line * 34} />)}
+        <path className="trend-area created" d={`${createdPath} L 268 132 L 12 132 Z`} />
+        <path className="trend-line created" d={createdPath} />
+        <path className="trend-line completed" d={completedPath} />
+        {points.map((point, index) => {
+          const x = trendX(index, points.length)
+          return <g className="trend-point" key={point.key}>
+            <circle cx={x} cy={trendY(point.created, max)} r="3" />
+            <title>{`${point.label}: ${point.created} created, ${point.completed} completed`}</title>
+          </g>
+        })}
+      </svg>
+      <div className="trend-axis">
+        <span>{points[0].label}</span>
+        <span>{latest.label}</span>
+      </div>
     </div>
-    <p>{total === 0 ? 'Create tasks to start tracking delivery progress.' : `${completed} completed and ${open} still open.`}</p>
+    <div className="chart-legend compact">
+      <span><i style={{ backgroundColor: '#2875d1' }} /> Created <strong>{latest.created}</strong></span>
+      <span><i style={{ backgroundColor: '#159b74' }} /> Completed <strong>{latest.completed}</strong></span>
+    </div>
+  </article>
+}
+
+function WorkloadChart({
+  tasks,
+  members,
+}: {
+  tasks: WorkspaceReport['tasks']
+  members: WorkspaceMember[]
+}) {
+  const items = buildWorkloadItems(tasks, members)
+  const max = Math.max(1, ...items.map((item) => item.count))
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  return <article className="analytics-card workload-card">
+    <header><h2>Workload</h2><span>{total} assigned</span></header>
+    <div className="workload-list">
+      {items.map((item) => <div
+        className="workload-row chart-hover-target"
+        data-tooltip={`${item.name}: ${item.count} assigned task${item.count === 1 ? '' : 's'}, ${item.completed} completed`}
+        title={`${item.name}: ${item.count} assigned task${item.count === 1 ? '' : 's'}, ${item.completed} completed`}
+        key={item.key}
+      >
+        <span>{item.name}</span>
+        <div className="bar-track"><i style={{ width: `${item.count / max * 100}%` }} /></div>
+        <strong>{item.count}</strong>
+      </div>)}
+    </div>
   </article>
 }
 
@@ -2458,6 +2498,58 @@ function friendlyChartLabel(label: string) {
 
 function chartPercentage(count: number, total: number) {
   return total > 0 ? Math.round(count * 100 / total) : 0
+}
+
+function buildTasksOverTimePoints(tasks: WorkspaceReport['tasks']) {
+  const today = new Date()
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (5 - index) * 7)
+    const cutoff = date.toISOString().slice(0, 10)
+    return {
+      key: cutoff,
+      label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      created: tasks.filter((task) => task.createdAt.slice(0, 10) <= cutoff).length,
+      completed: tasks.filter((task) => task.completedAt && task.completedAt.slice(0, 10) <= cutoff).length,
+    }
+  })
+}
+
+function buildLinePath(values: number[], max: number) {
+  return values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${trendX(index, values.length)} ${trendY(value, max)}`).join(' ')
+}
+
+function trendX(index: number, total: number) {
+  return total <= 1 ? 12 : 12 + index * (256 / (total - 1))
+}
+
+function trendY(value: number, max: number) {
+  return 132 - value / max * 104
+}
+
+function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
+  const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
+  const grouped = new Map<string, { key: string; name: string; count: number; completed: number }>()
+  tasks.forEach((task) => {
+    const key = task.assignedUserId ?? 'unassigned'
+    const current = grouped.get(key) ?? {
+      key,
+      name: key === 'unassigned' ? 'Unassigned' : memberNames.get(key) ?? 'Team member',
+      count: 0,
+      completed: 0,
+    }
+    current.count += 1
+    if (task.status === 'Completed') current.completed += 1
+    grouped.set(key, current)
+  })
+  members.forEach((member) => {
+    if (!grouped.has(member.userId)) {
+      grouped.set(member.userId, { key: member.userId, name: member.displayName, count: 0, completed: 0 })
+    }
+  })
+  return [...grouped.values()]
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    .slice(0, 5)
 }
 
 function ActivityPage({
