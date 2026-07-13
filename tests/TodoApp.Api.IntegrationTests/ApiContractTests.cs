@@ -8,6 +8,8 @@ namespace TodoApp.Api.IntegrationTests;
 public sealed class ApiContractTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
+    private static readonly Guid DefaultUserId =
+        Guid.Parse("30000000-0000-0000-0000-000000000001");
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
@@ -59,6 +61,11 @@ public sealed class ApiContractTests(ApiFactory factory)
             (await _client.PostAsync(
                 $"/api/v1/tasks/{taskId}/ready",
                 null)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await _client.PutAsJsonAsync(
+                $"/api/v1/tasks/{taskId}/assignment",
+                new { userId = DefaultUserId })).StatusCode);
         Assert.Equal(
             HttpStatusCode.OK,
             (await _client.PostAsync(
@@ -113,8 +120,17 @@ public sealed class ApiContractTests(ApiFactory factory)
 
     private async Task<Guid> CreateProjectAsync()
     {
+        var workspace = await _client.PostAsJsonAsync(
+            "/api/v1/workspaces",
+            new { name = $"Workspace {Guid.NewGuid():N}" });
+        workspace.EnsureSuccessStatusCode();
+        var workspaceId = (await workspace.Content
+            .ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id")
+            .GetGuid();
+
         var response = await _client.PostAsJsonAsync(
-            "/api/v1/projects",
+            $"/api/v1/workspaces/{workspaceId}/projects",
             new
             {
                 name = $"Project {Guid.NewGuid():N}",

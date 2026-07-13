@@ -8,14 +8,28 @@ public sealed class TodoAppDbContextFactory
 {
     public TodoAppDbContext CreateDbContext(string[] args)
     {
+        var provider =
+            Environment.GetEnvironmentVariable("Database__Provider") ??
+            "Sqlite";
         var connectionString =
             Environment.GetEnvironmentVariable(
                 "ConnectionStrings__TodoApp") ??
             "Data Source=todoapp.db";
-        var options = new DbContextOptionsBuilder<TodoAppDbContext>()
-            .UseSqlite(connectionString)
-            .Options;
+        var builder = new DbContextOptionsBuilder<TodoAppDbContext>();
 
-        return new TodoAppDbContext(options);
+        if (provider.Equals(
+                "SqlServer",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            builder.UseSqlServer(
+                connectionString,
+                sql => sql.EnableRetryOnFailure());
+        }
+        else
+        {
+            builder.UseSqlite(connectionString);
+        }
+
+        return new TodoAppDbContext(builder.Options);
     }
 }

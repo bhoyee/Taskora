@@ -30,7 +30,10 @@ public sealed class CreateTaskHandlerTests
             ProjectId,
             "  Publish architecture case study  ",
             new DateOnly(2026, 7, 31),
-            5);
+            3,
+            BusinessValue: 3,
+            Urgency: 3,
+            RiskReduction: 3);
 
         var result = await handler.HandleAsync(command, cancellation.Token);
 
@@ -40,9 +43,11 @@ public sealed class CreateTaskHandlerTests
         Assert.Equal("Publish architecture case study", result.Value.Title);
         Assert.Equal(TaskItemStatus.Backlog, result.Value.Status);
         Assert.Equal(new DateOnly(2026, 7, 31), result.Value.DueDate);
-        Assert.Equal(5, result.Value.Effort);
+        Assert.Equal(3, result.Value.Effort);
         Assert.NotNull(tasks.AddedTask);
         Assert.Equal(ProjectId, tasks.AddedTask.ProjectId);
+        Assert.True(tasks.AddedTask.HasPlanningFactors);
+        Assert.Equal(7m, tasks.AddedTask.Priority.Value);
         Assert.Equal(UserId, tasks.AddedTask.CreatedByUserId);
         Assert.Equal(Now, tasks.AddedTask.CreatedAt);
         Assert.Equal(cancellation.Token, tasks.ReceivedCancellationToken);
@@ -162,6 +167,18 @@ public sealed class CreateTaskHandlerTests
         {
             AddedTask = task;
             ReceivedCancellationToken = cancellationToken;
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(
+            TaskItem task,
+            CancellationToken cancellationToken)
+        {
+            if (AddedTask?.Id == task.Id)
+            {
+                AddedTask = null;
+            }
+
             return Task.CompletedTask;
         }
     }

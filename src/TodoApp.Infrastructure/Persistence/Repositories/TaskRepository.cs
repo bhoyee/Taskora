@@ -15,6 +15,19 @@ public sealed class TaskRepository(TodoAppDbContext context)
         await context.Tasks.AddAsync(task, cancellationToken);
     }
 
+    public async Task RemoveAsync(
+        TaskItem task,
+        CancellationToken cancellationToken)
+    {
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM TaskDependencies
+            WHERE TaskId = {task.Id} OR DependencyId = {task.Id}
+            """,
+            cancellationToken);
+        context.Tasks.Remove(task);
+    }
+
     public Task<TaskItem?> GetByIdAsync(
         Guid taskId,
         CancellationToken cancellationToken) =>
@@ -95,6 +108,9 @@ public sealed class TaskRepository(TodoAppDbContext context)
         var totalCount = await query.CountAsync(cancellationToken);
         query = criteria.SortBy switch
         {
+            TaskSortBy.CreatedDescending => query
+                .OrderByDescending(task => task.CreatedAt)
+                .ThenBy(task => task.Id),
             TaskSortBy.DueDateAscending => query
                 .OrderBy(task => task.DueDate == null)
                 .ThenBy(task => task.DueDate)

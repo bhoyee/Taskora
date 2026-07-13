@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Tasks.Queries;
+using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
 using TodoApp.Infrastructure.Persistence;
@@ -159,6 +160,48 @@ public sealed class RepositoryTests
     }
 
     [Fact]
+    public async Task Search_WhenSortedByCreatedDescending_ReturnsNewestTasksFirst()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var project = Project.Create(Guid.NewGuid(), "Newest first");
+        var older = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Older task",
+            new DateTimeOffset(2026, 7, 1, 9, 0, 0, TimeSpan.Zero));
+        var newer = TaskItem.Create(
+            Guid.NewGuid(),
+            project.Id,
+            "Newer task",
+            new DateTimeOffset(2026, 7, 2, 9, 0, 0, TimeSpan.Zero));
+
+        await using (var seed = database.CreateContext())
+        {
+            seed.AddRange(project, older, newer);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = database.CreateContext();
+        var result = await new TaskRepository(context).SearchAsync(
+            new TaskSearchCriteria(
+                project.Id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                TaskSortBy.CreatedDescending,
+                1,
+                10),
+            CancellationToken.None);
+
+        Assert.Equal(
+            [newer.Id, older.Id],
+            result.Items.Select(task => task.Id));
+    }
+
+    [Fact]
     public async Task Transaction_WhenRolledBack_DoesNotPersistChanges()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -175,6 +218,44 @@ public sealed class RepositoryTests
 
         await using var readContext = database.CreateContext();
         Assert.Equal(0, await readContext.Projects.CountAsync());
+    }
+
+    [Fact]
+    public async Task DueDateNotifications_ReturnsProjectTargetReminders()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var ownerId = Guid.NewGuid();
+        var workspace = Workspace.Create(
+            Guid.NewGuid(),
+            "Launch workspace",
+            ownerId);
+        var owner = UserProfile.Create(
+            ownerId,
+            "Launch Owner",
+            "owner@example.com");
+        var project = Project.Create(
+            Guid.NewGuid(),
+            "Portfolio launch",
+            workspaceId: workspace.Id);
+        project.SetTargetDate(
+            DueDate.Create(new DateOnly(2026, 7, 14)));
+
+        await using (var seedContext = database.CreateContext())
+        {
+            seedContext.AddRange(owner, workspace, project);
+            await seedContext.SaveChangesAsync();
+        }
+
+        await using var queryContext = database.CreateContext();
+        var reminders = await new DueDateNotificationReadRepository(queryContext)
+            .GetProjectTargetNotificationsAsync(
+                new DateOnly(2026, 7, 13),
+                CancellationToken.None);
+
+        var reminder = Assert.Single(reminders);
+        Assert.Equal(project.Id, reminder.ProjectId);
+        Assert.Equal(new DateOnly(2026, 7, 14), reminder.TargetDate);
+        Assert.Equal(["owner@example.com"], reminder.Recipients);
     }
 
     [Fact]

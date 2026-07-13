@@ -5,6 +5,8 @@ namespace TodoApp.Application.Tasks.CreateTask;
 public sealed record TaskDto(
     Guid Id,
     Guid ProjectId,
+    Guid? CreatedByUserId,
+    DateTimeOffset CreatedAt,
     string Title,
     TaskItemStatus Status,
     DateOnly? DueDate,

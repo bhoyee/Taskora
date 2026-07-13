@@ -8,6 +8,8 @@ namespace TodoApp.Application.Tests.Tasks.Maintenance;
 public sealed class TaskMaintenanceHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
+    private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly Guid OtherUserId = Guid.NewGuid();
 
     [Fact]
     public async Task MoveToReady_WhenTaskIsInBacklog_ChangesStatus()
@@ -58,7 +60,8 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new BlockTaskHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new BlockTaskCommand(task.Id, "Waiting for design approval"),
                 CancellationToken.None);
@@ -77,13 +80,35 @@ public sealed class TaskMaintenanceHandlerTests
 
         var result = await new UnblockTaskHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new UnblockTaskCommand(task.Id),
                 CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(TaskItemStatus.Ready, task.Status);
+    }
+
+    [Fact]
+    public async Task Block_WhenCurrentUserIsNotAssignee_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateInProgressTask();
+        var context = CreateContext(task);
+
+        var result = await new BlockTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new BlockTaskCommand(task.Id, "Waiting for design approval"),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.assignee_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
     [Fact]
@@ -106,20 +131,104 @@ public sealed class TaskMaintenanceHandlerTests
     }
 
     [Fact]
+    public async Task Delete_WhenCurrentUserCreatedTask_RemovesTask()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new DeleteTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new DeleteTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(context.Tasks.WasRemoved(task.Id));
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Delete_WhenCurrentUserDidNotCreateTask_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new DeleteTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new DeleteTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.False(context.Tasks.WasRemoved(task.Id));
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task UpdatePlanningFactors_WhenValuesAreValid_RecalculatesPriority()
     {
         var task = CreateTask();
+        task.RecordCreator(UserId);
         var context = CreateContext(task);
 
         var result = await new UpdatePlanningFactorsHandler(
                 context.Tasks,
-                context.UnitOfWork)
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
             .HandleAsync(
                 new UpdatePlanningFactorsCommand(task.Id, 5, 4, 3, 2),
                 CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(14.5m, task.Priority.Value);
+    }
+
+    [Fact]
+    public async Task UpdatePlanningFactors_WhenUserIsNotCreator_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateTask();
+        task.RecordCreator(UserId);
+        var context = CreateContext(task);
+
+        var result = await new UpdatePlanningFactorsHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new UpdatePlanningFactorsCommand(task.Id, 5, 4, 3, 2),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.planning_forbidden", result.Error.Code);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task UpdatePlanningFactors_WhenLegacyTaskHasNoCreator_AllowsPlanningInitialization()
+    {
+        var task = CreateTask();
+        var context = CreateContext(task);
+
+        var result = await new UpdatePlanningFactorsHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new UpdatePlanningFactorsCommand(task.Id, 3, 3, 3, 3),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(task.HasPlanningFactors);
+        Assert.Equal(7m, task.Priority.Value);
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
     }
 
     [Fact]
@@ -184,6 +293,7 @@ public sealed class TaskMaintenanceHandlerTests
     private static TaskItem CreateInProgressTask()
     {
         var task = CreateTask();
+        task.Assign(UserId);
         task.MoveToReady();
         task.Start();
         return task;
@@ -214,6 +324,16 @@ public sealed class TaskMaintenanceHandlerTests
             _tasks.Add(task.Id, task);
             return Task.CompletedTask;
         }
+
+        public Task RemoveAsync(
+            TaskItem task,
+            CancellationToken cancellationToken)
+        {
+            _tasks.Remove(task.Id);
+            return Task.CompletedTask;
+        }
+
+        public bool WasRemoved(Guid taskId) => !_tasks.ContainsKey(taskId);
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork
@@ -225,5 +345,12 @@ public sealed class TaskMaintenanceHandlerTests
             SaveCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class TestCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
     }
 }

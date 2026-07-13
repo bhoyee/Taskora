@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Mail;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Infrastructure.Services;
 
 public sealed class SmtpNotificationEmailSender(
-    IOptions<SmtpEmailOptions> options)
+    IOptions<SmtpEmailOptions> options,
+    ILogger<SmtpNotificationEmailSender> logger)
     : INotificationEmailSender
 {
     public async Task SendAsync(
@@ -35,8 +37,18 @@ public sealed class SmtpNotificationEmailSender(
 
         if (mail.To.Count == 0)
         {
+            logger.LogInformation(
+                "Skipping notification email {Subject} because no recipients were provided.",
+                message.Subject);
             return;
         }
+
+        logger.LogInformation(
+            "Sending notification email {Subject} to {RecipientCount} recipient(s) through {Host}:{Port}.",
+            message.Subject,
+            mail.To.Count,
+            settings.Host,
+            settings.Port);
 
         using var client = new SmtpClient(settings.Host, settings.Port)
         {
@@ -46,7 +58,23 @@ public sealed class SmtpNotificationEmailSender(
                 : new NetworkCredential(settings.Username, settings.Password)
         };
 
-        await client.SendMailAsync(mail, cancellationToken);
+        try
+        {
+            await client.SendMailAsync(mail, cancellationToken);
+            logger.LogInformation(
+                "Notification email {Subject} sent to {RecipientCount} recipient(s).",
+                message.Subject,
+                mail.To.Count);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Notification email {Subject} failed for {RecipientCount} recipient(s).",
+                message.Subject,
+                mail.To.Count);
+            throw;
+        }
     }
 
     private static void Validate(SmtpEmailOptions settings)

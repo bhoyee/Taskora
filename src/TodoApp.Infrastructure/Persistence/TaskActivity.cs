@@ -40,13 +40,15 @@ public sealed class TaskActivity
         Guid taskId,
         string previousValue,
         string currentValue,
-        DateTimeOffset occurredAt) =>
+        DateTimeOffset occurredAt,
+        string actor = "system") =>
         Record(
             taskId,
             "StatusChanged",
             previousValue,
             currentValue,
-            occurredAt);
+            occurredAt,
+            actor);
 
     public static TaskActivity Record(
         Guid taskId,

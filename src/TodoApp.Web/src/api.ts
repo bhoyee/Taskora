@@ -14,7 +14,9 @@ export interface PriorityExplanation {
 
 export interface TaskItem {
   id: string
+  createdByUserId: string | null
   assignedUserId: string | null
+  createdAt: string
   categoryId: string | null
   title: string
   status: TaskStatus
@@ -26,6 +28,7 @@ export interface TaskItem {
   priorityBand: string | null
   priorityExplanation: PriorityExplanation | null
   deadlineHealth: DeadlineHealth
+  effort?: number | null
 }
 
 export interface TaskPage {
@@ -73,6 +76,61 @@ export interface DashboardWarning {
   projectId: string | null
   taskId: string | null
   dueDate: string | null
+}
+
+export interface WorkspaceReport {
+  workspaceId: string
+  from: string | null
+  to: string | null
+  totalProjects: number
+  activeProjects: number
+  archivedProjects: number
+  projectsDeliveredInRange: number
+  totalTasks: number
+  completedTasks: number
+  activeTasks: number
+  blockedTasks: number
+  criticalTasks: number
+  overdueTasks: number
+  statusBreakdown: DashboardBreakdownItem[]
+  priorityBreakdown: DashboardBreakdownItem[]
+  deadlineBreakdown: DashboardBreakdownItem[]
+  projects: WorkspaceReportProject[]
+  tasks: WorkspaceReportTask[]
+  notifications: DashboardWarning[]
+}
+
+export interface WorkspaceReportProject {
+  id: string
+  name: string
+  description: string | null
+  deliveryDate: string | null
+  isArchived: boolean
+  archivedAt: string | null
+  totalTasks: number
+  completedTasks: number
+  activeTasks: number
+  blockedTasks: number
+  overdueTasks: number
+  criticalTasks: number
+  completionPercentage: number
+}
+
+export interface WorkspaceReportTask {
+  id: string
+  projectId: string
+  projectName: string
+  assignedUserId: string | null
+  title: string
+  status: TaskStatus
+  isBlocked: boolean
+  dueDate: string | null
+  createdAt: string
+  completedAt: string | null
+  priorityScore: number | null
+  priorityBand: string | null
+  deadlineHealth: DeadlineHealth
+  tags: string[]
 }
 
 export interface Workspace {
@@ -156,6 +214,57 @@ export interface WorkspaceActivity extends TaskActivity {
   projectName: string
 }
 
+export interface OperationsSummary {
+  isSuperAdmin: boolean
+  generatedAt: string
+  overallHealth: string
+  healthChecks: OperationHealthCheck[]
+  runtime: OperationsRuntime
+  reminderScheduler: ReminderScheduler
+  recentLogs: OperationLogRecord[]
+}
+
+export interface OperationHealthCheck {
+  name: string
+  status: string
+  description: string | null
+  durationMilliseconds: number
+}
+
+export interface OperationsRuntime {
+  environment: string
+  databaseProvider: string
+  publicBaseUrl: string
+  corsAllowedOrigins: string[]
+  emailMode: string
+  smtpEnabled: boolean
+  reminderSchedulerEnabled: boolean
+  logRetentionDays: number
+  logMaxEntries: number
+}
+
+export interface ReminderScheduler {
+  enabled: boolean
+  status: string
+  intervalMinutes: number
+  lastRunStartedAt: string | null
+  lastRunCompletedAt: string | null
+  nextRunAt: string | null
+  lastTaskReminderCount: number
+  lastProjectReminderCount: number
+  lastEmailCount: number
+  lastError: string | null
+}
+
+export interface OperationLogRecord {
+  timestamp: string
+  level: string
+  category: string
+  message: string
+  exception: string | null
+  eventId: string | null
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   const identityHeaders: Record<string, string> = accessToken
@@ -172,8 +281,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   const contentType = response.headers.get('content-type')
+  const isJson = contentType?.includes('application/json') ||
+    contentType?.includes('application/problem+json')
   if (!response.ok) {
-    if (contentType?.includes('application/json')) {
+    if (isJson) {
       const problem = await response.json().catch(() => null) as {
         title?: string
         detail?: string
@@ -191,7 +302,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`The API returned ${response.status}. Check that the API server is running.`)
   }
 
-  if (!contentType?.includes('application/json')) {
+  if (!isJson) {
     throw new Error('The API returned an unexpected response. Check that the API server is running.')
   }
 
@@ -268,6 +379,19 @@ export const api = {
         ...(projectId ? { projectId } : {}),
       })}`,
     ),
+  report: (
+    workspaceId: string,
+    from?: string,
+    to?: string,
+    projectId?: string,
+  ) =>
+    request<WorkspaceReport>(
+      `/api/v1/workspaces/${workspaceId}/reports?${new URLSearchParams({
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+        ...(projectId ? { projectId } : {}),
+      })}`,
+    ),
   projects: (workspaceId: string) =>
     request<ProjectDetails[]>(`/api/v1/workspaces/${workspaceId}/projects`),
   createWorkspaceProject: (
@@ -320,16 +444,35 @@ export const api = {
         pageSize: String(pageSize),
       })}`,
     ),
-  createTask: (projectId: string, title: string, dueDate: string, effort: number) =>
+  createTask: (
+    projectId: string,
+    title: string,
+    dueDate: string,
+    effort: number,
+    businessValue: number,
+    urgency: number,
+    riskReduction: number,
+  ) =>
     request<TaskItem>(`/api/v1/projects/${projectId}/tasks`, {
       method: 'POST',
-      body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
+      body: JSON.stringify({
+        title,
+        dueDate: dueDate || null,
+        effort,
+        businessValue,
+        urgency,
+        riskReduction,
+      }),
     }),
   task: (id: string) => request<TaskItem>(`/api/v1/tasks/${id}`),
   updateTask: (id: string, title: string, dueDate: string, effort: number) =>
     request(`/api/v1/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ title, dueDate: dueDate || null, effort }),
+    }),
+  deleteTask: (id: string) =>
+    request<boolean>(`/api/v1/tasks/${id}`, {
+      method: 'DELETE',
     }),
   updatePlanning: (
     id: string,
@@ -396,6 +539,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  operationsSummary: () =>
+    request<OperationsSummary>('/api/v1/operations/summary'),
   register: (
     displayName: string,
     email: string,

@@ -9,7 +9,9 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.CreatedByUserId,
             task.AssignedUserId,
+            task.CreatedAt,
             task.Title,
             task.CategoryId,
             task.Tags.Select(tag => tag.Name).ToArray(),
@@ -25,7 +27,9 @@ internal static class TaskDtoMapper
         new(
             task.Id,
             task.ProjectId,
+            task.CreatedByUserId,
             task.AssignedUserId,
+            task.CreatedAt,
             task.Title,
             task.CategoryId,
             task.Tags.Select(tag => tag.Name).ToArray(),

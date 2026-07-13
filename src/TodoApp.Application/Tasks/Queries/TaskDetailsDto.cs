@@ -6,7 +6,9 @@ namespace TodoApp.Application.Tasks.Queries;
 public sealed record TaskDetailsDto(
     Guid Id,
     Guid ProjectId,
+    Guid? CreatedByUserId,
     Guid? AssignedUserId,
+    DateTimeOffset CreatedAt,
     string Title,
     Guid? CategoryId,
     IReadOnlyCollection<string> Tags,

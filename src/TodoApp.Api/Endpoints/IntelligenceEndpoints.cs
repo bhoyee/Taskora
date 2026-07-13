@@ -21,6 +21,26 @@ internal static class IntelligenceEndpoints
             .RequireAuthorization()
             .WithName("GetPortfolioDashboard");
 
+        endpoints.MapGet(
+                "/api/v1/workspaces/{workspaceId:guid}/reports",
+                async (
+                    Guid workspaceId,
+                    DateOnly? from,
+                    DateOnly? to,
+                    Guid? projectId,
+                    GetWorkspaceReportHandler handler,
+                    CancellationToken cancellationToken) =>
+                    Results.Ok(await handler.HandleAsync(
+                        new GetWorkspaceReportQuery(
+                            workspaceId,
+                            from,
+                            to,
+                            projectId),
+                        cancellationToken)))
+            .WithTags("Intelligence")
+            .RequireAuthorization()
+            .WithName("GetWorkspaceReport");
+
         return endpoints;
     }
 }

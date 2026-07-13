@@ -52,6 +52,8 @@ internal static class TaskEndpoints
             .WithName("CompleteTask");
         group.MapPost("/{taskId:guid}/reopen", ReopenTaskAsync)
             .WithName("ReopenTask");
+        group.MapDelete("/{taskId:guid}", DeleteTaskAsync)
+            .WithName("DeleteTask");
         group.MapPost("/{taskId:guid}/block", BlockTaskAsync)
             .WithName("BlockTask");
         group.MapPost("/{taskId:guid}/unblock", UnblockTaskAsync)
@@ -91,7 +93,10 @@ internal static class TaskEndpoints
                 projectId,
                 request.Title,
                 request.DueDate,
-                request.Effort),
+                request.Effort,
+                request.BusinessValue,
+                request.Urgency,
+                request.RiskReduction),
             cancellationToken);
 
         return result.IsSuccess
@@ -139,7 +144,7 @@ internal static class TaskEndpoints
                 categoryId,
                 tag,
                 search,
-                sortBy ?? TaskSortBy.PriorityDescending,
+                sortBy ?? TaskSortBy.CreatedDescending,
                 pageNumber == 0 ? 1 : pageNumber,
                 pageSize == 0 ? 20 : pageSize),
             cancellationToken));
@@ -206,6 +211,14 @@ internal static class TaskEndpoints
             handler.HandleAsync(
                 new ReopenTaskCommand(taskId),
                 cancellationToken));
+
+    private static async Task<IResult> DeleteTaskAsync(
+        Guid taskId,
+        DeleteTaskHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new DeleteTaskCommand(taskId),
+            cancellationToken));
 
     private static Task<IResult> BlockTaskAsync(
         Guid taskId,

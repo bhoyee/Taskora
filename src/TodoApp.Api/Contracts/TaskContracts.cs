@@ -3,7 +3,10 @@ namespace TodoApp.Api.Contracts;
 public sealed record CreateTaskRequest(
     string Title,
     DateOnly? DueDate,
-    int? Effort);
+    int? Effort,
+    int? BusinessValue,
+    int? Urgency,
+    int? RiskReduction);
 
 public sealed record UpdateTaskRequest(
     string Title,

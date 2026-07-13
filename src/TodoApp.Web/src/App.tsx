@@ -6,15 +6,15 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleGauge,
+  Activity, AlertTriangle, Bell, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
   Clock3, Columns3, FolderPlus, GripVertical, KeyRound, LayoutList, LogOut,
-  Menu, MessageSquare, Pencil, Plus, Save, Search, Settings2, ShieldCheck,
+  Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, ProjectCategory, ProjectDetails,
-  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember,
+  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, ProjectCategory, ProjectDetails,
+  TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import './styles.css'
 
@@ -33,10 +33,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'workspace' | 'tasks' | 'activity' | 'settings' | 'profile'
+type View = 'workspace' | 'tasks' | 'reports' | 'activity' | 'settings' | 'profile' | 'operations'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['workspace', 'tasks', 'activity', 'settings', 'profile']
+const views: View[] = ['workspace', 'tasks', 'reports', 'activity', 'settings', 'profile', 'operations']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -66,6 +66,8 @@ const defaultSettings: UserSettings = {
 }
 
 const defaultAccount: AccountSession | null = null
+const todayInput = new Date().toISOString().slice(0, 10)
+const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -73,6 +75,16 @@ function readLocal<T>(key: string, fallback: T): T {
     return value ? { ...fallback, ...JSON.parse(value) } : fallback
   } catch {
     return fallback
+  }
+}
+
+function readPinnedTasks(userId: string) {
+  if (!userId) return new Set<string>()
+  try {
+    const value = localStorage.getItem(`todoapp_pinned_tasks_${userId}`)
+    return new Set<string>(value ? JSON.parse(value) : [])
+  } catch {
+    return new Set<string>()
   }
 }
 
@@ -91,6 +103,26 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   },
   Blocked: { Ready: { action: 'unblock' } },
   Completed: { Ready: { action: 'reopen' } },
+}
+
+function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) {
+  if (!boardTransitions[task.status]?.[target]) return false
+  const isAssignee = !!task.assignedUserId && task.assignedUserId === currentUserId
+  const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
+
+  if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
+  if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
+  if (task.status === 'Blocked' && target === 'Ready') return isAssignee
+  if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
+  if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
+
+  return false
+}
+
+function allowedTaskTargets(task: TaskItem, currentUserId: string) {
+  return Object.keys(boardTransitions[task.status] ?? {})
+    .filter((status): status is TaskStatus =>
+      canMoveTask(task, status as TaskStatus, currentUserId))
 }
 
 const activityTypes = [
@@ -131,6 +163,9 @@ export default function App() {
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+  const [quickNoteTask, setQuickNoteTask] = useState<TaskItem | null>(null)
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<Set<string>>(() =>
+    readPinnedTasks(localStorage.getItem('todoapp_current_user_id') ?? ''))
   const [navOpen, setNavOpen] = useState(false)
   const [activity, setActivity] = useState<WorkspaceActivity[]>([])
   const [activityTotal, setActivityTotal] = useState(0)
@@ -143,14 +178,28 @@ export default function App() {
     readLocal('todoapp_settings', defaultSettings))
   const [account, setAccount] = useState<AccountSession | null>(() =>
     readLocal('todoapp_account', defaultAccount))
+  const [currentUserId, setCurrentUserId] = useState(() =>
+    localStorage.getItem('todoapp_current_user_id') ?? '')
+  const [operations, setOperations] = useState<OperationsSummary | null>(null)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
+  const [report, setReport] = useState<WorkspaceReport | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportFrom, setReportFrom] = useState(todayInput)
+  const [reportTo, setReportTo] = useState(nextMonthInput)
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
   const inviteToken = inviteTokenFromPath()
 
-  const load = async () => {
+  useEffect(() => {
+    setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
+  }, [currentUserId, account?.userId])
+
+  const load = async (options: { silent?: boolean } = {}) => {
+    const silent = options.silent === true
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError('')
       const available = await api.workspaces()
       setWorkspaces(available)
@@ -171,8 +220,9 @@ export default function App() {
         setSelectedProjectId('')
         localStorage.removeItem('todoapp_project_id')
       }
-      const [summary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
+      const [summary, workspaceSummary, page, workspaceMembers, workspaceInvitations, activityPage] = await Promise.all([
         api.dashboard(selected.id, selectedProject?.id),
+        api.dashboard(selected.id),
         selectedProject
           ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id)
           : Promise.resolve({ items: [], totalCount: 0 }),
@@ -186,9 +236,12 @@ export default function App() {
           displayName: currentProfile.displayName,
           email: currentProfile.email,
         }
+        setCurrentUserId(currentProfile.userId)
         setProfile(nextProfile)
+        localStorage.setItem('todoapp_current_user_id', currentProfile.userId)
         localStorage.setItem('todoapp_profile', JSON.stringify(nextProfile))
       }
+      const operationsSummary = await api.operationsSummary().catch(() => null)
       setWorkspace(selected)
       setProjects(projects)
       setProject(selectedProject)
@@ -196,23 +249,51 @@ export default function App() {
       setInvitations(workspaceInvitations)
       setCategories(projects.flatMap((item) => item.categories))
       setDashboard(summary)
+      setNotifications(workspaceSummary.warnings)
       setTasks(page.items)
       setTaskTotal(page.totalCount)
       setActivity(activityPage.items)
       setActivityTotal(activityPage.totalCount)
+      setOperations(operationsSummary)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load workspace.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
-    if (view !== 'workspace' || loading) return undefined
-    const interval = window.setInterval(() => void load(), 15000)
+    if (loading || loggedOut) return undefined
+    const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
-  }, [view, loading, pageNumber, search, selectedWorkspaceId, selectedProjectId])
+  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (view !== 'reports' || !workspace) {
+      setReport(null)
+      return undefined
+    }
+
+    let cancelled = false
+    setReportLoading(true)
+    api.report(workspace.id, reportFrom, reportTo)
+      .then((nextReport) => {
+        if (!cancelled) {
+          setReport(nextReport)
+          setNotifications(nextReport.notifications)
+        }
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Reports could not be loaded.')
+      })
+      .finally(() => {
+        if (!cancelled) setReportLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [view, workspace?.id, reportFrom, reportTo])
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -230,8 +311,11 @@ export default function App() {
   const logout = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_current_user_id')
     localStorage.setItem('todoapp_logged_out', 'true')
     setAccount(null)
+    setCurrentUserId('')
+    setOperations(null)
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
     window.location.hash = 'workspace'
@@ -240,9 +324,12 @@ export default function App() {
   const resetSession = () => {
     localStorage.removeItem('todoapp_access_token')
     localStorage.removeItem('todoapp_account')
+    localStorage.removeItem('todoapp_current_user_id')
     localStorage.removeItem('todoapp_workspace_id')
     localStorage.removeItem('todoapp_logged_out')
     setAccount(null)
+    setCurrentUserId('')
+    setOperations(null)
     setLoggedOut(false)
     setSelectedWorkspaceId('')
     setNotice('Local browser session reset.')
@@ -251,8 +338,10 @@ export default function App() {
   const authenticated = (session: AccountSession) => {
     localStorage.setItem('todoapp_access_token', session.accessToken)
     localStorage.setItem('todoapp_account', JSON.stringify(session))
+    localStorage.setItem('todoapp_current_user_id', session.userId)
     localStorage.removeItem('todoapp_logged_out')
     setAccount(session)
+    setCurrentUserId(session.userId)
     setLoggedOut(false)
     setProfile((current) => {
       const next = {
@@ -383,7 +472,7 @@ export default function App() {
   }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
-    if (!transition) return
+    if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '')) return
 
     try {
       setError('')
@@ -402,6 +491,44 @@ export default function App() {
       setSelectedTask(task)
     }
   }
+  const openTaskNotes = async (task: TaskItem) => {
+    setQuickNoteTask(task)
+    try {
+      setQuickNoteTask(await api.task(task.id))
+    } catch {
+      setQuickNoteTask(task)
+    }
+  }
+  const refreshTaskNotes = async (taskId: string) => {
+    const task = await api.task(taskId)
+    setQuickNoteTask(task)
+    await load({ silent: true })
+  }
+  const togglePinnedTask = (taskId: string) => {
+    const userId = currentUserId || account?.userId || ''
+    if (!userId) return
+    setPinnedTaskIds((current) => {
+      const next = new Set(current)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      localStorage.setItem(
+        `todoapp_pinned_tasks_${userId}`,
+        JSON.stringify(Array.from(next)))
+      return next
+    })
+  }
+  const deleteTask = async (task: TaskItem) => {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
+
+    try {
+      setError('')
+      await api.deleteTask(task.id)
+      setNotice(`Task ${task.title} deleted.`)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The task could not be deleted.')
+    }
+  }
 
   if (inviteToken) {
     return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
@@ -418,9 +545,11 @@ export default function App() {
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
+          <button className={view === 'reports' ? 'active' : ''} onClick={() => openView('reports')}><ChartBar size={18} /> Reports</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => openView('settings')}><Settings2 size={18} /> Settings</button>
           <button className={view === 'profile' ? 'active' : ''} onClick={() => openView('profile')}><UserRound size={18} /> Profile</button>
+          {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
         </nav>
         <button className="sidebar-logout" onClick={logout}><LogOut size={18} /> Logout</button>
         <button className="sidebar-foot" onClick={() => openView('profile')}>
@@ -438,6 +567,11 @@ export default function App() {
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
+          />
+          <NotificationBell
+            warnings={notifications}
+            open={notificationsOpen}
+            onToggle={() => setNotificationsOpen((current) => !current)}
           />
           {view === 'tasks' && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
@@ -492,8 +626,8 @@ export default function App() {
 
             {loading ? <div className="loading">Loading workspace...</div> :
               mode === 'list'
-                ? <TaskList tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} />
-                : <Board tasks={visible} categories={categories} onEdit={(task) => void openTaskEditor(task)} onMove={moveTask} />}
+                ? <TaskList tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
+                : <Board tasks={visible} categories={categories} members={members} currentUserId={currentUserId || account?.userId || ''} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
             {!loading && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
@@ -516,13 +650,24 @@ export default function App() {
           pageSize={activityPageSize}
           totalCount={activityTotal}
           onPageChange={setActivityPageNumber}
+          members={members}
+          currentUserId={currentUserId || account?.userId || ''}
+        />}
+        {view === 'reports' && <ReportsPage
+          dashboard={dashboard}
+          report={report}
+          loading={reportLoading}
+          from={reportFrom}
+          to={reportTo}
+          onFromChange={setReportFrom}
+          onToChange={setReportTo}
         />}
         {view === 'settings' && <SettingsPage
           settings={settings}
           workspace={workspace}
           members={members}
           invitations={invitations}
-          currentUserId={account?.userId}
+          currentUserId={currentUserId || account?.userId}
           onMemberRemoved={async (userId) => {
             if (!workspace) return
             await api.removeMember(workspace.id, userId)
@@ -578,10 +723,12 @@ export default function App() {
           }}
           onLogout={logout}
         />}
+        {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
-      {dialogOpen && project && <TaskDialog projectId={project.id} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
-      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
+      {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} isMember={workspace?.role === 'Member'} members={members} categories={categories} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
+      {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
     </div>
   )
 }
@@ -590,9 +737,11 @@ function viewTitle(view: View) {
   return {
     workspace: 'Delivery workspace',
     tasks: 'Tasks',
+    reports: 'Reports',
     activity: 'Activity timeline',
     settings: 'Workspace settings',
     profile: 'Profile',
+    operations: 'Operations',
   }[view]
 }
 
@@ -934,8 +1083,12 @@ function deliveryStatus(deliveryDate: string | null) {
   return { label: `${days} days left`, tone: 'healthy' }
 }
 
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString()
+function formatDate(value?: string | null) {
+  if (!value) return 'Not recorded'
+  const date = value.includes('T')
+    ? new Date(value)
+    : new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
 }
 
 const drilldownLabels: Record<TaskDrilldown, string> = {
@@ -1012,6 +1165,143 @@ function DashboardAnalytics({ dashboard }: { dashboard: Dashboard }) {
       total={dashboard.projectProgress.totalTasks}
       percentage={dashboard.projectProgress.completionPercentage}
     />
+  </section>
+}
+
+function NotificationBell({
+  warnings,
+  open,
+  onToggle,
+}: {
+  warnings: Dashboard['warnings']
+  open: boolean
+  onToggle: () => void
+}) {
+  const criticalCount = warnings.filter((warning) => warning.severity === 'critical').length
+  return <div className="notification-center">
+    <button
+      className={`icon-button notification-button ${warnings.length ? 'has-alerts' : ''}`}
+      onClick={onToggle}
+      aria-label={`Notifications ${warnings.length}`}
+      aria-expanded={open}
+    >
+      <Bell />
+      {warnings.length > 0 && <span>{warnings.length}</span>}
+    </button>
+    {open && <section className="notification-panel" aria-label="In-app notifications">
+      <header>
+        <div>
+          <h2>Notifications</h2>
+          <p>{criticalCount ? `${criticalCount} critical reminder${criticalCount === 1 ? '' : 's'}` : 'Workspace reminders'}</p>
+        </div>
+      </header>
+      {warnings.length
+        ? <div className="notification-list">
+          {warnings.map((warning) => <article className={`notification-item ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{warning.title}</strong>
+              <p>{warning.message}</p>
+              {warning.dueDate && <small>{formatDate(warning.dueDate)}</small>}
+            </div>
+          </article>)}
+        </div>
+        : <div className="empty compact"><Bell /><h2>No notifications</h2><p>Due-date and delivery reminders will appear here in real time.</p></div>}
+    </section>}
+  </div>
+}
+
+function ReportsPage({
+  dashboard,
+  report,
+  loading,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  dashboard: Dashboard
+  report: WorkspaceReport | null
+  loading: boolean
+  from: string
+  to: string
+  onFromChange: (value: string) => void
+  onToChange: (value: string) => void
+}) {
+  const [pageNumber, setPageNumber] = useState(1)
+  const pageSize = 8
+  useEffect(() => setPageNumber(1), [from, to])
+
+  const tasks = report?.tasks ?? []
+  const projects = report?.projects ?? []
+  const totalPages = Math.max(1, Math.ceil(tasks.length / pageSize))
+  const pageTasks = tasks.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
+
+  return <section className="panel-page reports-page" aria-label="Reports">
+    <div className="report-toolbar">
+      <div>
+        <h2>Workspace reports</h2>
+        <p>Workspace-wide task and project delivery activity for the selected date range.</p>
+      </div>
+      <div className="date-range">
+        <label><span>From</span><input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></label>
+        <label><span>To</span><input type="date" value={to} onChange={(event) => onToChange(event.target.value)} /></label>
+      </div>
+    </div>
+
+    <section className="report-metrics" aria-label="Report summary">
+      <Metric label="Tasks in range" value={report?.totalTasks ?? 0} icon={<Clock3 />} />
+      <Metric label="Completed tasks" value={report?.completedTasks ?? 0} icon={<CheckCircle2 />} />
+      <Metric label="Closed projects" value={report?.archivedProjects ?? 0} icon={<FolderPlus />} />
+      <Metric label="Critical" value={report?.criticalTasks ?? 0} icon={<AlertTriangle />} tone="danger" />
+    </section>
+
+    <section className="report-grid">
+      <BarChart title="Report status" items={report?.statusBreakdown ?? []} colors={statusChartColors} />
+      <BarChart title="Report priority" items={report?.priorityBreakdown ?? []} colors={priorityChartColors} />
+      <article className="report-card">
+        <header><h2>Project delivery</h2><span>{report?.projectsDeliveredInRange ?? 0} in range</span></header>
+        <div className="report-project-list">
+          {projects.map((project) => {
+            const delivery = deliveryStatus(project.deliveryDate)
+            return <article key={project.id}>
+              <strong>{project.name}</strong>
+              <span>{project.deliveryDate ? formatDate(project.deliveryDate) : 'No delivery date'}</span>
+              {delivery && <small className={`delivery-badge ${delivery.tone}`}>{delivery.label}</small>}
+              <span>{project.completedTasks}/{project.totalTasks} tasks complete, {project.completionPercentage}% done</span>
+              {project.isArchived && <small className="delivery-badge healthy">Closed project</small>}
+            </article>
+          })}
+          {!projects.length && <p className="muted">No project delivery or archive date falls inside this range.</p>}
+        </div>
+      </article>
+      <article className="report-card">
+        <header><h2>Executive summary</h2><span>{dashboard.projectProgress.completionPercentage}% complete</span></header>
+        <p>{report
+          ? `${report.completedTasks} completed task${report.completedTasks === 1 ? '' : 's'} across ${report.totalProjects} project${report.totalProjects === 1 ? '' : 's'}, with ${report.overdueTasks} overdue due-date signal${report.overdueTasks === 1 ? '' : 's'} and ${report.blockedTasks} blocked task${report.blockedTasks === 1 ? '' : 's'} in this report range.`
+          : 'Reports become richer after projects and tasks are created.'}</p>
+      </article>
+    </section>
+
+    <section className="work-area report-table">
+      <div className="table-head report-head"><span>Task</span><span>Status</span><span>Due</span><span>Priority</span></div>
+      {loading ? <div className="loading">Loading reports...</div> : pageTasks.length
+        ? pageTasks.map((task) => <article className="task-row report-row" key={task.id}>
+          <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase() ?? 'low'}`} /><div><strong>{task.title}</strong><small>{task.tags.length ? task.tags.join(', ') : 'No tags'}</small></div></div>
+          <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+          <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? formatDate(task.dueDate) : task.completedAt ? `Done ${new Date(task.completedAt).toLocaleDateString()}` : 'No date'}</span>
+          <span className="score"><strong>{task.priorityBand ?? 'Unscored'}</strong><small>{task.priorityScore ?? 0}</small></span>
+          <div className="metadata-line"><span className="category-pill">{task.projectName}</span></div>
+        </article>)
+        : <div className="empty compact"><ChartBar /><h2>No report rows</h2><p>No task activity matches this range for the selected workspace.</p></div>}
+      <Pagination
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={tasks.length}
+        totalPages={totalPages}
+        onPageChange={setPageNumber}
+      />
+    </section>
   </section>
 }
 
@@ -1304,6 +1594,8 @@ function ActivityPage({
   pageSize,
   totalCount,
   onPageChange,
+  members,
+  currentUserId,
 }: {
   activity: WorkspaceActivity[]
   tasks: TaskItem[]
@@ -1314,6 +1606,8 @@ function ActivityPage({
   pageSize: number
   totalCount: number
   onPageChange: (page: number) => void
+  members: WorkspaceMember[]
+  currentUserId: string
 }) {
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -1347,7 +1641,7 @@ function ActivityPage({
       <span className="activity-icon">{activityIcon(item.action)}</span>
       <div>
         <strong>{item.taskTitle}</strong>
-        <p>{activityMessage(item)}</p>
+        <p>{activityMessage(item, members, currentUserId)}</p>
         <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
       </div>
     </article>)}
@@ -1389,33 +1683,162 @@ function ActivityControls({
   </div>
 }
 
-function activityMessage(item: WorkspaceActivity) {
+function OperationsPage({ summary }: { summary: OperationsSummary }) {
+  const check = (name: string) =>
+    summary.healthChecks.find((item) =>
+      item.name.toLowerCase() === name.toLowerCase())
+  const api = check('API running')
+  const database = check('Database')
+  const email = check('Email notifications')
+  const cors = check('CORS configuration')
+  const auth = check('Authentication configuration')
+  const reminders = check('Due date reminder runner')
+  const statusText = (item?: OperationHealthCheck) =>
+    item?.description ?? item?.status ?? 'Not reported'
+
+  return <section className="panel-page operations-page" aria-label="Operations health and logs">
+    <div className="activity-toolbar">
+      <div>
+        <p className="eyebrow">Super admin</p>
+        <h2>Application monitoring</h2>
+      </div>
+      <span className={`status ${summary.overallHealth.toLowerCase()}`}>{summary.overallHealth}</span>
+    </div>
+
+    <div className="operations-overview">
+      <OperationCard title="API running" value={api?.status ?? 'Unknown'} detail={statusText(api)} icon={<Activity />} />
+      <OperationCard title="Database" value={database?.status ?? 'Unknown'} detail={statusText(database)} icon={<CircleGauge />} />
+      <OperationCard title="Email" value={email?.status ?? 'Unknown'} detail={statusText(email)} icon={<Bell />} />
+      <OperationCard title="Reminders" value={summary.reminderScheduler.status} detail={statusText(reminders)} icon={<Clock3 />} />
+    </div>
+
+    <div className="operations-grid">
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><ShieldCheck /></span>
+          <div>
+            <h2>Service health</h2>
+            <p>Generated {new Date(summary.generatedAt).toLocaleString()}.</p>
+          </div>
+        </div>
+        <div className="health-check-list">
+          {summary.healthChecks.map((check) => <article className="health-check-row" key={check.name}>
+            <span className={`health-dot ${check.status.toLowerCase()}`} />
+            <div>
+              <strong>{check.name}</strong>
+              <p>{check.description ?? `${check.status} in ${Math.round(check.durationMilliseconds)}ms`}</p>
+            </div>
+            <span>{Math.round(check.durationMilliseconds)}ms</span>
+          </article>)}
+        </div>
+      </article>
+
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><Settings2 /></span>
+          <div>
+            <h2>Runtime configuration</h2>
+            <p>Deployment settings currently used by the API.</p>
+          </div>
+        </div>
+        <div className="log-summary">
+          <span><strong>Environment</strong>{summary.runtime.environment}</span>
+          <span><strong>Database</strong>{summary.runtime.databaseProvider}</span>
+          <span><strong>Frontend URL</strong>{summary.runtime.publicBaseUrl}</span>
+          <span><strong>Email mode</strong>{summary.runtime.emailMode}</span>
+          <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
+          <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? `Every ${summary.reminderScheduler.intervalMinutes} min` : 'Disabled'}</span>
+          <span><strong>Log retention</strong>{`${summary.runtime.logRetentionDays} days / ${summary.runtime.logMaxEntries} entries`}</span>
+        </div>
+      </article>
+
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><Clock3 /></span>
+          <div>
+            <h2>Automatic reminders</h2>
+            <p>Background task and project deadline reminders.</p>
+          </div>
+        </div>
+        <div className="log-summary">
+          <span><strong>Status</strong>{summary.reminderScheduler.status}</span>
+          <span><strong>Interval</strong>{summary.reminderScheduler.intervalMinutes ? `${summary.reminderScheduler.intervalMinutes} minutes` : 'Not configured'}</span>
+          <span><strong>Last run</strong>{summary.reminderScheduler.lastRunCompletedAt ? new Date(summary.reminderScheduler.lastRunCompletedAt).toLocaleString() : 'Not run yet'}</span>
+          <span><strong>Next run</strong>{summary.reminderScheduler.nextRunAt ? new Date(summary.reminderScheduler.nextRunAt).toLocaleString() : 'Pending'}</span>
+          <span><strong>Task reminders</strong>{summary.reminderScheduler.lastTaskReminderCount}</span>
+          <span><strong>Project reminders</strong>{summary.reminderScheduler.lastProjectReminderCount}</span>
+          <span><strong>Emails sent</strong>{summary.reminderScheduler.lastEmailCount}</span>
+          <span><strong>Last error</strong>{summary.reminderScheduler.lastError ?? 'None'}</span>
+        </div>
+      </article>
+
+      <article className="profile-card operations-wide">
+        <div className="profile-heading">
+          <span className="metric-icon"><LayoutList /></span>
+          <div>
+            <h2>Recent application logs</h2>
+            <p>Newest API log entries captured from the running application.</p>
+          </div>
+        </div>
+        <div className="operation-log-list">
+          {summary.recentLogs.length
+            ? summary.recentLogs.map((entry, index) => <article className={`operation-log-row ${entry.level.toLowerCase()}`} key={`${entry.timestamp}-${index}`}>
+                <span className="log-level">{entry.level}</span>
+                <div>
+                  <strong>{entry.message}</strong>
+                  <small>{entry.category} - {new Date(entry.timestamp).toLocaleString()}{entry.eventId ? ` - event ${entry.eventId}` : ''}</small>
+                  {entry.exception && <p>{entry.exception}</p>}
+                </div>
+              </article>)
+            : <div className="empty compact"><Activity /><h2>No logs captured yet</h2><p>Use the application or run a reminder/email action to generate log entries.</p></div>}
+        </div>
+      </article>
+    </div>
+  </section>
+}
+
+function OperationCard({ title, value, detail, icon }: { title: string; value: string; detail: string; icon: ReactNode }) {
+  return <article className={`operation-card ${value.toLowerCase()}`}>
+    <span className="metric-icon">{icon}</span>
+    <div><strong>{title}</strong><b>{value}</b><small>{detail}</small></div>
+  </article>
+}
+
+function activityMessage(item: WorkspaceActivity, members: WorkspaceMember[] = [], currentUserId = '') {
+  const actor = displayActor(item.actor, members, currentUserId)
   const previous = item.previousValue || 'none'
   const current = item.currentValue || 'none'
   switch (item.action) {
     case 'TaskCreated':
-      return `${item.actor} created this task.`
+      return `${actor} created this task.`
     case 'TaskRenamed':
-      return `${item.actor} renamed the task from ${previous} to ${current}.`
+      return `${actor} renamed the task from ${previous} to ${current}.`
     case 'StatusChanged':
-      return `${item.actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
+      return `${actor} moved the task from ${friendlyChartLabel(previous)} to ${friendlyChartLabel(current)}.`
     case 'DueDateChanged':
-      return `${item.actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
+      return `${actor} changed the due date from ${formatActivityValue(previous)} to ${formatActivityValue(current)}.`
     case 'EffortChanged':
-      return `${item.actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
+      return `${actor} changed the effort estimate from ${previous || 'none'} to ${current || 'none'}.`
     case 'AssignmentChanged':
-      return `${item.actor} changed the assignee from ${previous} to ${current}.`
+      return `${actor} changed the assignee from ${displayActor(previous, members, currentUserId)} to ${displayActor(current, members, currentUserId)}.`
     case 'CategoryChanged':
-      return `${item.actor} changed the category from ${previous} to ${current}.`
+      return `${actor} changed the category from ${previous} to ${current}.`
     case 'TagAdded':
-      return `${item.actor} added tag #${current}.`
+      return `${actor} added tag #${current}.`
     case 'TagRemoved':
-      return `${item.actor} removed tag #${previous}.`
+      return `${actor} removed tag #${previous}.`
     case 'NoteAdded':
-      return `${item.actor} added a note: ${current}`
+      return `${actor} added a note: ${current}`
     default:
-      return `${item.actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
+      return `${actor} changed ${activityLabel(item)} from ${previous} to ${current}.`
   }
+}
+
+function displayActor(value: string, members: WorkspaceMember[], currentUserId: string) {
+  if (!value || value === 'none') return 'none'
+  if (value === 'system') return 'System'
+  if (value === currentUserId) return 'You'
+  return members.find((member) => member.userId === value)?.displayName ?? value
 }
 
 function activityIcon(action: string) {
@@ -1693,24 +2116,32 @@ function ProfilePage({
   </section>
 }
 
-function TaskList({ tasks, categories, onEdit }: { tasks: TaskItem[]; categories: ProjectCategory[]; onEdit: (task: TaskItem) => void }) {
+function TaskList({ tasks, categories, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
+  const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   if (!tasks.length) return <div className="empty"><Search /><h2>No matching work</h2><p>Try a different search term.</p></div>
-  return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Deadline</span><span>Priority</span><span /></div>
+  return <div className="task-table"><div className="table-head"><span>Task</span><span>Status</span><span>Created</span><span>Deadline</span><span>Priority</span><span /></div>
     {tasks.map((task) => <article className="task-row" key={task.id}>
       <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase()}`} /><div><strong>{task.title}</strong><small>{task.priorityExplanation ? `Value ${task.priorityExplanation.businessValueContribution} · Urgency ${task.priorityExplanation.urgencyContribution} · Risk ${task.priorityExplanation.riskReductionContribution}` : 'Planning factors not set'}</small></div></div>
-      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} />
+      <TaskMetadataLine task={task} categoryName={task.categoryId ? categoryNames.get(task.categoryId) : undefined} assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined} currentUserId={currentUserId} />
       <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+      <span className="created-date">{formatDate(task.createdAt)}</span>
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ?? 'Not scheduled'}</span>
       <span className="score"><strong>{task.priorityScore?.toFixed(1) ?? '—'}</strong><small>{task.priorityBand ?? 'Unscored'}</small></span>
-      <button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>
+      <div className="row-actions"><button className="icon-button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit task"><Pencil /></button>{task.createdByUserId === currentUserId && <button className="icon-button danger-action" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`} title="Delete task"><Trash2 /></button>}</div>
     </article>)}
   </div>
 }
 
-function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName?: string }) {
-  if (!categoryName && !task.tags.length) return null
+function TaskMetadataLine({ task, categoryName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; assigneeName?: string; currentUserId?: string }) {
+  const assigneeLabel = task.assignedUserId
+    ? task.assignedUserId === currentUserId
+      ? 'Assigned to you'
+      : `Assigned to ${assigneeName ?? 'workspace member'}`
+    : 'Unassigned'
+  if (!categoryName && !task.tags.length && !assigneeLabel) return null
   return <span className="metadata-line">
+    <span className={`assignee-pill ${task.assignedUserId ? 'assigned' : 'unassigned'}`}>{assigneeLabel}</span>
     {categoryName && <span className="category-pill"><FolderPlus size={12} /> {categoryName}</span>}
     {task.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}><Tags size={12} /> {tag}</span>)}
   </span>
@@ -1719,13 +2150,27 @@ function TaskMetadataLine({ task, categoryName }: { task: TaskItem; categoryName
 function Board({
   tasks,
   categories,
+  members,
+  currentUserId,
+  pinnedTaskIds,
   onEdit,
+  onDelete,
   onMove,
+  onNote,
+  onTogglePin,
+  onLockedMoveAttempt,
 }: {
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  members: WorkspaceMember[]
+  currentUserId: string
+  pinnedTaskIds: Set<string>
   onEdit: (task: TaskItem) => void
+  onDelete: (task: TaskItem) => void
   onMove: (task: TaskItem, target: TaskStatus) => Promise<void>
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
+  onLockedMoveAttempt: (message: string) => void
 }) {
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
   const [activeTask, setActiveTask] = useState<TaskItem | null>(null)
@@ -1735,14 +2180,14 @@ function Board({
     useSensor(KeyboardSensor),
   )
   const validTargets = activeTask
-    ? new Set(Object.keys(boardTransitions[activeTask.status] ?? {}))
+    ? new Set(allowedTaskTargets(activeTask, currentUserId))
     : new Set<string>()
 
   const finishDrag = async ({ active, over }: DragEndEvent) => {
     const task = active.data.current?.task as TaskItem | undefined
     const target = over?.id as TaskStatus | undefined
     setActiveTask(null)
-    if (!task || !target || !boardTransitions[task.status]?.[target]) return
+    if (!task || !target || !canMoveTask(task, target, currentUserId)) return
 
     setMoving(true)
     try {
@@ -1764,14 +2209,21 @@ function Board({
         key={status}
         status={status}
         categories={categories}
+        members={members}
+        pinnedTaskIds={pinnedTaskIds}
         tasks={tasks.filter((task) => task.status === status)}
+        currentUserId={currentUserId}
         onEdit={onEdit}
+        onDelete={onDelete}
+        onNote={onNote}
+        onTogglePin={onTogglePin}
+        onLockedMoveAttempt={onLockedMoveAttempt}
         dragActive={activeTask !== null}
         validTarget={validTargets.has(status)}
       />)}
     </div>
     <DragOverlay>
-      {activeTask ? <BoardCard task={activeTask} categories={categories} onEdit={onEdit} overlay /> : null}
+      {activeTask ? <BoardCard task={activeTask} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(activeTask.id)} onEdit={onEdit} onNote={onNote} onTogglePin={onTogglePin} overlay /> : null}
     </DragOverlay>
   </DndContext>
 }
@@ -1780,17 +2232,36 @@ function BoardColumn({
   status,
   tasks,
   categories,
+  members,
+  pinnedTaskIds,
+  currentUserId,
   onEdit,
+  onDelete,
+  onNote,
+  onTogglePin,
+  onLockedMoveAttempt,
   dragActive,
   validTarget,
 }: {
   status: TaskStatus
   tasks: TaskItem[]
   categories: ProjectCategory[]
+  members: WorkspaceMember[]
+  pinnedTaskIds: Set<string>
+  currentUserId: string
   onEdit: (task: TaskItem) => void
+  onDelete: (task: TaskItem) => void
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
+  onLockedMoveAttempt: (message: string) => void
   dragActive: boolean
   validTarget: boolean
 }) {
+  const orderedTasks = [...tasks].sort((left, right) => {
+    const leftPinned = pinnedTaskIds.has(left.id) ? 0 : 1
+    const rightPinned = pinnedTaskIds.has(right.id) ? 0 : 1
+    return leftPinned - rightPinned
+  })
   const { isOver, setNodeRef } = useDroppable({
     id: status,
     disabled: dragActive && !validTarget,
@@ -1803,8 +2274,8 @@ function BoardColumn({
   >
     <header><span>{statusLabels[status]}</span><small>{tasks.length}</small></header>
     <div className="board-column-body">
-      {tasks.map((task) =>
-        <BoardCard task={task} categories={categories} onEdit={onEdit} key={task.id} />)}
+      {orderedTasks.map((task) =>
+        <BoardCard task={task} categories={categories} members={members} currentUserId={currentUserId} pinned={pinnedTaskIds.has(task.id)} onEdit={onEdit} onDelete={onDelete} onNote={onNote} onTogglePin={onTogglePin} onLockedMoveAttempt={onLockedMoveAttempt} key={task.id} />)}
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
@@ -1813,18 +2284,42 @@ function BoardColumn({
 function BoardCard({
   task,
   categories,
+  members = [],
+  currentUserId,
+  pinned = false,
   onEdit,
+  onDelete,
+  onNote,
+  onTogglePin,
+  onLockedMoveAttempt,
   overlay = false,
 }: {
   task: TaskItem
   categories?: ProjectCategory[]
+  members?: WorkspaceMember[]
+  currentUserId?: string
+  pinned?: boolean
   onEdit: (task: TaskItem) => void
+  onDelete?: (task: TaskItem) => void
+  onNote: (task: TaskItem) => void
+  onTogglePin: (taskId: string) => void
+  onLockedMoveAttempt?: (message: string) => void
   overlay?: boolean
 }) {
+  const hasMoveTargets = !!currentUserId && allowedTaskTargets(task, currentUserId).length > 0
+  const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
+  const lockedAssigneeName = task.assignedUserId
+    ? memberNames.get(task.assignedUserId) ?? 'another workspace member'
+    : null
+  const lockedMessage = task.status === 'Ready' &&
+    !!task.assignedUserId &&
+    task.assignedUserId !== currentUserId
+      ? `Task already assigned to ${lockedAssigneeName}; it is not available to move.`
+      : ''
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: task.id,
     data: { task },
-    disabled: overlay,
+    disabled: overlay || !hasMoveTargets,
   })
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -1833,24 +2328,62 @@ function BoardCard({
   return <article
     ref={setNodeRef}
     style={style}
-    className={`board-task ${task.status.toLowerCase()} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''}`}
+    className={`board-task ${task.status.toLowerCase()} ${pinned ? 'pinned' : ''} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
+    onPointerDown={() => {
+      if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
+    }}
     {...attributes}
     {...listeners}
   >
     <div className="board-task-heading">
       <GripVertical aria-hidden="true" />
       <strong>{task.title}</strong>
-      <button
-        className="icon-button"
-        onClick={(event) => {
-          event.stopPropagation()
-          onEdit(task)
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        aria-label={`Edit ${task.title}`}
-        title="Edit task"
-      ><Pencil /></button>
+      <div className="board-task-actions">
+        <button
+          className={`pin-button ${pinned ? 'active' : ''}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onTogglePin(task.id)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={pinned ? `Unpin ${task.title}` : `Pin ${task.title}`}
+          title={pinned ? 'Unpin task' : 'Pin task'}
+        ><Pin /></button>
+        <button
+          className="icon-button note-action"
+          onClick={(event) => {
+            event.stopPropagation()
+            onNote(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Open notes for ${task.title}`}
+          title="Task notes"
+        ><MessageSquare /></button>
+        <button
+          className="icon-button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onEdit(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Edit ${task.title}`}
+          title="Edit task"
+        ><Pencil /></button>
+        {!overlay && onDelete && task.createdByUserId === currentUserId && <button
+          className="icon-button danger-action"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete(task)
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={`Delete ${task.title}`}
+          title="Delete task"
+        ><Trash2 /></button>}
+      </div>
     </div>
     <div className="board-task-meta">
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>
@@ -1861,6 +2394,8 @@ function BoardCard({
     <TaskMetadataLine
       task={task}
       categoryName={task.categoryId ? categories?.find((category) => category.id === task.categoryId)?.name : undefined}
+      assigneeName={task.assignedUserId ? memberNames.get(task.assignedUserId) : undefined}
+      currentUserId={currentUserId}
     />
   </article>
 }
@@ -1873,32 +2408,113 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
-function TaskEditor({ projectId, task, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
+const actionTargets: Record<string, TaskStatus> = {
+  ready: 'Ready',
+  start: 'InProgress',
+  block: 'Blocked',
+  complete: 'Completed',
+  unblock: 'Ready',
+  reopen: 'Ready',
+}
+
+const effortOptions = [1, 2, 3, 5, 8]
+
+function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?: boolean; unscored?: boolean }) {
+  return <p className="field-help">
+    Use 1-5 scores: 1 is low impact or urgency, 3 is normal delivery value, and 5 is high business impact, urgent deadline pressure, or major risk reduction.
+    {unscored ? ' This task is currently unscored; the values shown are starter defaults until you save them.' : ''}
+    {readOnly ? ' Only the task creator can change these priority inputs.' : ''}
+  </p>
+}
+
+function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; currentUserId: string; onClose: () => void; onSaved: (taskId: string) => void }) {
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const notes = task.notes ?? []
+  const noteAuthor = (authorId: string) =>
+    displayActor(authorId, members, currentUserId)
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!body.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      await api.addNote(task.id, body.trim())
+      setBody('')
+      onSaved(task.id)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Note could not be added.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open aria-labelledby="quick-note-title" className="quick-note-dialog">
+      <header>
+        <div><p className="eyebrow">Task notes</p><h2 id="quick-note-title">{task.title}</h2></div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <form onSubmit={(event) => void submit(event)}>
+        {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+        <label>Add note<textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} rows={4} placeholder="Write a short update, blocker, or handover note." autoFocus /></label>
+        <footer className="editor-footer"><span /> <div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving || !body.trim()}>{saving ? 'Adding...' : 'Add note'}</button></div></footer>
+      </form>
+      <section className="quick-note-list" aria-label="Existing notes">
+        {notes.length
+          ? notes.map((note) => <article key={note.id}><MessageSquare size={16} /><div><p>{note.body}</p><small className="note-meta"><span className="note-author">{noteAuthor(note.authorId)}</span><span>{new Date(note.createdAt).toLocaleString()}</span></small></div></article>)
+          : <div className="empty compact"><MessageSquare /><h2>No notes yet</h2><p>Add the first note for this task.</p></div>}
+      </section>
+    </dialog>
+  </div>
+}
+
+function TaskEditor({ projectId, task, currentUserId, isMember, members, categories, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [noteDraft, setNoteDraft] = useState('')
+  const [error, setError] = useState('')
   const explanation = task.priorityExplanation
+  const canEditPlanning = !isMember && (!task.createdByUserId || task.createdByUserId === currentUserId)
+  const isUnscored = !explanation
+  const availableActions = (nextActions[task.status] ?? [])
+    .filter(({ action }) => canMoveTask(task, actionTargets[action], currentUserId))
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setSaving(true)
-    const data = new FormData(event.currentTarget)
-    const effort = Number(data.get('effort'))
-    await api.updateTask(task.id, String(data.get('title')), String(data.get('dueDate')), effort)
-    await api.updatePlanning(
-      task.id,
-      Number(data.get('businessValue')),
-      Number(data.get('urgency')),
-      Number(data.get('riskReduction')),
-      effort,
-    )
-    const assignee = String(data.get('assignedUserId') ?? '')
-    if (assignee) await api.assign(task.id, assignee)
-    else if (task.assignedUserId) await api.unassign(task.id)
-    const categoryId = String(data.get('categoryId') ?? '')
-    await api.updateCategory(task.id, categoryId || null)
-    if (tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
-    if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
-    onSaved()
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const data = new FormData(event.currentTarget)
+      const title = isMember ? task.title : String(data.get('title'))
+      const dueDate = isMember ? task.dueDate ?? '' : String(data.get('dueDate'))
+      const effort = canEditPlanning ? Number(data.get('effort')) : explanation?.effort ?? task.effort ?? 3
+      await api.updateTask(task.id, title, dueDate, effort)
+      if (canEditPlanning) {
+        await api.updatePlanning(
+          task.id,
+          Number(data.get('businessValue')),
+          Number(data.get('urgency')),
+          Number(data.get('riskReduction')),
+          effort,
+        )
+      }
+      const assignee = String(data.get('assignedUserId') ?? '')
+      if (assignee) await api.assign(task.id, assignee)
+      else if (task.assignedUserId) await api.unassign(task.id)
+      if (!isMember) {
+        const categoryId = String(data.get('categoryId') ?? '')
+        await api.updateCategory(task.id, categoryId || null)
+      }
+      if (!isMember && tagDraft.trim()) await api.addTag(task.id, tagDraft.trim())
+      if (noteDraft.trim()) await api.addNote(task.id, noteDraft.trim())
+      onSaved()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task could not be saved.')
+    } finally {
+      setSaving(false)
+    }
   }
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
@@ -1915,56 +2531,112 @@ function TaskEditor({ projectId, task, members, categories, onCategoryCreated, o
   }
   const transition = async (action: string) => {
     setSaving(true)
-    await api.transition(task.id, action)
-    onSaved()
+    setError('')
+    try {
+      await api.transition(task.id, action)
+      onSaved()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task status could not be changed.')
+      setSaving(false)
+    }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="edit-dialog-title"><header><div><p className="eyebrow">{statusLabels[task.status]}</p><h2 id="edit-dialog-title">Edit task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
     <form onSubmit={(event) => void submit(event)}>
-      <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} autoFocus /></label>
-      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? 3)}>{[1, 2, 3, 5, 8, 13].map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      <label>Task title<input name="title" required maxLength={240} defaultValue={task.title} readOnly={isMember} autoFocus={!isMember} /></label>
+      <div className="form-grid"><label>Due date<input name="dueDate" type="date" defaultValue={task.dueDate ?? ''} readOnly={isMember} /></label><label>Effort<select name="effort" defaultValue={String(explanation?.effort ?? task.effort ?? 3)} disabled={!canEditPlanning}>{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label></div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue={task.assignedUserId ?? ''}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} · {member.role}</option>)}</select><ChevronDown /></label>
       <fieldset><legend>Metadata</legend><div className="metadata-editor">
-        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
-        <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>
-        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={40} placeholder="client, urgent, research" /></label>
-        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
+        <label>Category<select name="categoryId" defaultValue={task.categoryId ?? ''} disabled={isMember}><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        {!isMember && <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>}
+        <label>Add tag<input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} disabled={isMember} maxLength={40} placeholder="client, urgent, research" /></label>
+        {!!task.tags.length && <div className="chip-list" aria-label="Task tags">{task.tags.map((tag) => <button type="button" className="tag-chip removable" key={tag} disabled={saving || isMember} onClick={() => void removeTag(tag)}><Tags size={12} /> {tag} <X size={12} /></button>)}</div>}
         <label className="note-field">Add note<textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} maxLength={4000} rows={3} /></label>
         {!!task.notes?.length && <div className="note-list" aria-label="Task notes">{task.notes.map((note) => <article key={note.id}><MessageSquare size={15} /><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString()}</small></article>)}</div>}
       </div></fieldset>
-      <fieldset><legend>Priority inputs</legend><div className="planning-grid">
-        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} /></label>
-        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} /></label>
-        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} /></label>
+      <fieldset><legend>Priority inputs</legend><PriorityInputGuide readOnly={!canEditPlanning} unscored={isUnscored} /><div className="planning-grid">
+        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue={explanation ? explanation.businessValueContribution / 3 : 3} readOnly={!canEditPlanning} /></label>
+        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue={explanation ? explanation.urgencyContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
+        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue={explanation ? explanation.riskReductionContribution / 2 : 3} readOnly={!canEditPlanning} /></label>
       </div></fieldset>
-      <footer className="editor-footer"><div>{nextActions[task.status]?.map(({ label, action }) => <button type="button" className="secondary" key={action} disabled={saving} onClick={() => void transition(action)}>{label}</button>)}</div><div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button></div></footer>
+      <footer className="editor-footer"><div>{availableActions.map(({ label, action }) => <button type="button" className="secondary" key={action} disabled={saving} onClick={() => void transition(action)}>{label}</button>)}</div><div><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button></div></footer>
     </form>
   </dialog></div>
 }
 
-function TaskDialog({ projectId, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, isMember, members, categories, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setSaving(true)
-    const data = new FormData(event.currentTarget)
-    const task = await api.createTask(projectId, String(data.get('title')), String(data.get('dueDate')), Number(data.get('effort')))
-    const categoryId = String(data.get('categoryId') ?? '')
-    const tag = String(data.get('tag') ?? '').trim()
-    const note = String(data.get('note') ?? '').trim()
-    if (categoryId) await api.updateCategory(task.id, categoryId)
-    if (tag) await api.addTag(task.id, tag)
-    if (note) await api.addNote(task.id, note)
-    onCreated()
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const data = new FormData(event.currentTarget)
+      const assignee = String(data.get('assignedUserId') ?? '')
+      const categoryId = String(data.get('categoryId') ?? '')
+      const tag = String(data.get('tag') ?? '').trim()
+      const note = String(data.get('note') ?? '').trim()
+      if (tag && tag.replace(/^#/, '').trim().length < 2) {
+        throw new Error('Tag names must be between 2 and 40 characters.')
+      }
+      const effort = Number(data.get('effort'))
+      const task = await api.createTask(
+        projectId,
+        String(data.get('title')),
+        String(data.get('dueDate')),
+        effort,
+        Number(data.get('businessValue')),
+        Number(data.get('urgency')),
+        Number(data.get('riskReduction')),
+      )
+      if (assignee) await api.assign(task.id, assignee)
+      if (categoryId) await api.updateCategory(task.id, categoryId)
+      if (tag) await api.addTag(task.id, tag)
+      if (note) await api.addNote(task.id, note)
+      onCreated()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Task could not be created.')
+    } finally {
+      setSaving(false)
+    }
   }
   const createCategory = async () => {
     if (!categoryDraft.trim()) return
     setSaving(true)
-    const category = await api.createCategory(projectId, categoryDraft.trim())
-    onCategoryCreated(category)
-    setCategoryDraft('')
-    setSaving(false)
+    setError('')
+    try {
+      const category = await api.createCategory(projectId, categoryDraft.trim())
+      onCategoryCreated(category)
+      setCategoryDraft('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Category could not be created.')
+    } finally {
+      setSaving(false)
+    }
   }
   return <div className="dialog-backdrop" role="presentation"><dialog open aria-labelledby="task-dialog-title"><header><div><p className="eyebrow">Portfolio launch</p><h2 id="task-dialog-title">Create task</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>
-    <form onSubmit={(event) => void submit(event)}><label>Task title<input name="title" required maxLength={240} autoFocus /></label><div className="form-grid"><label>Due date<input name="dueDate" type="date" /></label><label>Effort<select name="effort" defaultValue="3"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option><option>13</option></select><ChevronDown /></label></div><fieldset><legend>Metadata</legend><div className="metadata-editor"><label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label><div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div><label>Tag<input name="tag" maxLength={40} /></label><label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label></div></fieldset><footer><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer></form>
+    <form onSubmit={(event) => void submit(event)}>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      <label>Task title<input name="title" required maxLength={240} autoFocus /></label>
+      <div className="form-grid">
+        <label>Due date<input name="dueDate" type="date" /></label>
+        <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
+      </div>
+      <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label>
+      <fieldset><legend>Priority inputs</legend><PriorityInputGuide /><div className="planning-grid">
+        <label>Business value<input name="businessValue" type="number" min="1" max="5" defaultValue="3" /></label>
+        <label>Urgency<input name="urgency" type="number" min="1" max="5" defaultValue="3" /></label>
+        <label>Risk reduction<input name="riskReduction" type="number" min="1" max="5" defaultValue="3" /></label>
+      </div></fieldset>
+      <fieldset><legend>Metadata</legend><div className="metadata-editor">
+        <label>Category<select name="categoryId" defaultValue=""><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown /></label>
+        {!isMember && <div className="inline-create"><label>New category<input value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} maxLength={80} /></label><button type="button" className="secondary" disabled={saving || !categoryDraft.trim()} onClick={() => void createCategory()}><FolderPlus size={16} /> Add</button></div>}
+        <label>Tag<input name="tag" maxLength={40} /></label>
+        <label className="note-field">Note<textarea name="note" maxLength={4000} rows={3} /></label>
+      </div></fieldset>
+      <footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancel</button><button className="primary" disabled={saving}>{saving ? 'Creating...' : 'Create task'}</button></footer>
+    </form>
   </dialog></div>
 }

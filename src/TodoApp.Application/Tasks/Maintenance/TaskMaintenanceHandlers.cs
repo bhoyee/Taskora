@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Tasks.Lifecycle;
 using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Maintenance;
@@ -49,32 +50,66 @@ public sealed class UpdateTaskHandler(
 
 public sealed class BlockTaskHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         BlockTaskCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.Block(command.Reason),
+            item => item.Block(command.Reason),
             cancellationToken);
+    }
 }
 
 public sealed class UnblockTaskHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         UnblockTaskCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.Unblock(),
+            item => item.Unblock(),
             cancellationToken);
+    }
 }
 
 public sealed class ReopenTaskHandler(
@@ -92,24 +127,86 @@ public sealed class ReopenTaskHandler(
             cancellationToken);
 }
 
+public sealed class DeleteTaskHandler(
+    ITaskRepository tasks,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteTaskCommand command,
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+
+        if (task is null)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "task.not_found",
+                    "The task was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (!currentUser.IsAuthenticated ||
+            task.CreatedByUserId is null ||
+            task.CreatedByUserId != currentUser.UserId)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "task.delete_forbidden",
+                    "Only the task creator can delete this task.",
+                    ErrorType.Forbidden));
+        }
+
+        await tasks.RemoveAsync(task, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 public sealed class UpdatePlanningFactorsHandler(
     ITaskRepository tasks,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
-    public Task<Result<TaskItemStatus>> HandleAsync(
+    public async Task<Result<TaskItemStatus>> HandleAsync(
         UpdatePlanningFactorsCommand command,
-        CancellationToken cancellationToken) =>
-        TaskMutationExecutor.ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+
+        if (task is null)
+        {
+            return Result<TaskItemStatus>.Failure(
+                new ApplicationError(
+                    "task.not_found",
+                    "The task was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (!currentUser.IsAuthenticated ||
+            (task.CreatedByUserId is not null &&
+             task.CreatedByUserId != currentUser.UserId))
+        {
+            return Result<TaskItemStatus>.Failure(
+                new ApplicationError(
+                    "task.planning_forbidden",
+                    "Only the task creator can edit priority inputs.",
+                    ErrorType.Forbidden));
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
             command.TaskId,
-            tasks,
             unitOfWork,
-            task => task.SetPlanningFactors(
+            item => item.SetPlanningFactors(
                 PlanningFactors.Create(
                     command.BusinessValue,
                     command.Urgency,
                     command.RiskReduction,
                     command.Effort)),
             cancellationToken);
+    }
 }
 
 public sealed class RemoveTaskDependencyHandler(

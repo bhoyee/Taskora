@@ -38,6 +38,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<DeclineWorkspaceInvitationHandler>();
         services.AddScoped<CancelWorkspaceInvitationHandler>();
         services.AddScoped<GetPortfolioDashboardHandler>();
+        services.AddScoped<GetWorkspaceReportHandler>();
         services.AddScoped<SendDueDateNotificationsHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();
@@ -60,6 +61,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<BlockTaskHandler>();
         services.AddScoped<UnblockTaskHandler>();
         services.AddScoped<ReopenTaskHandler>();
+        services.AddScoped<DeleteTaskHandler>();
         services.AddScoped<UpdatePlanningFactorsHandler>();
         services.AddScoped<AddTaskDependencyHandler>();
         services.AddScoped<RemoveTaskDependencyHandler>();
