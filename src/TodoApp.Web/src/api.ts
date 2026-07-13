@@ -265,18 +265,30 @@ export interface OperationLogRecord {
   eventId: string | null
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export interface WorkspaceRealtimeEvent {
+  eventType: string
+  workspaceId: string
+  entityType: string
+  entityId: string | null
+  actorId: string | null
+  occurredAt: string
+}
+
+function identityHeaders(): Record<string, string> {
   const accessToken = localStorage.getItem('todoapp_access_token')
-  const identityHeaders: Record<string, string> = accessToken
+  return accessToken
     ? { Authorization: `Bearer ${accessToken}` }
     : import.meta.env.DEV
       ? { 'X-User-Id': '30000000-0000-0000-0000-000000000001' }
       : {}
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...identityHeaders,
+      ...identityHeaders(),
       ...init?.headers,
     },
   })
@@ -307,6 +319,49 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+export async function streamWorkspaceEvents(
+  workspaceId: string,
+  onEvent: (event: WorkspaceRealtimeEvent) => void,
+  signal: AbortSignal,
+) {
+  const response = await fetch(
+    `/api/v1/workspaces/${workspaceId}/events`,
+    {
+      headers: {
+        Accept: 'text/event-stream',
+        ...identityHeaders(),
+      },
+      signal,
+    },
+  )
+
+  if (!response.ok || !response.body) {
+    throw new Error('Realtime workspace updates could not be started.')
+  }
+
+  const reader = response.body
+    .pipeThrough(new TextDecoderStream())
+    .getReader()
+  let buffer = ''
+
+  while (!signal.aborted) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    const messages = buffer.split('\n\n')
+    buffer = messages.pop() ?? ''
+
+    for (const message of messages) {
+      const data = message
+        .split('\n')
+        .find((line) => line.startsWith('data: '))
+        ?.slice(6)
+      if (!data) continue
+      onEvent(JSON.parse(data) as WorkspaceRealtimeEvent)
+    }
+  }
 }
 
 export const api = {

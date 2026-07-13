@@ -1,4 +1,6 @@
 using TodoApp.Api.Contracts;
+using TodoApp.Api.Realtime;
+using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Application.Tasks.CreateTask;
 using TodoApp.Application.Tasks.Activity;
@@ -86,6 +88,9 @@ internal static class TaskEndpoints
         Guid projectId,
         CreateTaskRequest request,
         CreateTaskHandler handler,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken)
     {
         var result = await handler.HandleAsync(
@@ -99,11 +104,22 @@ internal static class TaskEndpoints
                 request.RiskReduction),
             cancellationToken);
 
-        return result.IsSuccess
-            ? Results.Created(
-                $"/api/v1/tasks/{result.Value.Id}",
-                result.Value)
-            : ApiResult.From(result);
+        if (!result.IsSuccess)
+        {
+            return ApiResult.From(result);
+        }
+
+        await PublishProjectChangeAsync(
+            projectId,
+            "task.created",
+            result.Value.Id,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return Results.Created(
+            $"/api/v1/tasks/{result.Value.Id}",
+            result.Value);
     }
 
     private static async Task<IResult> GetTaskAsync(
@@ -153,167 +169,482 @@ internal static class TaskEndpoints
         Guid taskId,
         UpdateTaskRequest request,
         UpdateTaskHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new UpdateTaskCommand(
                 taskId,
                 request.Title,
                 request.DueDate,
                 request.Effort),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.updated",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> UpdatePlanningAsync(
         Guid taskId,
         UpdatePlanningFactorsRequest request,
         UpdatePlanningFactorsHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new UpdatePlanningFactorsCommand(
                 taskId,
                 request.BusinessValue,
                 request.Urgency,
                 request.RiskReduction,
                 request.Effort),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.planning-updated",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
-    private static Task<IResult> MoveToReadyAsync(
+    private static async Task<IResult> MoveToReadyAsync(
         Guid taskId,
         MoveTaskToReadyHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.ready",
             handler.HandleAsync(
                 new MoveTaskToReadyCommand(taskId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
-    private static Task<IResult> StartTaskAsync(
+    private static async Task<IResult> StartTaskAsync(
         Guid taskId,
         StartTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.started",
             handler.HandleAsync(
                 new StartTaskCommand(taskId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
-    private static Task<IResult> CompleteTaskAsync(
+    private static async Task<IResult> CompleteTaskAsync(
         Guid taskId,
         CompleteTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.completed",
             handler.HandleAsync(
                 new CompleteTaskCommand(taskId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
-    private static Task<IResult> ReopenTaskAsync(
+    private static async Task<IResult> ReopenTaskAsync(
         Guid taskId,
         ReopenTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.reopened",
             handler.HandleAsync(
                 new ReopenTaskCommand(taskId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
     private static async Task<IResult> DeleteTaskAsync(
         Guid taskId,
         DeleteTaskHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(taskId, cancellationToken);
+        var result = await handler.HandleAsync(
             new DeleteTaskCommand(taskId),
-            cancellationToken));
+            cancellationToken);
+        if (result.IsSuccess && task is not null)
+        {
+            await PublishProjectChangeAsync(
+                task.ProjectId,
+                "task.deleted",
+                taskId,
+                projects,
+                events,
+                currentUser,
+                cancellationToken);
+        }
 
-    private static Task<IResult> BlockTaskAsync(
+        return ApiResult.From(result);
+    }
+
+    private static async Task<IResult> BlockTaskAsync(
         Guid taskId,
         BlockTaskRequest request,
         BlockTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.blocked",
             handler.HandleAsync(
                 new BlockTaskCommand(taskId, request.Reason),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
-    private static Task<IResult> UnblockTaskAsync(
+    private static async Task<IResult> UnblockTaskAsync(
         Guid taskId,
         UnblockTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.unblocked",
             handler.HandleAsync(
                 new UnblockTaskCommand(taskId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
     private static async Task<IResult> AddDependencyAsync(
         Guid taskId,
         AddDependencyRequest request,
         AddTaskDependencyHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new AddTaskDependencyCommand(taskId, request.DependencyId),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.dependency-added",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
-    private static Task<IResult> RemoveDependencyAsync(
+    private static async Task<IResult> RemoveDependencyAsync(
         Guid taskId,
         Guid dependencyId,
         RemoveTaskDependencyHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
-        HandleStatusAsync(
+        await HandleStatusAsync(
+            taskId,
+            "task.dependency-removed",
             handler.HandleAsync(
                 new RemoveTaskDependencyCommand(taskId, dependencyId),
-                cancellationToken));
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
 
     private static async Task<IResult> AssignTaskAsync(
         Guid taskId,
         AssignTaskRequest request,
         AssignTaskHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new AssignTaskCommand(taskId, request.UserId),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.assigned",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> UnassignTaskAsync(
         Guid taskId,
         UnassignTaskHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new UnassignTaskCommand(taskId),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.unassigned",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> UpdateCategoryAsync(
         Guid taskId,
         UpdateTaskCategoryRequest request,
         UpdateTaskCategoryHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new UpdateTaskCategoryCommand(taskId, request.CategoryId),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.category-updated",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> AddTagAsync(
         Guid taskId,
         AddTaskTagRequest request,
         AddTaskTagHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new AddTaskTagCommand(taskId, request.Name ?? request.Tag ?? string.Empty),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.tag-added",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> RemoveTagAsync(
         Guid taskId,
         string tag,
         RemoveTaskTagHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new RemoveTaskTagCommand(taskId, tag),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.tag-removed",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> AddNoteAsync(
         Guid taskId,
         AddTaskNoteRequest request,
         AddTaskNoteHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
             new AddTaskNoteCommand(taskId, request.Body),
-            cancellationToken));
+            cancellationToken);
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            "task.note-added",
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
 
     private static async Task<IResult> HandleStatusAsync(
-        Task<Result<TaskItemStatus>> operation) =>
-        ApiResult.From(await operation);
+        Guid taskId,
+        string eventType,
+        Task<Result<TaskItemStatus>> operation,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await operation;
+        await PublishTaskChangeAsync(
+            result.IsSuccess,
+            taskId,
+            eventType,
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+        return ApiResult.From(result);
+    }
+
+    private static async Task PublishTaskChangeAsync(
+        bool succeeded,
+        Guid taskId,
+        string eventType,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (!succeeded)
+        {
+            return;
+        }
+
+        var task = await tasks.GetByIdAsync(taskId, cancellationToken);
+        if (task is null)
+        {
+            return;
+        }
+
+        await PublishProjectChangeAsync(
+            task.ProjectId,
+            eventType,
+            taskId,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+    }
+
+    private static async Task PublishProjectChangeAsync(
+        Guid projectId,
+        string eventType,
+        Guid? entityId,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var project = await projects.GetByIdAsync(projectId, cancellationToken);
+        if (project is null || project.WorkspaceId == Guid.Empty)
+        {
+            return;
+        }
+
+        await events.PublishAsync(
+            project.WorkspaceId,
+            eventType,
+            "Task",
+            entityId,
+            currentUser.UserId,
+            cancellationToken);
+    }
 }
 
 public sealed record UpdateTaskCategoryRequest(Guid? CategoryId);

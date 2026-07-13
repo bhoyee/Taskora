@@ -11,7 +11,7 @@ import {
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
-import { api } from './api'
+import { api, streamWorkspaceEvents } from './api'
 import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
@@ -268,6 +268,33 @@ export default function App() {
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
   }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, activityPageNumber, activityType])
+  useEffect(() => {
+    if (!selectedWorkspaceId || loading || loggedOut) return undefined
+
+    const controller = new AbortController()
+    let refreshTimer = 0
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(
+        () => void load({ silent: true }),
+        150)
+    }
+
+    void streamWorkspaceEvents(
+      selectedWorkspaceId,
+      scheduleRefresh,
+      controller.signal)
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          window.clearTimeout(refreshTimer)
+        }
+      })
+
+    return () => {
+      window.clearTimeout(refreshTimer)
+      controller.abort()
+    }
+  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)

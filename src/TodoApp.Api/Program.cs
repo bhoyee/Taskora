@@ -6,6 +6,7 @@ using TodoApp.Api;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Endpoints;
 using TodoApp.Api.Notifications;
+using TodoApp.Api.Realtime;
 using TodoApp.Api.Security;
 using TodoApp.Infrastructure;
 using TodoApp.Infrastructure.Persistence;
@@ -20,6 +21,7 @@ var operationLogs = new InMemoryLogStore(
 builder.Services.AddSingleton(operationLogs);
 builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
 builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
+builder.Services.AddSingleton<WorkspaceEventBroadcaster>();
 
 ValidateDeploymentConfiguration(
     builder.Environment,
@@ -203,6 +205,7 @@ app.MapNotificationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapAccountEndpoints();
 app.MapOperationsEndpoints();
+app.MapRealtimeEndpoints();
 app.Map("/api/{**path}", () => Results.Problem(
     statusCode: StatusCodes.Status404NotFound,
     title: "API endpoint not found."));
