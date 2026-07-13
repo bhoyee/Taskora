@@ -2,7 +2,7 @@
 
 ## Architectural Style
 
-TodoApp will use a modular monolith with domain-oriented boundaries. The
+Taskora uses a modular monolith with domain-oriented boundaries. The
 application is deployed as one product, while its code is separated into
 projects with explicit dependency rules.
 
@@ -12,50 +12,50 @@ operational cost of microservices before the product needs them.
 ## Proposed Solution Structure
 
 ```text
-TodoApp.sln
+Taskora.sln
 src/
-  TodoApp.Domain/
-  TodoApp.Application/
-  TodoApp.Infrastructure/
-  TodoApp.Api/
-  TodoApp.Web/
+  Taskora.Domain/
+  Taskora.Application/
+  Taskora.Infrastructure/
+  Taskora.Api/
+  Taskora.Web/
 tests/
-  TodoApp.Domain.Tests/
-  TodoApp.Application.Tests/
-  TodoApp.Infrastructure.IntegrationTests/
-  TodoApp.Api.IntegrationTests/
+  Taskora.Domain.Tests/
+  Taskora.Application.Tests/
+  Taskora.Infrastructure.IntegrationTests/
+  Taskora.Api.IntegrationTests/
 docs/
 ```
 
 ## Project Responsibilities
 
-### TodoApp.Domain
+### Taskora.Domain
 
 - Entities, value objects, domain services, and domain events.
 - Task lifecycle, dependencies, and priority rules.
 - No references to ASP.NET Core, EF Core, or frontend code.
 
-### TodoApp.Application
+### Taskora.Application
 
 - Use cases expressed as commands and queries.
 - Ports for persistence, identity, time, and external services.
 - Request-independent validation and result models.
 - References only the Domain project.
 
-### TodoApp.Infrastructure
+### Taskora.Infrastructure
 
 - EF Core database context and mappings.
 - Implementations of application ports.
 - Database migrations and external integrations.
 - References Application and Domain.
 
-### TodoApp.Api
+### Taskora.Api
 
 - HTTP endpoints, authentication, authorization, and composition root.
 - API contracts, middleware, OpenAPI, health checks, and logging.
 - References Application and Infrastructure.
 
-### TodoApp.Web
+### Taskora.Web
 
 - React and TypeScript user interface.
 - Communicates with the application only through public API contracts.

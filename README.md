@@ -6,9 +6,6 @@ project, but now demonstrates a portfolio-ready modular monolith with
 workspaces, projects, tasks, assignment, reporting, reminders, operations
 monitoring, and CI/CD.
 
-The repository keeps the internal solution name as `TodoApp` while the
-user-facing product name is `Taskora`.
-
 ## What It Does
 
 - Workspace management with owner, manager, and member roles.
@@ -47,11 +44,11 @@ early.
 
 ```mermaid
 flowchart LR
-    Web["TodoApp.Web<br/>React + TypeScript"]
-    Api["TodoApp.Api<br/>HTTP, auth, health, composition"]
-    Application["TodoApp.Application<br/>Use cases, commands, queries, ports"]
-    Domain["TodoApp.Domain<br/>Entities, value objects, business rules"]
-    Infrastructure["TodoApp.Infrastructure<br/>EF Core, repositories, email, logs"]
+    Web["Taskora.Web<br/>React + TypeScript"]
+    Api["Taskora.Api<br/>HTTP, auth, health, composition"]
+    Application["Taskora.Application<br/>Use cases, commands, queries, ports"]
+    Domain["Taskora.Domain<br/>Entities, value objects, business rules"]
+    Infrastructure["Taskora.Infrastructure<br/>EF Core, repositories, email, logs"]
     Database[("SQLite local<br/>Azure SQL production")]
 
     Web -->|HTTPS / JSON / SSE| Api
@@ -81,17 +78,17 @@ flowchart LR
 
 ```text
 src/
-├── TodoApp.Api             HTTP API, auth, health checks, SSE, startup
-├── TodoApp.Application     Commands, queries, DTOs, ports, use cases
-├── TodoApp.Domain          Entities, value objects, domain rules, events
-├── TodoApp.Infrastructure  EF Core, repositories, email, logging, seed data
-└── TodoApp.Web             React + TypeScript frontend
+├── Taskora.Api             HTTP API, auth, health checks, SSE, startup
+├── Taskora.Application     Commands, queries, DTOs, ports, use cases
+├── Taskora.Domain          Entities, value objects, domain rules, events
+├── Taskora.Infrastructure  EF Core, repositories, email, logging, seed data
+└── Taskora.Web             React + TypeScript frontend
 
 tests/
-├── TodoApp.Domain.Tests
-├── TodoApp.Application.Tests
-├── TodoApp.Infrastructure.Tests
-└── TodoApp.Api.IntegrationTests
+├── Taskora.Domain.Tests
+├── Taskora.Application.Tests
+├── Taskora.Infrastructure.Tests
+└── Taskora.Api.IntegrationTests
 ```
 
 ## Key Product Workflows
@@ -200,12 +197,12 @@ The project follows TDD for core behaviour and uses focused tests at each layer:
 Run backend validation:
 
 ```powershell
-dotnet restore TodoApp.sln
-dotnet build TodoApp.sln --configuration Release
-dotnet test TodoApp.sln --configuration Release --no-build
+dotnet restore Taskora.sln
+dotnet build Taskora.sln --configuration Release
+dotnet test Taskora.sln --configuration Release --no-build
 ```
 
-Run frontend validation from `src/TodoApp.Web`:
+Run frontend validation from `src/Taskora.Web`:
 
 ```powershell
 npm install
@@ -232,13 +229,13 @@ DemoData__SeedOnStartup=true
 Start the API:
 
 ```powershell
-dotnet run --project src/TodoApp.Api/TodoApp.Api.csproj --launch-profile http
+dotnet run --project src/Taskora.Api/Taskora.Api.csproj --launch-profile http
 ```
 
 Start the web app:
 
 ```powershell
-cd src/TodoApp.Web
+cd src/Taskora.Web
 npm install
 npm run dev
 ```
@@ -307,8 +304,8 @@ Apply local migrations:
 
 ```powershell
 dotnet tool run dotnet-ef database update `
-  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
-  --startup-project src/TodoApp.Api/TodoApp.Api.csproj
+  --project src/Taskora.Infrastructure/Taskora.Infrastructure.csproj `
+  --startup-project src/Taskora.Api/Taskora.Api.csproj
 ```
 
 For production, prefer an idempotent SQL migration script reviewed before
@@ -316,8 +313,8 @@ deployment:
 
 ```powershell
 dotnet tool run dotnet-ef migrations script --idempotent `
-  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
-  --startup-project src/TodoApp.Api/TodoApp.Api.csproj `
+  --project src/Taskora.Infrastructure/Taskora.Infrastructure.csproj `
+  --startup-project src/Taskora.Api/Taskora.Api.csproj `
   --output database/migrations.sql
 ```
 

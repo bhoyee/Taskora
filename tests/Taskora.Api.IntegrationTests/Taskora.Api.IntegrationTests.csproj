@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TodoApp.Api\TodoApp.Api.csproj" />
+    <ProjectReference Include="..\..\src\Taskora.Api\Taskora.Api.csproj" />
   </ItemGroup>
 
 </Project>

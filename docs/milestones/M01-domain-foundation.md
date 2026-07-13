@@ -34,7 +34,7 @@ has a lifecycle and delivery target.
 
 ## Technical Tasks
 
-- Maintain `TodoApp.Domain` with no framework or infrastructure dependencies.
+- Maintain `Taskora.Domain` with no framework or infrastructure dependencies.
 - Implement guarded `TaskItem` lifecycle operations.
 - Implement dependency add/remove operations and cycle detection.
 - Implement immutable planning factors and priority score value objects.

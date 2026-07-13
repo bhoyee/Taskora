@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook explains how TodoApp is built, packaged, deployed, validated, and
+This runbook explains how Taskora is built, packaged, deployed, validated, and
 rolled back. It is intended for Azure App Service deployments from Azure
 DevOps, while keeping local development and portfolio review simple.
 
@@ -47,17 +47,17 @@ flowchart LR
 ## Local Verification
 
 ```powershell
-dotnet restore TodoApp.sln
-dotnet build TodoApp.sln --configuration Release --no-restore
-dotnet test TodoApp.sln --configuration Release --no-build --collect:"XPlat Code Coverage"
+dotnet restore Taskora.sln
+dotnet build Taskora.sln --configuration Release --no-restore
+dotnet test Taskora.sln --configuration Release --no-build --collect:"XPlat Code Coverage"
 
-Push-Location src/TodoApp.Web
+Push-Location src/Taskora.Web
 npm ci
 npm run test
 npm run build
 Pop-Location
 
-docker build -t todoapp:local .
+docker build -t taskora:local .
 ```
 
 Docker can be skipped on machines where it is not installed. CI still contains
