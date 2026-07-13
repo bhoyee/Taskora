@@ -1562,7 +1562,7 @@ function ProjectBar({
   }
 
   return <section className="project-bar panel-page" aria-label="Projects">
-    <div>
+    <div className="project-context">
       <p className="eyebrow">Project</p>
       <h2>{selectedProject?.name ?? 'No project yet'}</h2>
       {selectedProject && <p className="project-delivery">
@@ -1570,36 +1570,42 @@ function ProjectBar({
         {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
       </p>}
     </div>
-    {projects.length > 0 && <label>
-      <span>Project</span>
-      <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
-        {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-      </select>
-      <ChevronDown />
-    </label>}
-    {selectedProject && onSprintSwitch && <label>
-      <span>Sprint</span>
-      <select value={selectedSprintId ?? ''} onChange={(event) => onSprintSwitch(event.target.value)}>
-        <option value="">All sprints</option>
-        {activeSprints.map((sprint) => <option value={sprint.id} key={sprint.id}>{sprint.name} ({sprint.status})</option>)}
-      </select>
-      <ChevronDown />
-    </label>}
-    {(canCreateProject || selectedProject) && <div className="project-actions">
-      {canCreateProject && <button className="secondary" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
-      {canCreateProject && selectedProject && onAddSprint && <button className="secondary sprint-action" onClick={onAddSprint}><Clock3 size={16} /> New sprint</button>}
-      {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
-      {canCreateProject && selectedProject && <>
-        <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
-        <button className="secondary danger-action" disabled={busy} onClick={() => {
-          setBusy(true)
-          setError('')
-          onArchive(selectedProject.id)
-            .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
-            .finally(() => setBusy(false))
-        }}><Trash2 size={16} /> Archive</button>
-      </>}
-    </div>}
+    <div className="project-controls">
+      <div className="project-selectors">
+        {projects.length > 0 && <label>
+          <span>Project</span>
+          <select value={selectedProjectId} onChange={(event) => onSwitch(event.target.value)}>
+            {projects.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+          </select>
+          <ChevronDown />
+        </label>}
+        {selectedProject && onSprintSwitch && <label>
+          <span>Sprint</span>
+          <select value={selectedSprintId ?? ''} onChange={(event) => onSprintSwitch(event.target.value)}>
+            <option value="">All sprints</option>
+            {activeSprints.map((sprint) => <option value={sprint.id} key={sprint.id}>{sprint.name} ({sprint.status})</option>)}
+          </select>
+          <ChevronDown />
+        </label>}
+      </div>
+      {(canCreateProject || selectedProject) && <div className="project-actions">
+        {canCreateProject && <button className="primary project-main-action" onClick={() => setCreating(true)}><FolderPlus size={16} /> New project</button>}
+        <div className="project-action-row">
+          {canCreateProject && selectedProject && onAddSprint && <button className="secondary sprint-action" onClick={onAddSprint}><Clock3 size={16} /> New sprint</button>}
+          {selectedProject && onTogglePin && <button className={`secondary ${selectedPinned ? 'selected-action' : ''}`} onClick={() => onTogglePin(selectedProject.id)}><Pin size={16} /> {selectedPinned ? 'Pinned' : 'Pin'}</button>}
+        </div>
+        {canCreateProject && selectedProject && <div className="project-action-row compact">
+          <button className="secondary" onClick={() => setEditing(true)}><Pencil size={16} /> Edit</button>
+          <button className="secondary danger-action" disabled={busy} onClick={() => {
+            setBusy(true)
+            setError('')
+            onArchive(selectedProject.id)
+              .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
+              .finally(() => setBusy(false))
+          }}><Trash2 size={16} /> Archive</button>
+        </div>}
+      </div>}
+    </div>
     {error && <p className="field-error">{error}</p>}
   </section>
 }
