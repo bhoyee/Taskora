@@ -1829,10 +1829,10 @@ const priorityChartColors: Record<string, string> = {
 }
 
 const trendPlot = {
-  left: 34,
-  right: 352,
-  top: 18,
-  bottom: 166,
+  left: 26,
+  right: 362,
+  top: 14,
+  bottom: 170,
 }
 
 function DashboardAnalytics({
@@ -2436,7 +2436,7 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
       data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
       title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
     >
-      <svg viewBox="0 0 364 216" role="img" aria-label="Tasks created and completed over time">
+      <svg viewBox="0 0 370 206" role="img" aria-label="Tasks created and completed over time">
         {yAxis.map((value) => {
           const y = trendY(value, axisMax)
           return <g key={value}>
@@ -2455,7 +2455,7 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
             <title>{`${point.label}: ${point.created} created, ${point.completed} completed`}</title>
           </g>
         })}
-        {points.map((point, index) => <text className="trend-x-label" key={`${point.key}-label`} x={trendX(index, points.length)} y="166">{point.label}</text>)}
+        {points.map((point, index) => <text className="trend-x-label" key={`${point.key}-label`} x={trendX(index, points.length)} y="194">{point.label}</text>)}
       </svg>
     </div>
     <div className="chart-legend compact">
@@ -2549,9 +2549,19 @@ function trendY(value: number, max: number) {
 }
 
 function buildTrendYAxis(max: number) {
-  const step = Math.max(5, Math.ceil(max / 4 / 5) * 5)
+  if (max <= 4) return [4, 3, 2, 1, 0]
+  const step = niceTrendStep(max / 4)
   const top = step * 4
   return [top, step * 3, step * 2, step, 0]
+}
+
+function niceTrendStep(value: number) {
+  const magnitude = 10 ** Math.floor(Math.log10(value))
+  const normalized = value / magnitude
+  if (normalized <= 1) return magnitude
+  if (normalized <= 2) return 2 * magnitude
+  if (normalized <= 5) return 5 * magnitude
+  return 10 * magnitude
 }
 
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
