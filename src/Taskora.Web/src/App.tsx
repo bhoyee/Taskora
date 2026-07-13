@@ -1887,9 +1887,10 @@ function SprintPanel({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
     setBusy(true)
     setError('')
-    const data = new FormData(event.currentTarget)
+    const data = new FormData(form)
     const name = String(data.get('name')).trim()
     const goal = String(data.get('goal') ?? '').trim()
     const startDate = String(data.get('startDate'))
@@ -1898,12 +1899,13 @@ function SprintPanel({
     try {
       if (editing) {
         await onUpdate(project.id, editing.id, name, goal, startDate, endDate)
+        form.reset()
         setEditing(null)
       } else {
         await onCreate(project.id, name, goal, startDate, endDate)
+        form.reset()
         setCreating(false)
       }
-      event.currentTarget.reset()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Sprint could not be saved.')
     } finally {
