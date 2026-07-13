@@ -356,7 +356,7 @@ public sealed class InviteWorkspaceMemberHandler(
             $"""
             Hello {invitation.FullName},
 
-            You have been invited to join the {workspaceName} workspace in Todo Intelligence.
+            You have been invited to join the {workspaceName} workspace in Taskora.
 
             Role: {invitation.Role}
             Invitation expires: {invitation.ExpiresAt:yyyy-MM-dd}

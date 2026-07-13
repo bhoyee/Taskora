@@ -1,351 +1,396 @@
-# TodoApp
+# Taskora
 
-A priority-intelligence task management application built with C# and .NET.
-Its production REST API helps users manage projects and rank work using value,
-urgency, risk, effort, and task dependencies.
+Taskora is a workspace-based task and project delivery platform built with
+.NET, C#, React, TypeScript, and Entity Framework Core. It started as a todo
+project, but now demonstrates a portfolio-ready modular monolith with
+workspaces, projects, tasks, assignment, reporting, reminders, operations
+monitoring, and CI/CD.
 
-## Project Documentation
+The repository keeps the internal solution name as `TodoApp` while the
+user-facing product name is `Taskora`.
 
-- [Product roadmap](docs/ROADMAP.md)
-- [Product requirements](docs/REQUIREMENTS.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Testing strategy](docs/TESTING.md)
-- [Contribution workflow](docs/CONTRIBUTING.md)
-- [Operations runbook](docs/OPERATIONS.md)
-- [Azure setup checklist](docs/AZURE_SETUP.md)
-- [Detailed milestones](docs/ROADMAP.md#detailed-milestones)
+## What It Does
 
-Development follows incremental delivery, TDD for core behaviour, and a
-modular monolith architecture. The product is delivered through nine
-milestones covering planning, business rules, application workflows, data,
-HTTP APIs, product intelligence, user experience, security, and operations.
-
-## Delivery Milestones
-
-| Milestone | Status | Outcome |
-| --- | --- | --- |
-| 0. Planning and Baseline | Complete | Requirements, architecture, testing strategy, contribution workflow, and initial CI |
-| 1. Domain Foundation | Complete | Tested task lifecycle, projects, dependencies, scheduling, priority rules, and domain events |
-| 2. Application Use Cases | Complete | Commands, queries, application ports, typed results, filtering, sorting, and pagination |
-| 3. Persistence | Complete | EF Core, SQLite development database, Azure SQL configuration, migrations, and repositories |
-| 4. Production REST API | Complete | Versioned endpoints, validation, Problem Details, OpenAPI, health checks, and integration tests |
-| 5. Priority Intelligence | Complete | Explainable prioritisation, deadline health, blocker analysis, activity history, and dashboards |
-| 6. Web Experience | Complete | Responsive React and TypeScript dashboard, task list, Kanban board, and frontend tests |
-| 7. Identity and Collaboration | Complete | Authentication, workspaces, membership, assignments, roles, and authorization |
-| 8. Delivery and Operations | Complete | Docker, Azure CI/CD, deployment environments, observability, runbooks, and portfolio evidence |
-| 9. Task Metadata and Account Access | Complete | Categories, tags, notes, registration, login, metadata APIs, and React account access |
-| 10. Workspace Management and Invitations | Complete | Workspace creation, switching, secure invite links, accept/decline flow, and member administration |
-
-Each milestone has measurable acceptance criteria, required tests, a definition
-of done, and an expected commit sequence in the
-[product roadmap](docs/ROADMAP.md).
+- Workspace management with owner, manager, and member roles.
+- User registration, login, profile update, password update, and logout.
+- Workspace invitations for new or existing users through secure invite links.
+- Workspace switching so cards, board, list, reports, projects, members, and
+  notifications only show data for the selected workspace.
+- Project CRUD with required delivery dates, archive rules, delivery countdowns,
+  and project-level health indicators.
+- Tasks created under active projects only.
+- Task workflow: Backlog, Ready, In Progress, Blocked, and Completed.
+- Drag-and-drop board with guarded workflow rules and assignment awareness.
+- Task list with search, filtering, sorting, pagination, created date, due date,
+  score, status, assignee, tags, and actions.
+- Task assignment to workspace members, including automatic pickup of
+  unassigned Ready work when a member moves it to In Progress.
+- Priority scoring from business value, urgency, risk reduction, and effort.
+- Due dates, overdue detection, reminder notifications, and dashboard warnings.
+- Categories, tags, and task notes with writer name and timestamp.
+- Personal Todo page for daily private work with CRUD, search, pagination,
+  complete/reopen, mobile layout, and automatic carry-over after midnight.
+- Dashboard cards, charts, project health, risk register, decision log, release
+  readiness, activity, and reports.
+- In-app notifications and SMTP-backed email notifications.
+- Super-admin-only Operations page for API health, database health, scheduler
+  status, log settings, and recent application logs.
+- Seed/demo data mode for portfolio walkthroughs.
+- Azure DevOps pipeline for restore, build, tests, frontend build, migrations,
+  packaging, and optional deployment.
 
 ## Architecture
+
+Taskora uses a modular monolith with clean dependency direction. This gives the
+project a production-style structure without adding microservice complexity too
+early.
 
 ```mermaid
 flowchart LR
     Web["TodoApp.Web<br/>React + TypeScript"]
-    Api["TodoApp.Api<br/>HTTP, auth, composition"]
-    App["TodoApp.Application<br/>Commands, queries, ports"]
-    Domain["TodoApp.Domain<br/>Entities, value objects, rules"]
-    Infra["TodoApp.Infrastructure<br/>EF Core, repositories, integrations"]
-    Database[("SQLite / Azure SQL")]
+    Api["TodoApp.Api<br/>HTTP, auth, health, composition"]
+    Application["TodoApp.Application<br/>Use cases, commands, queries, ports"]
+    Domain["TodoApp.Domain<br/>Entities, value objects, business rules"]
+    Infrastructure["TodoApp.Infrastructure<br/>EF Core, repositories, email, logs"]
+    Database[("SQLite local<br/>Azure SQL production")]
 
-    Web -->|HTTPS/JSON| Api
-    Api --> App
-    Api -->|wires implementations| Infra
-    Infra --> App
-    App --> Domain
-    Infra --> Domain
-    Infra --> Database
+    Web -->|HTTPS / JSON / SSE| Api
+    Api --> Application
+    Api --> Infrastructure
+    Application --> Domain
+    Infrastructure --> Application
+    Infrastructure --> Domain
+    Infrastructure --> Database
 ```
 
-The project uses a **modular monolith with domain-oriented boundaries**:
+### Why This Architecture
 
-- It keeps deployment and local development simple for one product.
-- Business rules remain independent of ASP.NET Core, EF Core, and React.
-- Application interfaces make infrastructure replaceable and testable.
-- Separate projects enforce dependency direction at compile time.
-- It demonstrates production architecture without the operational overhead of
-  premature microservices.
-- Modules can be extracted later if scale or team ownership provides a real
-  reason.
+- The domain layer keeps business rules independent from ASP.NET Core, React,
+  EF Core, and deployment concerns.
+- The application layer models real use cases such as creating tasks, assigning
+  work, inviting members, generating reports, and sending reminders.
+- Infrastructure can be swapped or tested behind interfaces.
+- The API stays focused on HTTP contracts, validation, authentication,
+  authorization, and composition.
+- The React app remains a separate client that consumes the API instead of
+  reaching into server internals.
+- It is easy to run locally, easy to deploy, and still shows professional
+  separation of concerns.
 
-`TodoApp.Api` is the composition root. HTTP contracts stay separate from
-domain entities and invoke application use cases backed by Infrastructure.
+## Solution Structure
 
-## Delivery Architecture
+```text
+src/
+├── TodoApp.Api             HTTP API, auth, health checks, SSE, startup
+├── TodoApp.Application     Commands, queries, DTOs, ports, use cases
+├── TodoApp.Domain          Entities, value objects, domain rules, events
+├── TodoApp.Infrastructure  EF Core, repositories, email, logging, seed data
+└── TodoApp.Web             React + TypeScript frontend
 
-```mermaid
-flowchart LR
-    GitHub["GitHub"]
-    AzureDevOps["Azure DevOps"]
-    Pipeline["Azure Pipelines<br/>test, coverage, build, package"]
-    Artifact["Deployable ZIP<br/>optional Docker artifact"]
-    AppService["Azure App Service<br/>F1 Free for portfolio demo"]
-    Database[("SQLite local/demo<br/>or Azure SQL optional")]
-    Smoke["Smoke tests<br/>live + ready health"]
-    Budget["Azure budget alerts"]
-
-    GitHub --> Pipeline
-    AzureDevOps --> Pipeline
-    Pipeline --> Artifact
-    Artifact -->|manual deploy gate| AppService
-    AppService --> Database
-    AppService --> Smoke
-    Budget -. guardrail .-> AppService
-    Budget -. guardrail .-> Database
+tests/
+├── TodoApp.Domain.Tests
+├── TodoApp.Application.Tests
+├── TodoApp.Infrastructure.Tests
+└── TodoApp.Api.IntegrationTests
 ```
 
-## Current Development
+## Key Product Workflows
 
-Milestones 1 through 9 are complete on feature branches. The current
-`feature/delivery-operations` branch includes:
+### Workspaces and Members
 
-- A guarded task lifecycle from Backlog to Completed.
-- Blocking, unblocking, and reopening rules.
-- Task dependencies with circular-reference protection.
-- Automatic detection of work blocked by incomplete dependencies.
-- Explainable priority scoring using value, urgency, risk reduction, and effort.
-- Project creation, editing, target dates, and archive restrictions.
-- Due-date and Fibonacci effort-estimate value objects.
-- Domain events for task lifecycle changes.
-- Create, start, complete, and dependency application commands.
-- Task detail and filtered paginated search queries.
-- Task editing, workflow, planning, scheduling, and dependency maintenance.
-- Project create, update, archive, details, and delivery-board use cases.
-- Architecture dependency tests.
-- EF Core mappings, repositories, migrations, concurrency, and seed data.
-- SQLite local persistence and Azure SQL provider configuration.
-- Versioned project, board, task, lifecycle, planning, and dependency routes.
-- Consistent Problem Details for validation, not-found, conflict, malformed,
-  and unexpected failures.
-- OpenAPI discovery, correlation IDs, and separate live/ready health checks.
-- Explainable priority recommendations and deadline health.
-- Stable priority tie-breakers and incomplete dependency-chain guidance.
-- Immutable activity history and project/portfolio intelligence dashboards.
-- Responsive React list and Kanban views with task editing and planning.
-- Component and desktop/mobile browser tests.
-- JWT authentication with development/test identity isolation.
-- Workspace roles, guarded membership, and task assignment.
-- Server-side security tests for unauthorized and forbidden access.
-- Interactive board drag and drop, task pagination, activity fallback, settings,
-  profile, password, and logout screens.
-- Project-owned task categories, task tags, and actor-attributed task notes.
-- Registration and login APIs with hashed account credentials and bearer-token
-  development authentication.
-- React login/register screen and task metadata controls for category, tags,
-  and notes.
-- Azure Pipeline coverage publishing, app packaging, optional Docker artifact,
-  deployment smoke-test hook, operations runbook, and Azure setup checklist.
-- 78 domain, 34 application, 18 Infrastructure, and 24 API integration tests.
+When a user registers, Taskora can create a default workspace and make that user
+the owner. Owners and managers can invite members, manage workspace membership,
+and create projects. Members can work only inside workspaces they belong to.
 
-Run the complete build and test suite with:
+Invites are not limited to existing accounts. The invite flow can accept an
+email address, create the user account when needed, and send onboarding details
+through email when SMTP is enabled.
+
+### Projects and Tasks
+
+Projects represent delivery containers. A task must belong to an active project
+before it can be created. This keeps work tied to real delivery outcomes instead
+of becoming a loose global todo list.
+
+Workspace owners and managers can create and manage projects. Members can view
+project context and work on assigned or available tasks.
+
+### Task Workflow
+
+- `Backlog`: captured work that is not ready to start.
+- `Ready`: refined work available for pickup or assignment.
+- `In Progress`: work currently being handled by an assigned member.
+- `Blocked`: work paused because something is preventing progress.
+- `Completed`: finished work.
+
+If an unassigned Ready task is moved to In Progress by a workspace member, the
+system assigns that task to the member. Assigned tasks cannot be picked up by
+another member without the correct permissions.
+
+### Priority Intelligence
+
+Task priority is calculated from:
+
+- Business value
+- Urgency
+- Risk reduction
+- Effort
+
+This makes the score explainable instead of arbitrary. High value, urgent,
+risk-reducing, lower-effort tasks naturally rise higher.
+
+### Notes, Tags, and Categories
+
+Categories group tasks by work type, such as Backend, Frontend, QA, Research,
+Bug, Feature, Documentation, or Support. Tags are lighter labels such as
+`frontend`, `urgent`, `blocked-by-api`, `client-review`, or `quick-win`.
+
+Task notes are used for updates, decisions, blockers, and handover context.
+Each note shows the writer and timestamp.
+
+### Personal Todo
+
+The Todo page is for a user's own daily checklist. It is separate from project
+tasks. Incomplete todos can automatically carry over after midnight and show a
+carry-over badge with the original date.
+
+## Realtime and Notifications
+
+Taskora uses server-sent events where available so workspace changes can update
+the UI without a full page refresh. The frontend also uses silent refresh
+patterns so board and dashboard updates do not blank the page during normal
+work.
+
+Notifications include:
+
+- In-app notification feed.
+- Task assignment notifications.
+- Due-date reminders two days before, 24 hours before, and on the due date.
+- Project delivery-date reminders.
+- Dashboard warnings for overdue, blocked, or at-risk work.
+- SMTP email delivery when configured.
+
+## Operations
+
+Health and operations features are designed for deployment support:
+
+- `/health/live` checks whether the API process is running.
+- `/health/ready` checks whether the app is ready to serve traffic.
+- `/health` provides a general health endpoint.
+- Super-admin-only Operations page shows API, database, reminder scheduler,
+  logging configuration, and recent application log entries.
+- Logs are retained according to `Operations__Logs__RetentionDays`.
+- Super-admin access is configured through
+  `Administration__SuperAdminEmails__0`.
+
+## Testing
+
+The project follows TDD for core behaviour and uses focused tests at each layer:
+
+- Domain tests for task lifecycle, priority scoring, dependencies, projects,
+  dates, effort, and business rules.
+- Application tests for commands, queries, authorization paths, reports,
+  reminders, workspace access, and typed results.
+- Infrastructure tests for EF Core mappings, repositories, migrations,
+  persistence, seed data, and logs.
+- API integration tests for routes, validation, authentication, authorization,
+  Problem Details, health checks, and end-to-end API behaviour.
+- Frontend build and tests are part of the pipeline when Node/npm are available.
+
+Run backend validation:
 
 ```powershell
+dotnet restore TodoApp.sln
 dotnet build TodoApp.sln --configuration Release
 dotnet test TodoApp.sln --configuration Release --no-build
 ```
 
-Restore the repository-pinned EF tool and apply local migrations with:
+Run frontend validation from `src/TodoApp.Web`:
 
 ```powershell
-dotnet tool restore
-dotnet tool run dotnet-ef database update `
-  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
-  --startup-project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj
+npm install
+npm run build
 ```
 
-## Run Locally
+## Local Setup
 
-Install the .NET SDK, then run:
+Copy the environment template:
 
-```bash
-dotnet restore TodoApp.sln
-dotnet run --project src/TodoApp.Api/TodoApp.Api.csproj
+```powershell
+Copy-Item .env.example .env
 ```
 
-The development API runs at:
+For local development, SQLite is the simplest database:
 
 ```text
-http://localhost:5080
-```
-
-You can test the API from `TodoApp.http` in VS Code with the REST Client extension.
-
-## Example Requests
-
-Create a project:
-
-```http
-POST http://localhost:5080/api/v1/projects
-Content-Type: application/json
-
-{
-  "name": "Portfolio launch",
-  "description": "Deliver a production-ready portfolio"
-}
-```
-
-Create a task:
-
-```http
-POST http://localhost:5080/api/v1/projects/{projectId}/tasks
-Content-Type: application/json
-
-{
-  "title": "Review Azure pipeline",
-  "effort": 3
-}
-```
-
-## Push To GitHub
-
-Install Git first if the `git` command is not available.
-
-```bash
-git init
-git add .
-git commit -m "Create simple todo API"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/TodoApp.git
-git push -u origin main
-```
-
-Replace `YOUR-USERNAME` with your GitHub username.
-
-## Azure DevOps CI Pipeline
-
-This repository includes `azure-pipelines.yml`. It does the following when code is pushed to `main`, `dev`, or a feature branch:
-
-- Installs the .NET SDK.
-- Installs Node.js.
-- Restores frontend packages.
-- Runs frontend component tests.
-- Builds the React frontend.
-- Restores NuGet packages.
-- Builds the .NET solution.
-- Generates an idempotent EF Core migration SQL script.
-- Runs backend tests and publishes coverage.
-- Publishes the app as a build artifact named `drop`.
-- Builds and publishes a Docker image artifact.
-- Optionally deploys the artifact to Azure App Service.
-- Optionally runs a deployment smoke test.
-
-To connect it in Azure DevOps:
-
-1. Create a project in Azure DevOps.
-2. Go to **Pipelines**.
-3. Select **New pipeline**.
-4. Select **GitHub** as the code source.
-5. Authorize Azure DevOps to access your GitHub repository.
-6. Select this repository.
-7. Choose **Existing Azure Pipelines YAML file**.
-8. Select `/azure-pipelines.yml`.
-9. Run the pipeline.
-
-## Optional Deployment
-
-After the CI pipeline works, you can enable the deployment stage. You will need:
-
-- An Azure subscription.
-- An App Service already created.
-- An Azure DevOps service connection.
-- The App Service name.
-
-Then update these variables in `azure-pipelines.yml`:
-
-```yaml
-azureServiceConnection: YOUR-AZURE-SERVICE-CONNECTION
-webAppName: YOUR-AZURE-WEB-APP-NAME
-smokeTestBaseUrl: https://YOUR-AZURE-WEB-APP-NAME.azurewebsites.net
-```
-
-When you manually run the pipeline, set `Deploy to Azure App Service` to `true`.
-See the [operations runbook](docs/OPERATIONS.md) for release, smoke-test, and
-rollback steps.
-
-For a low-cost portfolio deployment, start with App Service F1 Free, keep
-deployment manual, set Azure budget alerts, and use SQLite locally until Azure
-SQL is needed. Docker is optional for App Service ZIP deployment.
-Follow the [Azure setup checklist](docs/AZURE_SETUP.md) when you are ready to
-deploy.
-
-## Production Readiness
-
-Before deploying, copy `.env.example` to `.env` for local development or set the
-same keys as App Service application settings in Azure. Do not commit `.env`;
-the repository ignores it.
-
-Required production settings:
-
-```text
-ConnectionStrings__TodoApp=Server=...;Database=...;...
-Database__Provider=SqlServer
-Database__ApplyMigrationsOnStartup=false
-DemoData__SeedOnStartup=false
-Authentication__Authority=https://your-token-issuer
-Authentication__Audience=todoapp-api
-Cors__AllowedOrigins__0=https://your-frontend-host
-Administration__SuperAdminEmails__0=you@example.com
-App__PublicBaseUrl=https://your-frontend-host
-Email__Smtp__Enabled=true
-Email__Smtp__Host=smtp.example.com
-Email__Smtp__FromAddress=no-reply@example.com
-```
-
-The API validates those settings outside Development and Testing so deployment
-fails early instead of running with placeholder auth, missing CORS, or missing
-database configuration.
-
-### Demo Data
-
-Development automatically applies migrations and seeds a portfolio demo
-workspace. Production does not seed demo data unless you explicitly set:
-
-```text
-DemoData__SeedOnStartup=true
+Database__Provider=Sqlite
+ConnectionStrings__TodoApp=Data Source=todoapp.db
 Database__ApplyMigrationsOnStartup=true
+DemoData__SeedOnStartup=true
 ```
 
-Demo login for local/dev portfolio walkthroughs:
+Start the API:
+
+```powershell
+dotnet run --project src/TodoApp.Api/TodoApp.Api.csproj --launch-profile http
+```
+
+Start the web app:
+
+```powershell
+cd src/TodoApp.Web
+npm install
+npm run dev
+```
+
+Default local URLs:
+
+```text
+API: http://localhost:5080
+Web: http://localhost:5173
+```
+
+Demo account when demo data is enabled:
 
 ```text
 jadesola@example.com
 Portfolio123!
 ```
 
-Leave demo seeding disabled for a real production tenant.
+## Environment Configuration
 
-### Database Migration Flow
+Use `.env` locally and Azure App Service application settings in production.
+Do not commit `.env`.
 
-CI generates an idempotent migration script at:
+Important settings:
 
 ```text
-database/migrations.sql
+App__PublicBaseUrl=https://your-frontend-host
+
+Database__Provider=SqlServer
+ConnectionStrings__TodoApp=Server=...;Database=...;...
+Database__ApplyMigrationsOnStartup=false
+
+DemoData__SeedOnStartup=false
+
+Authentication__Authority=https://your-token-issuer
+Authentication__Audience=todoapp-api
+Cors__AllowedOrigins__0=https://your-frontend-host
+
+Administration__SuperAdminEmails__0=you@example.com
+
+Notifications__Scheduler__Enabled=true
+Notifications__Scheduler__IntervalMinutes=1440
+
+Operations__Logs__RetentionDays=30
+Operations__Logs__MaxEntries=200
+
+Email__Smtp__Enabled=true
+Email__Smtp__Host=smtp.example.com
+Email__Smtp__Port=587
+Email__Smtp__UseSsl=true
+Email__Smtp__Username=your-smtp-username
+Email__Smtp__Password=your-smtp-password
+Email__Smtp__FromAddress=no-reply@example.com
+Email__Smtp__FromName=Taskora
 ```
 
-Recommended production flow:
+## Database and Migrations
 
-1. Run the Azure Pipeline.
-2. Download the build artifact.
-3. Review and apply `database/migrations.sql` to the production database.
-4. Deploy the App Service ZIP artifact.
-5. Smoke test `/health/live`, `/health/ready`, and `/health`.
+Restore the repository-pinned EF tool:
 
-Startup migrations are available through
-`Database__ApplyMigrationsOnStartup=true`, but manual/scripted migration is safer
-for production because it gives you review and rollback control.
+```powershell
+dotnet tool restore
+```
 
-### Security Checklist
+Apply local migrations:
 
-- `.env` is ignored and must not be committed.
+```powershell
+dotnet tool run dotnet-ef database update `
+  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
+  --startup-project src/TodoApp.Api/TodoApp.Api.csproj
+```
+
+For production, prefer an idempotent SQL migration script reviewed before
+deployment:
+
+```powershell
+dotnet tool run dotnet-ef migrations script --idempotent `
+  --project src/TodoApp.Infrastructure/TodoApp.Infrastructure.csproj `
+  --startup-project src/TodoApp.Api/TodoApp.Api.csproj `
+  --output database/migrations.sql
+```
+
+## CI/CD
+
+`azure-pipelines.yml` is configured for Azure DevOps and portfolio deployment.
+The pipeline covers:
+
+- .NET SDK setup
+- Node.js setup
+- frontend package restore
+- frontend build
+- NuGet restore
+- solution build
+- backend tests
+- coverage publishing
+- EF Core migration script generation
+- API/web publish artifact
+- optional Docker artifact
+- optional Azure App Service deployment
+- optional smoke test
+
+Branches are intended to follow:
+
+```text
+feature/* -> dev -> main
+```
+
+Feature branches should be tested through pull requests before merging into
+`dev`. `main` should represent deployable code.
+
+## Azure Deployment Notes
+
+For a low-cost portfolio deployment:
+
+- Start with Azure App Service F1 Free for the API when possible.
+- Keep deployments manual until the pipeline is proven.
+- Use budget alerts in Azure.
+- Use real SMTP credentials only through App Service application settings.
+- Use Azure SQL or another managed SQL database when persistent production data
+  is required.
+- Keep Docker optional if the target environment does not need it yet.
+
+See:
+
+- [Azure setup checklist](docs/AZURE_SETUP.md)
+- [Operations runbook](docs/OPERATIONS.md)
+- [Testing strategy](docs/TESTING.md)
+- [Architecture notes](docs/ARCHITECTURE.md)
+- [Roadmap and milestones](docs/ROADMAP.md)
+
+## Security Checklist
+
+- `.env` is ignored by Git.
+- Secrets are supplied through environment variables or Azure settings.
 - Passwords are stored as PBKDF2 hashes.
-- JWT bearer tokens validate issuer, audience, and lifetime outside
-  Development/Testing.
-- CORS is restricted to configured frontend origins outside Development.
-- SMTP credentials are read from configuration/environment variables.
-- Health endpoints are available at `/health/live`, `/health/ready`, and
-  `/health`.
-- The Operations page is only visible and callable when the signed-in user's
-  email is listed under `Administration__SuperAdminEmails`.
+- Tokens expire and production JWT settings must be configured.
+- CORS is restricted outside local development.
+- Role checks are enforced in the backend, not only hidden in the UI.
+- Super-admin operations are gated by configured email address.
+- SMTP can be disabled locally and enabled in production.
+- Health endpoints support deployment checks.
+
+## Portfolio Highlights
+
+Taskora demonstrates more than a basic todo list:
+
+- Domain-driven modelling with tested business rules.
+- TDD across domain and application behaviour.
+- Clean use-case boundaries with commands, queries, and ports.
+- Real collaboration model with workspaces, roles, invites, and assignment.
+- Professional delivery features: reports, health, risks, readiness, activity,
+  reminders, notifications, and operational monitoring.
+- Full-stack React + .NET implementation with CI/CD and deployment guidance.
+
+Developed by [salisu.dev](https://salisu.dev). Copyright 2026.

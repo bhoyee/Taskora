@@ -113,7 +113,7 @@ public static class DependencyInjection
             FromAddress = configuration["Email:Smtp:FromAddress"] ?? string.Empty,
             FromName = string.IsNullOrWhiteSpace(
                 configuration["Email:Smtp:FromName"])
-                ? "Todo Intelligence"
+                ? "Taskora"
                 : configuration["Email:Smtp:FromName"]!
         };
 

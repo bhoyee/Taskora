@@ -633,7 +633,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+        <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
         <nav aria-label="Primary navigation">
           <button className={view === 'workspace' ? 'active' : ''} onClick={() => openView('workspace')}><CircleGauge size={18} /> Workspace</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
@@ -928,7 +928,7 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSessi
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">Account access</p>
         <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
@@ -1009,7 +1009,7 @@ function InvitationPage({
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Todo Intelligence</strong></div>
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       {declined ? <>
         <div><p className="eyebrow">Workspace invitation</p><h1>Invitation declined</h1></div>
         <p className="muted">The workspace owner can send a new invitation later.</p>
