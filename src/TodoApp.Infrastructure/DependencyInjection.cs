@@ -45,6 +45,8 @@ public static class DependencyInjection
             provider => provider.GetRequiredService<TaskRepository>());
         services.AddScoped<ITaskReadRepository>(
             provider => provider.GetRequiredService<TaskRepository>());
+        services.AddScoped<IPersonalTodoRepository,
+            PersonalTodoRepository>();
         services.AddScoped<IProjectBoardReadRepository,
             ProjectBoardReadRepository>();
         services.AddScoped<ITaskActivityReadRepository,

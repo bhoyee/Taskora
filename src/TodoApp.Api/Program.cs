@@ -200,6 +200,7 @@ app.MapHealthChecks(
     });
 app.MapProjectEndpoints();
 app.MapTaskEndpoints();
+app.MapPersonalTodoEndpoints();
 app.MapIntelligenceEndpoints();
 app.MapNotificationEndpoints();
 app.MapWorkspaceEndpoints();
