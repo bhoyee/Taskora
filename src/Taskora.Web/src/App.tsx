@@ -835,6 +835,7 @@ export default function App() {
             onCreate={createWorkspace}
           />
           <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPageNumber(1) }} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>
+          {(view === 'tasks' || view === 'board') && <button className="primary topbar-page-action" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
           <NotificationBell
             notifications={notificationItems}
             open={notificationsOpen}
@@ -849,7 +850,6 @@ export default function App() {
           <button className="topbar-avatar" onClick={() => openView('profile')} aria-label={`Open profile for ${profile.displayName}`}>
             {initials(profile.displayName)}
           </button>
-          {(view === 'tasks' || view === 'board') && <button className="primary" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
         </header>
 
         {notice && <div className="success-state"><ShieldCheck /> <span>{notice}</span><button onClick={() => setNotice('')}>Dismiss</button></div>}
