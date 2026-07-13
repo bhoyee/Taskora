@@ -60,6 +60,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<UpdateTaskHandler>();
         services.AddScoped<BlockTaskHandler>();
         services.AddScoped<UnblockTaskHandler>();
+        services.AddScoped<ResumeTaskHandler>();
         services.AddScoped<ReopenTaskHandler>();
         services.AddScoped<DeleteTaskHandler>();
         services.AddScoped<UpdatePlanningFactorsHandler>();

@@ -91,6 +91,49 @@ public sealed class TaskMaintenanceHandlerTests
     }
 
     [Fact]
+    public async Task Resume_WhenTaskIsBlocked_ReturnsTaskToInProgress()
+    {
+        var task = CreateInProgressTask();
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new ResumeTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(UserId))
+            .HandleAsync(
+                new ResumeTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Null(task.BlockedReason);
+        Assert.Equal(1, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Resume_WhenCurrentUserIsNotAssignee_ReturnsForbiddenWithoutSaving()
+    {
+        var task = CreateInProgressTask();
+        task.Block("Waiting for design approval");
+        var context = CreateContext(task);
+
+        var result = await new ResumeTaskHandler(
+                context.Tasks,
+                context.UnitOfWork,
+                new TestCurrentUser(OtherUserId))
+            .HandleAsync(
+                new ResumeTaskCommand(task.Id),
+                CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Equal("task.assignee_required", result.Error.Code);
+        Assert.Equal(TaskItemStatus.Blocked, task.Status);
+        Assert.Equal(0, context.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task Block_WhenCurrentUserIsNotAssignee_ReturnsForbiddenWithoutSaving()
     {
         var task = CreateInProgressTask();

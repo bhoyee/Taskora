@@ -112,6 +112,38 @@ public sealed class UnblockTaskHandler(
     }
 }
 
+public sealed class ResumeTaskHandler(
+    ITaskRepository tasks,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<TaskItemStatus>> HandleAsync(
+        ResumeTaskCommand command,
+        CancellationToken cancellationToken)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+        if (task is null)
+        {
+            return TaskMutationExecutor.NotFound();
+        }
+
+        var authorization = AssignedTaskAuthorization.EnsureAssignedWorker(
+            task,
+            currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<TaskItemStatus>.Failure(authorization.Error);
+        }
+
+        return await TaskMutationExecutor.ExecuteLoadedAsync(
+            task,
+            command.TaskId,
+            unitOfWork,
+            item => item.Resume(),
+            cancellationToken);
+    }
+}
+
 public sealed class ReopenTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)

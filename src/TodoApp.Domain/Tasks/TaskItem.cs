@@ -302,6 +302,22 @@ public sealed class TaskItem
         ChangeStatus(TaskItemStatus.Ready);
     }
 
+    public void Resume()
+    {
+        EnsureStatus(
+            TaskItemStatus.Blocked,
+            "Only a blocked task can be resumed.");
+
+        if (HasIncompleteDependencies)
+        {
+            throw new DomainRuleException(
+                "Task cannot resume until all dependencies are completed.");
+        }
+
+        BlockedReason = null;
+        ChangeStatus(TaskItemStatus.InProgress);
+    }
+
     public void Complete(DateTimeOffset completedAt)
     {
         EnsureStatus(

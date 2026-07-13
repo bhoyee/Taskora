@@ -60,6 +60,8 @@ internal static class TaskEndpoints
             .WithName("BlockTask");
         group.MapPost("/{taskId:guid}/unblock", UnblockTaskAsync)
             .WithName("UnblockTask");
+        group.MapPost("/{taskId:guid}/resume", ResumeTaskAsync)
+            .WithName("ResumeTask");
         group.MapPost("/{taskId:guid}/dependencies", AddDependencyAsync)
             .WithName("AddTaskDependency");
         group.MapDelete(
@@ -366,6 +368,26 @@ internal static class TaskEndpoints
             "task.unblocked",
             handler.HandleAsync(
                 new UnblockTaskCommand(taskId),
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+
+    private static async Task<IResult> ResumeTaskAsync(
+        Guid taskId,
+        ResumeTaskHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        await HandleStatusAsync(
+            taskId,
+            "task.resumed",
+            handler.HandleAsync(
+                new ResumeTaskCommand(taskId),
                 cancellationToken),
             tasks,
             projects,

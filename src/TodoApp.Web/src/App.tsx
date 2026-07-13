@@ -101,7 +101,10 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
     },
     Completed: { action: 'complete' },
   },
-  Blocked: { Ready: { action: 'unblock' } },
+  Blocked: {
+    Ready: { action: 'unblock' },
+    InProgress: { action: 'resume' },
+  },
   Completed: { Ready: { action: 'reopen' } },
 }
 
@@ -112,7 +115,7 @@ function canMoveTask(task: TaskItem, target: TaskStatus, currentUserId: string) 
 
   if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
   if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
-  if (task.status === 'Blocked' && target === 'Ready') return isAssignee
+  if (task.status === 'Blocked' && (target === 'Ready' || target === 'InProgress')) return isAssignee
   if (task.status === 'Backlog' && target === 'Ready') return isCreator || !task.createdByUserId
   if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
 
@@ -2549,7 +2552,10 @@ const nextActions: Partial<Record<TaskStatus, { label: string; action: string }[
   Backlog: [{ label: 'Move to ready', action: 'ready' }],
   Ready: [{ label: 'Start task', action: 'start' }],
   InProgress: [{ label: 'Complete task', action: 'complete' }],
-  Blocked: [{ label: 'Unblock task', action: 'unblock' }],
+  Blocked: [
+    { label: 'Resume work', action: 'resume' },
+    { label: 'Move to ready', action: 'unblock' },
+  ],
   Completed: [{ label: 'Reopen task', action: 'reopen' }],
 }
 
@@ -2559,6 +2565,7 @@ const actionTargets: Record<string, TaskStatus> = {
   block: 'Blocked',
   complete: 'Completed',
   unblock: 'Ready',
+  resume: 'InProgress',
   reopen: 'Ready',
 }
 
