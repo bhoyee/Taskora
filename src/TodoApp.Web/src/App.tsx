@@ -1248,11 +1248,10 @@ function PinnedProjects({
   onOpen: (projectId: string) => void
 }) {
   const pinned = projects.filter((project) => pinnedProjectIds.has(project.id))
-  if (!pinned.length) return null
 
   return <section className="pinned-projects" aria-label="Pinned projects">
     <h2>Pinned Projects</h2>
-    {pinned.map((project) => {
+    {pinned.length ? pinned.map((project) => {
       const delivery = deliveryStatus(project.targetDate)
       return <button
         key={project.id}
@@ -1262,7 +1261,7 @@ function PinnedProjects({
         <span className={`project-dot ${delivery?.tone ?? 'healthy'}`} />
         <span>{project.name}</span>
       </button>
-    })}
+    }) : <p>Pin important projects from the Projects page.</p>}
   </section>
 }
 

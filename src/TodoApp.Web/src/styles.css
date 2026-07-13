@@ -5,7 +5,7 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; }
-.sidebar { background: #18202b; color: #f7f9fb; padding: 24px 16px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.sidebar { background: #18202b; color: #f7f9fb; padding: 24px 16px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 28px; }
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: #45c4a1; color: #10231e; font-weight: 800; border-radius: 6px; }
 .sidebar nav { display: grid; gap: 4px; }
@@ -16,6 +16,7 @@ button:disabled { cursor: not-allowed; }
 .pinned-projects button { border: 0; border-radius: 6px; background: transparent; color: #d8dee6; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px 6px; text-align: left; }
 .pinned-projects button:hover, .pinned-projects button.active { background: #293442; color: white; }
 .pinned-projects button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinned-projects p { margin: 0; color: #8f9aa7; font-size: 12px; line-height: 1.4; }
 .project-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: #45c4a1; box-shadow: 0 0 0 4px #45c4a11a; }
 .project-dot.warning { background: #f1b84b; box-shadow: 0 0 0 4px #f1b84b22; }
 .project-dot.critical { background: #d14a41; box-shadow: 0 0 0 4px #d14a4122; }
@@ -25,7 +26,7 @@ button:disabled { cursor: not-allowed; }
 .sidebar-foot:hover { color: white; }
 .sidebar-foot small { display: block; color: #8f9aa7; margin-top: 2px; }.avatar { background: #f1b84b; color: #35250a; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
 .avatar.large { width: 52px; height: 52px; font-size: 16px; }
-main { min-width: 0; padding: 30px 38px 60px; }
+main { min-width: 0; min-height: 100vh; padding: 30px 38px 24px; display: flex; flex-direction: column; }
 .landing-page { min-height: 100vh; padding: 0; background: #f4f6f7; color: #18202b; }
 .landing-nav { display: flex; justify-content: space-between; align-items: center; gap: 18px; width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 22px 0; }
 .landing-nav .brand { padding: 0; }
@@ -443,7 +444,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .pagination > div { display: flex; gap: 10px; align-items: center; }
 .pagination .secondary { padding: 7px 10px; }
 .pagination button:disabled { cursor: not-allowed; opacity: .45; }
-.app-credit { margin-top: 28px; padding-top: 18px; border-top: 1px solid #dce2e8; color: #73808d; font-size: 12px; text-align: center; }
+.app-credit { margin-top: auto; padding-top: 18px; border-top: 1px solid #dce2e8; color: #73808d; font-size: 12px; text-align: center; }
 .app-credit a { color: #147d68; font-weight: 800; text-decoration: none; }
 .app-credit a:hover, .app-credit a:focus-visible { color: #0f6756; text-decoration: underline; }
 .empty, .loading { min-height: 300px; display: grid; place-content: center; text-align: center; color: #74808d; }.empty.compact { min-height: 180px; border: 1px dashed #d4dae0; border-radius: 6px; }.empty svg { margin: auto; }.empty h2 { color: #27313d; font-size: 16px; margin-bottom: 0; }.error-state, .success-state { margin: 0 0 16px; padding: 12px; display: flex; gap: 10px; align-items: center; border-radius: 6px; }.error-state { background: #fce8e6; color: #8b3029; }.success-state { background: #e3f4ef; color: #17624f; }.error-state button, .success-state button { margin-left: auto; border: 0; background: transparent; color: inherit; font-weight: 700; }
