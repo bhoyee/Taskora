@@ -648,6 +648,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  requestPasswordReset: (email: string) =>
+    request<boolean>('/api/v1/account/password/reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPasswordWithToken: (email: string, token: string, newPassword: string) =>
+    request<boolean>('/api/v1/account/password/reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ email, token, newPassword }),
+    }),
   operationsSummary: () =>
     request<OperationsSummary>('/api/v1/operations/summary'),
   register: (

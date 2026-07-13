@@ -26,6 +26,8 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<GetCurrentAccountHandler>();
         services.AddScoped<UpdateAccountProfileHandler>();
         services.AddScoped<ChangePasswordHandler>();
+        services.AddScoped<RequestPasswordResetHandler>();
+        services.AddScoped<ResetPasswordWithTokenHandler>();
         services.AddScoped<CreateWorkspaceHandler>();
         services.AddScoped<GetMyWorkspacesHandler>();
         services.AddScoped<GetWorkspaceMembersHandler>();

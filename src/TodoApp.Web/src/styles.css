@@ -440,6 +440,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .invitation-row code, .invitation-row a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #f2f5f7; border-radius: 4px; padding: 6px; color: #295f8f; }
 .invite-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .field-error { margin: -4px 0 0; color: #a6372e; font-size: 13px; font-weight: 700; }
+.field-success { margin: -4px 0 0; color: #147d68; font-size: 13px; font-weight: 700; }
+.link-button { border: 0; background: transparent; color: #147d68; font-weight: 800; justify-self: start; padding: 0; cursor: pointer; }
+.link-button:hover { color: #0f6756; text-decoration: underline; }
 .pagination { border-top: 1px solid #e2e6ea; padding: 12px 16px; display: flex; justify-content: space-between; gap: 12px; align-items: center; color: #5f6b78; font-size: 13px; }
 .pagination > div { display: flex; gap: 10px; align-items: center; }
 .pagination .secondary { padding: 7px 10px; }

@@ -16,6 +16,13 @@ public sealed record ChangePasswordCommand(
     string CurrentPassword,
     string NewPassword);
 
+public sealed record RequestPasswordResetCommand(string Email);
+
+public sealed record ResetPasswordWithTokenCommand(
+    string Email,
+    string Token,
+    string NewPassword);
+
 public sealed record AccountSessionDto(
     Guid UserId,
     string DisplayName,

@@ -14,6 +14,10 @@ internal static class AccountEndpoints
             .WithName("RegisterAccount");
         group.MapPost("/login", LoginAsync)
             .WithName("Login");
+        group.MapPost("/password/reset/request", RequestPasswordResetAsync)
+            .WithName("RequestPasswordReset");
+        group.MapPost("/password/reset/confirm", ResetPasswordWithTokenAsync)
+            .WithName("ResetPasswordWithToken");
         group.MapGet("/me", GetCurrentAsync)
             .RequireAuthorization()
             .WithName("GetCurrentAccount");
@@ -45,6 +49,25 @@ internal static class AccountEndpoints
         CancellationToken cancellationToken) =>
         ApiResult.From(await handler.HandleAsync(
             new LoginCommand(request.Email, request.Password),
+            cancellationToken));
+
+    private static async Task<IResult> RequestPasswordResetAsync(
+        RequestPasswordResetRequest request,
+        RequestPasswordResetHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new RequestPasswordResetCommand(request.Email),
+            cancellationToken));
+
+    private static async Task<IResult> ResetPasswordWithTokenAsync(
+        ResetPasswordWithTokenRequest request,
+        ResetPasswordWithTokenHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new ResetPasswordWithTokenCommand(
+                request.Email,
+                request.Token,
+                request.NewPassword),
             cancellationToken));
 
     private static async Task<IResult> GetCurrentAsync(
@@ -80,6 +103,13 @@ public sealed record RegisterAccountRequest(
     string WorkspaceName);
 
 public sealed record LoginRequest(string Email, string Password);
+
+public sealed record RequestPasswordResetRequest(string Email);
+
+public sealed record ResetPasswordWithTokenRequest(
+    string Email,
+    string Token,
+    string NewPassword);
 
 public sealed record UpdateAccountProfileRequest(string Email);
 

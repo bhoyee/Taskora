@@ -13,5 +13,8 @@ internal sealed class UserCredentialConfiguration
         builder.Property(credential => credential.PasswordHash)
             .HasMaxLength(512)
             .IsRequired();
+        builder.Property(credential => credential.PasswordResetTokenHash)
+            .HasMaxLength(512);
+        builder.Property(credential => credential.PasswordResetTokenExpiresAt);
     }
 }

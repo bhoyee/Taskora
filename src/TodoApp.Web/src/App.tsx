@@ -1024,9 +1024,11 @@ function AuthPage({
   onBack?: () => void
   onAuthenticated: (session: AccountSession) => void
 }) {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode)
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [resetEmail, setResetEmail] = useState('')
 
   useEffect(() => {
     setMode(initialMode)
@@ -1036,8 +1038,31 @@ function AuthPage({
     event.preventDefault()
     setBusy(true)
     setError('')
+    setNotice('')
     const data = new FormData(event.currentTarget)
     try {
+      if (mode === 'forgot') {
+        const email = String(data.get('email')).trim()
+        await api.requestPasswordReset(email)
+        setResetEmail(email)
+        setNotice('If that email exists, a 6-digit reset code has been sent.')
+        setMode('reset')
+        return
+      }
+
+      if (mode === 'reset') {
+        const email = String(data.get('email')).trim()
+        await api.resetPasswordWithToken(
+          email,
+          String(data.get('token')),
+          String(data.get('password')),
+        )
+        setResetEmail(email)
+        setNotice('Password reset. Sign in with your new password.')
+        setMode('login')
+        return
+      }
+
       const session = mode === 'login'
         ? await api.login(String(data.get('email')), String(data.get('password')))
         : await api.register(
@@ -1059,22 +1084,32 @@ function AuthPage({
       <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">Account access</p>
-        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+        <h1>{mode === 'login'
+          ? 'Sign in'
+          : mode === 'register'
+            ? 'Create account'
+            : mode === 'forgot'
+              ? 'Reset password'
+              : 'Enter reset code'}</h1>
       </div>
-      <div className="segmented" aria-label="Account mode">
-        <button className={mode === 'login' ? 'selected' : ''} onClick={() => setMode('login')}><KeyRound size={16} /> Login</button>
-        <button className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}><UserRound size={16} /> Register</button>
-      </div>
+      {(mode === 'login' || mode === 'register') && <div className="segmented" aria-label="Account mode">
+        <button className={mode === 'login' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('login') }}><KeyRound size={16} /> Login</button>
+        <button className={mode === 'register' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('register') }}><UserRound size={16} /> Register</button>
+      </div>}
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
         {mode === 'register' && <>
           <label>Display name<input name="displayName" required maxLength={120} autoComplete="name" /></label>
           <label>Workspace name<input name="workspaceName" required maxLength={160} defaultValue="Portfolio workspace" /></label>
         </>}
-        <label>Email<input name="email" type="email" required autoComplete="email" /></label>
-        <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        <label>Email<input key={`${mode}-${resetEmail}`} name="email" type="email" required autoComplete="email" defaultValue={resetEmail} /></label>
+        {mode === 'reset' && <label>Reset code<input name="token" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" /></label>}
+        {mode !== 'forgot' && <label>{mode === 'reset' ? 'New password' : 'Password'}<input name="password" type="password" required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>}
         {error && <p className="field-error">{error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Register'}</button>
+        {notice && <p className="field-success">{notice}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : mode === 'forgot' ? 'Send reset code' : 'Reset password'}</button>
       </form>
+      {mode === 'login' && <button className="link-button" type="button" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
+      {(mode === 'forgot' || mode === 'reset') && <button className="secondary" type="button" onClick={() => { setError(''); setMode('login') }}>Back to sign in</button>}
       {onBack && <button className="secondary" onClick={onBack}>Back to overview</button>}
     </section>
   </main>

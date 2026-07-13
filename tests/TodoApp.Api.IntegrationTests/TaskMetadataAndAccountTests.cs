@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
@@ -142,6 +143,62 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Account_password_can_be_reset_with_emailed_code()
+    {
+        var email = $"reset-{Guid.NewGuid():N}@example.com";
+        var originalPassword = "SecurePass123!";
+        var newPassword = "SecurePass456!";
+        var registered = await _client.PostAsJsonAsync(
+            "/api/v1/account/register",
+            new
+            {
+                displayName = "Reset Owner",
+                email,
+                password = originalPassword,
+                workspaceName = "Reset workspace"
+            });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+
+        var request = await _client.PostAsJsonAsync(
+            "/api/v1/account/password/reset/request",
+            new { email });
+        Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+
+        var token = ReadLatestResetToken(email);
+        Assert.Matches("^[0-9]{6}$", token);
+
+        var reset = await _client.PostAsJsonAsync(
+            "/api/v1/account/password/reset/confirm",
+            new
+            {
+                email,
+                token,
+                newPassword
+            });
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        var oldLogin = await _client.PostAsJsonAsync(
+            "/api/v1/account/login",
+            new { email, password = originalPassword });
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+
+        var newLogin = await _client.PostAsJsonAsync(
+            "/api/v1/account/login",
+            new { email, password = newPassword });
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+
+        var reusedToken = await _client.PostAsJsonAsync(
+            "/api/v1/account/password/reset/confirm",
+            new
+            {
+                email,
+                token,
+                newPassword = "SecurePass789!"
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, reusedToken.StatusCode);
+    }
+
+    [Fact]
     public async Task Task_metadata_endpoints_manage_category_tags_and_notes()
     {
         var projectId = await CreateProjectAsync();
@@ -217,6 +274,20 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
         return (await response.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id")
             .GetGuid();
+    }
+
+    private string ReadLatestResetToken(string email)
+    {
+        var resetEmail = factory.EmailSender.Messages.Last(message =>
+            message.Recipients.Contains(email) &&
+            message.Subject.Contains(
+                "password reset",
+                StringComparison.OrdinalIgnoreCase));
+        var message = resetEmail.Body;
+        var match = Regex.Match(message, @"reset code is:\s*(\d{6})");
+
+        Assert.True(match.Success, "Expected the reset email log to contain a 6-digit code.");
+        return match.Groups[1].Value;
     }
 
     private static void AssertSuccess(HttpResponseMessage response) =>
