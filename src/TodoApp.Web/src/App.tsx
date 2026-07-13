@@ -16,6 +16,7 @@ import type {
   AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
   TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
+import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -627,7 +628,7 @@ export default function App() {
   }
 
   if (loggedOut || (!import.meta.env.DEV && !localStorage.getItem('todoapp_access_token'))) {
-    return <AuthPage onAuthenticated={authenticated} />
+    return <PublicAccessPage onAuthenticated={authenticated} />
   }
 
   return (
@@ -900,10 +901,96 @@ function inviteTokenFromPath() {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
-function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
+  const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing')
+
+  if (mode !== 'landing') {
+    return <AuthPage
+      initialMode={mode}
+      onBack={() => setMode('landing')}
+      onAuthenticated={onAuthenticated}
+    />
+  }
+
+  return <main className="landing-page">
+    <header className="landing-nav">
+      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+      <nav aria-label="Public navigation">
+        <button className="secondary" onClick={() => setMode('login')}><KeyRound size={16} /> Sign in</button>
+        <button className="primary" onClick={() => setMode('register')}><UserRound size={16} /> Create account</button>
+      </nav>
+    </header>
+
+    <section className="landing-hero" aria-labelledby="landing-title">
+      <div className="landing-copy">
+        <p className="eyebrow">Workspace delivery platform</p>
+        <h1 id="landing-title">Run project work, daily tasks, and delivery signals from one calm workspace.</h1>
+        <p>
+          Taskora combines project boards, priority scoring, reminders, reports,
+          workspace roles, and personal todos in one production-style portfolio app.
+        </p>
+        <div className="landing-actions">
+          <button className="primary" onClick={() => setMode('register')}><UserPlus size={17} /> Start a workspace</button>
+          <button className="secondary" onClick={() => setMode('login')}><KeyRound size={17} /> Sign in</button>
+        </div>
+        <dl className="landing-proof">
+          <div><dt>Role-based</dt><dd>Owners, managers, members</dd></div>
+          <div><dt>Realtime</dt><dd>Board and dashboard updates</dd></div>
+          <div><dt>Ops-ready</dt><dd>Health, logs, CI/CD</dd></div>
+        </dl>
+      </div>
+      <figure className="landing-visual">
+        <img src={landingDashboard} alt="Taskora dashboard preview showing workspace health cards, charts, and task board columns" />
+      </figure>
+    </section>
+
+    <section className="landing-section" aria-label="Taskora capabilities">
+      <article>
+        <CircleGauge size={20} />
+        <h2>Delivery workspace</h2>
+        <p>Track projects, delivery dates, active work, blockers, overdue tasks, and release readiness by workspace.</p>
+      </article>
+      <article>
+        <Columns3 size={20} />
+        <h2>Smarter task flow</h2>
+        <p>Move tasks through Backlog, Ready, In Progress, Blocked, and Completed with assignment-aware rules.</p>
+      </article>
+      <article>
+        <Bell size={20} />
+        <h2>Notifications</h2>
+        <p>Use in-app alerts and SMTP email reminders for assignments, due dates, project delivery, and risks.</p>
+      </article>
+      <article>
+        <ChartBar size={20} />
+        <h2>Reports and operations</h2>
+        <p>Review activity, date-range reports, health checks, logs, and deployment-ready configuration.</p>
+      </article>
+    </section>
+
+    <footer className="landing-footer">
+      <span>Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></span>
+      <span>Copyright 2026</span>
+    </footer>
+  </main>
+}
+
+function AuthPage({
+  initialMode = 'login',
+  onBack,
+  onAuthenticated,
+}: {
+  initialMode?: 'login' | 'register'
+  onBack?: () => void
+  onAuthenticated: (session: AccountSession) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setMode(initialMode)
+  }, [initialMode])
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setBusy(true)
@@ -947,6 +1034,7 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (session: AccountSessi
         {error && <p className="field-error">{error}</p>}
         <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Register'}</button>
       </form>
+      {onBack && <button className="secondary" onClick={onBack}>Back to overview</button>}
     </section>
   </main>
 }

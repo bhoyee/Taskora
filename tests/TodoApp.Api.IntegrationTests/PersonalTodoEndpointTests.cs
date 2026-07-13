@@ -73,22 +73,24 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Incomplete_todos_are_carried_over_to_selected_later_date()
     {
+        var marker = $"carry-{Guid.NewGuid():N}";
+        var title = $"Carry this forward {marker}";
         var created = await _client.PostAsJsonAsync(
             "/api/v1/todos",
             new
             {
-                title = "Carry this forward uniquely",
+                title,
                 todoDate = "2026-07-13",
                 notes = "Still open"
             });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
         var list = await _client.GetFromJsonAsync<JsonElement>(
-            "/api/v1/todos?date=2026-07-14&search=uniquely&pageNumber=1&pageSize=10");
+            $"/api/v1/todos?date=2026-07-14&search={marker}&pageNumber=1&pageSize=10");
         var item = list.GetProperty("items")[0];
 
         Assert.Equal(1, list.GetProperty("totalCount").GetInt32());
-        Assert.Equal("Carry this forward uniquely", item.GetProperty("title").GetString());
+        Assert.Equal(title, item.GetProperty("title").GetString());
         Assert.Equal("2026-07-14", item.GetProperty("todoDate").GetString());
         Assert.Equal("2026-07-13", item.GetProperty("originalTodoDate").GetString());
         Assert.Equal("2026-07-13", item.GetProperty("carriedOverFromDate").GetString());

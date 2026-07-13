@@ -633,6 +633,10 @@ describe('delivery workspace', () => {
     expect(screen.getByText('Showing 11-11 of 11')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^logout$/i }))
+    expect(screen.getByRole('heading', {
+      name: /run project work, daily tasks, and delivery signals/i,
+    })).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: /sign in/i })[0])
     expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
