@@ -1829,10 +1829,10 @@ const priorityChartColors: Record<string, string> = {
 }
 
 const trendPlot = {
-  left: 26,
-  right: 362,
-  top: 14,
-  bottom: 170,
+  left: 24,
+  right: 388,
+  top: 10,
+  bottom: 172,
 }
 
 function DashboardAnalytics({
@@ -2420,11 +2420,11 @@ function BarChart({
 
 function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
   const points = buildTasksOverTimePoints(tasks)
-  const max = Math.max(1, ...points.flatMap((point) => [point.created, point.completed]))
-  const yAxis = buildTrendYAxis(max)
-  const axisMax = yAxis[0]
-  const createdPath = buildLinePath(points.map((point) => point.created), axisMax)
-  const completedPath = buildLinePath(points.map((point) => point.completed), axisMax)
+  const values = points.flatMap((point) => [point.created, point.completed])
+  const scale = buildTrendScale(values)
+  const yAxis = buildTrendYAxis(scale)
+  const createdPath = buildLinePath(points.map((point) => point.created), scale)
+  const completedPath = buildLinePath(points.map((point) => point.completed), scale)
   const latest = points[points.length - 1]
   return <article className="analytics-card trend-card">
     <header>
@@ -2436,9 +2436,9 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
       data-tooltip={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
       title={`${latest.created} created and ${latest.completed} completed by ${latest.label}`}
     >
-      <svg viewBox="0 0 370 206" role="img" aria-label="Tasks created and completed over time">
+      <svg viewBox="0 0 400 210" role="img" aria-label="Tasks created and completed over time">
         {yAxis.map((value) => {
-          const y = trendY(value, axisMax)
+          const y = trendY(value, scale)
           return <g key={value}>
             <text className="trend-y-label" x="7" y={y + 4}>{value}</text>
             <line x1={trendPlot.left} x2={trendPlot.right} y1={y} y2={y} />
@@ -2451,7 +2451,7 @@ function TasksOverTimeChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
         {points.map((point, index) => {
           const x = trendX(index, points.length)
           return <g className="trend-point" key={point.key}>
-            <circle cx={x} cy={trendY(point.created, axisMax)} r="3" />
+            <circle cx={x} cy={trendY(point.created, scale)} r="3" />
             <title>{`${point.label}: ${point.created} created, ${point.completed} completed`}</title>
           </g>
         })}
@@ -2534,8 +2534,8 @@ function buildTasksOverTimePoints(tasks: WorkspaceReport['tasks']) {
   })
 }
 
-function buildLinePath(values: number[], max: number) {
-  return values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${trendX(index, values.length)} ${trendY(value, max)}`).join(' ')
+function buildLinePath(values: number[], scale: TrendScale) {
+  return values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${trendX(index, values.length)} ${trendY(value, scale)}`).join(' ')
 }
 
 function trendX(index: number, total: number) {
@@ -2544,24 +2544,32 @@ function trendX(index: number, total: number) {
     : trendPlot.left + index * ((trendPlot.right - trendPlot.left) / (total - 1))
 }
 
-function trendY(value: number, max: number) {
-  return trendPlot.bottom - value / max * (trendPlot.bottom - trendPlot.top)
+interface TrendScale {
+  min: number
+  max: number
 }
 
-function buildTrendYAxis(max: number) {
-  if (max <= 4) return [4, 3, 2, 1, 0]
-  const step = niceTrendStep(max / 4)
-  const top = step * 4
-  return [top, step * 3, step * 2, step, 0]
+function trendY(value: number, scale: TrendScale) {
+  const range = Math.max(1, scale.max - scale.min)
+  return trendPlot.bottom - (value - scale.min) / range * (trendPlot.bottom - trendPlot.top)
 }
 
-function niceTrendStep(value: number) {
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const normalized = value / magnitude
-  if (normalized <= 1) return magnitude
-  if (normalized <= 2) return 2 * magnitude
-  if (normalized <= 5) return 5 * magnitude
-  return 10 * magnitude
+function buildTrendScale(values: number[]): TrendScale {
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  if (rawMax <= 0) return { min: 0, max: 1 }
+  const range = Math.max(1, rawMax - rawMin)
+  const padding = Math.max(0.25, range * 0.12)
+  const min = rawMin <= 1 ? 0 : Math.max(0, rawMin - padding)
+  const max = rawMax + padding
+  return { min, max }
+}
+
+function buildTrendYAxis(scale: TrendScale) {
+  return Array.from({ length: 5 }, (_, index) => {
+    const value = scale.max - ((scale.max - scale.min) / 4) * index
+    return Math.round(value * 10) / 10
+  })
 }
 
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
