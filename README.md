@@ -348,6 +348,12 @@ Email__Smtp__FromAddress=no-reply@example.com
 Email__Smtp__FromName=Taskora
 ```
 
+Frontend production builds can point to the deployed API with:
+
+```text
+VITE_API_BASE_URL=https://your-api-app.azurewebsites.net
+```
+
 ## Database and Migrations
 
 Restore the repository-pinned EF tool:
@@ -401,6 +407,28 @@ feature/* -> dev -> main
 
 Feature branches should be tested through pull requests before merging into
 `dev`. `main` should represent deployable code.
+
+### GitHub Actions Static Web Apps Deployment
+
+The repository also includes `.github/workflows/azure-static-web-apps.yml` for
+deploying the React frontend from GitHub to Azure Static Web Apps.
+
+Required GitHub repository secrets:
+
+```text
+AZURE_STATIC_WEB_APPS_API_TOKEN=<deployment token from Azure Static Web Apps>
+VITE_API_BASE_URL=https://your-api-app.azurewebsites.net
+```
+
+The workflow uses:
+
+```text
+app_location: src/Taskora.Web
+output_location: dist
+```
+
+If the Static Web App shows the Azure placeholder page, check the GitHub Actions
+run first. A successful run should upload the built `dist` folder to Azure.
 
 ## Azure Deployment Notes
 

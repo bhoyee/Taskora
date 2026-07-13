@@ -302,6 +302,12 @@ export interface PersonalTodo {
   completedAt: string | null
 }
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+
+function apiUrl(path: string) {
+  return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 function identityHeaders(): Record<string, string> {
   const accessToken = localStorage.getItem('todoapp_access_token')
   return accessToken
@@ -312,7 +318,7 @@ function identityHeaders(): Record<string, string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -355,7 +361,7 @@ export async function streamWorkspaceEvents(
   signal: AbortSignal,
 ) {
   const response = await fetch(
-    `/api/v1/workspaces/${workspaceId}/events`,
+    apiUrl(`/api/v1/workspaces/${workspaceId}/events`),
     {
       headers: {
         Accept: 'text/event-stream',
