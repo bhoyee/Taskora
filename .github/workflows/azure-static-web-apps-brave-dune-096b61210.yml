@@ -35,6 +35,8 @@ jobs:
             echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN."
             exit 1
           fi
+          echo "Static Web Apps token fingerprint:"
+          echo -n "$SWA_DEPLOYMENT_TOKEN" | sha256sum | cut -c1-16
 
       - name: Build and deploy
         id: builddeploy
