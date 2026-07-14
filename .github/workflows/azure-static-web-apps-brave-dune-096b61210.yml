@@ -15,6 +15,9 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    env:
+      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
     permissions:
       contents: read
       id-token: write
@@ -25,27 +28,44 @@ jobs:
           submodules: true
           lfs: false
 
+      - name: Validate deployment token
+        shell: bash
+        run: |
+          if [ -z "$SWA_DEPLOYMENT_TOKEN" ]; then
+            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 or AZURE_STATIC_WEB_APPS_API_TOKEN."
+            exit 1
+          fi
+
       - name: Build and deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ env.SWA_DEPLOYMENT_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: src/Taskora.Web
           api_location: ''
           output_location: dist
-        env:
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          app_build_command: npm run build
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
+    env:
+      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
     steps:
+      - name: Validate deployment token
+        shell: bash
+        run: |
+          if [ -z "$SWA_DEPLOYMENT_TOKEN" ]; then
+            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 or AZURE_STATIC_WEB_APPS_API_TOKEN."
+            exit 1
+          fi
+
       - name: Close Pull Request
         id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ env.SWA_DEPLOYMENT_TOKEN }}
           action: close
