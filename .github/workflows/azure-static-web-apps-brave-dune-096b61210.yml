@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     env:
-      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
       VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$SWA_DEPLOYMENT_TOKEN" ]; then
-            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 or AZURE_STATIC_WEB_APPS_API_TOKEN."
+            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN."
             exit 1
           fi
 
@@ -53,13 +53,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Close Pull Request Job
     env:
-      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
     steps:
       - name: Validate deployment token
         shell: bash
         run: |
           if [ -z "$SWA_DEPLOYMENT_TOKEN" ]; then
-            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN_BRAVE_DUNE_096B61210 or AZURE_STATIC_WEB_APPS_API_TOKEN."
+            echo "::error::Static Web Apps deployment token is missing. Add a repository secret named AZURE_STATIC_WEB_APPS_API_TOKEN."
             exit 1
           fi
 
