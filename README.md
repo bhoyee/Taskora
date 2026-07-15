@@ -94,7 +94,7 @@ flowchart LR
     Application["Taskora.Application<br/>Use cases, commands, queries, ports"]
     Domain["Taskora.Domain<br/>Entities, value objects, business rules"]
     Infrastructure["Taskora.Infrastructure<br/>EF Core, repositories, email, logs"]
-    Database[("SQLite local<br/>Azure SQL production")]
+    Database[("SQLite local<br/>Neon PostgreSQL production")]
 
     Web -->|HTTPS / JSON / SSE| Api
     Api --> Application
@@ -312,17 +312,17 @@ Portfolio123!
 
 ## Environment Configuration
 
-Use `.env` locally and Azure App Service application settings in production.
-Do not commit `.env`.
+Use `.env` locally and platform environment variables in production. Do not
+commit `.env`.
 
 Important settings:
 
 ```text
 App__PublicBaseUrl=https://your-frontend-host
 
-Database__Provider=SqlServer
-ConnectionStrings__TodoApp=Server=...;Database=...;...
-Database__ApplyMigrationsOnStartup=false
+Database__Provider=Postgres
+ConnectionStrings__TodoApp=Host=your-neon-host.neon.tech;Port=5432;Database=neondb;Username=your-user;Password=your-password;SSL Mode=Require;Trust Server Certificate=true
+Database__ApplyMigrationsOnStartup=true
 
 DemoData__SeedOnStartup=false
 
@@ -351,8 +351,78 @@ Email__Smtp__FromName=Taskora
 Frontend production builds can point to the deployed API with:
 
 ```text
-VITE_API_BASE_URL=https://your-api-app.azurewebsites.net
+VITE_API_BASE_URL=https://your-taskora-api.onrender.com
 ```
+
+## Vercel + Render + Neon Deployment
+
+The preferred low-cost portfolio deployment is:
+
+```text
+Vercel          React frontend
+Render          .NET API container
+Neon            PostgreSQL database
+Resend/SMTP     Email delivery
+```
+
+### Neon Database
+
+Create a Neon PostgreSQL project and copy the pooled or direct connection
+string. Use SSL in the connection string:
+
+```text
+Database__Provider=Postgres
+ConnectionStrings__TodoApp=Host=...neon.tech;Port=5432;Database=neondb;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true
+```
+
+### Render API
+
+Render can deploy the API from the included `render.yaml` and root
+`Dockerfile`. Configure these environment variables in Render:
+
+```text
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://+:10000
+Database__Provider=Postgres
+Database__ApplyMigrationsOnStartup=true
+ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
+App__PublicBaseUrl=https://your-taskora-app.vercel.app
+Cors__AllowedOrigins__0=https://your-taskora-app.vercel.app
+Authentication__Authority=<production auth authority>
+Authentication__Audience=taskora-api
+Administration__SuperAdminEmails__0=you@example.com
+Email__Smtp__Enabled=true
+Email__Smtp__Host=<smtp host>
+Email__Smtp__Username=<smtp username>
+Email__Smtp__Password=<smtp password>
+Email__Smtp__FromAddress=<verified sender>
+Email__Smtp__FromName=Taskora
+```
+
+The Render health check should use:
+
+```text
+/health/live
+```
+
+### Vercel Frontend
+
+Create a Vercel project from `src/Taskora.Web`:
+
+```text
+Root directory: src/Taskora.Web
+Build command: npm run build
+Output directory: dist
+```
+
+Add this Vercel environment variable:
+
+```text
+VITE_API_BASE_URL=https://your-taskora-api.onrender.com
+```
+
+After Vercel gives you the final frontend URL, add that exact URL to Render as
+`Cors__AllowedOrigins__0` and `App__PublicBaseUrl`.
 
 ## Database and Migrations
 
@@ -408,16 +478,17 @@ feature/* -> dev -> main
 Feature branches should be tested through pull requests before merging into
 `dev`. `main` should represent deployable code.
 
-### GitHub Actions Static Web Apps Deployment
+### Legacy GitHub Actions Static Web Apps Deployment
 
-The repository also includes `.github/workflows/azure-static-web-apps.yml` for
-deploying the React frontend from GitHub to Azure Static Web Apps.
+The repository previously used Azure Static Web Apps for the React frontend.
+The preferred frontend host is now Vercel, but the Azure workflow can be kept
+as optional reference if you return to Azure later.
 
 Required GitHub repository secrets:
 
 ```text
 AZURE_STATIC_WEB_APPS_API_TOKEN=<deployment token from Azure Static Web Apps>
-VITE_API_BASE_URL=https://your-api-app.azurewebsites.net
+VITE_API_BASE_URL=https://your-taskora-api.onrender.com
 ```
 
 The workflow uses:
@@ -438,8 +509,8 @@ For a low-cost portfolio deployment:
 - Keep deployments manual until the pipeline is proven.
 - Use budget alerts in Azure.
 - Use real SMTP credentials only through App Service application settings.
-- Use Azure SQL or another managed SQL database when persistent production data
-  is required.
+- Use Neon PostgreSQL or another managed database when persistent production
+  data is required.
 - Keep Docker optional if the target environment does not need it yet.
 
 See:

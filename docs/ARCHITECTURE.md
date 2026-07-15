@@ -107,7 +107,7 @@ milestone after the core task model is stable.
 
 - SQLite for simple local development.
 - EF Core migrations for schema evolution.
-- Azure SQL for the hosted environment.
+- Neon PostgreSQL for the hosted environment.
 - UTC timestamps at persistence and API boundaries.
 - Development seed data separated from production startup.
 
@@ -127,7 +127,8 @@ milestone after the core task model is stable.
 - Central exception handling.
 - Authentication and policy-based authorization.
 - Configuration through environment-specific providers.
-- Secrets supplied by development secret storage or Azure configuration.
+- Secrets supplied by local `.env` files or deployment platform environment
+  variables.
 
 ## Architecture Decision Records
 
@@ -144,5 +145,5 @@ Each record will state context, decision, alternatives, and consequences.
 1. Use a modular monolith instead of microservices.
 2. Use a behaviour-rich domain model for core rules.
 3. Use React and TypeScript for the web client.
-4. Use EF Core with SQLite locally and Azure SQL when hosted.
+4. Use EF Core with SQLite locally and PostgreSQL when hosted.
 5. Keep the application layer independent of ASP.NET Core.

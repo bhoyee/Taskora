@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: taskora-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: Database__Provider
+        value: Postgres
+      - key: Database__ApplyMigrationsOnStartup
+        value: true
+      - key: DemoData__SeedOnStartup
+        value: false
+      - key: ConnectionStrings__TodoApp
+        sync: false
+      - key: App__PublicBaseUrl
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: Authentication__Authority
+        sync: false
+      - key: Authentication__Audience
+        sync: false
+      - key: Administration__SuperAdminEmails__0
+        sync: false
+      - key: Email__Smtp__Enabled
+        value: true
+      - key: Email__Smtp__Host
+        sync: false
+      - key: Email__Smtp__Port
+        value: 587
+      - key: Email__Smtp__UseSsl
+        value: true
+      - key: Email__Smtp__Username
+        sync: false
+      - key: Email__Smtp__Password
+        sync: false
+      - key: Email__Smtp__FromAddress
+        sync: false
+      - key: Email__Smtp__FromName
+        value: Taskora

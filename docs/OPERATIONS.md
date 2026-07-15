@@ -3,18 +3,19 @@
 ## Purpose
 
 This runbook explains how Taskora is built, packaged, deployed, validated, and
-rolled back. It is intended for Azure App Service deployments from Azure
-DevOps, while keeping local development and portfolio review simple.
+rolled back. The preferred portfolio deployment is Vercel for the React
+frontend, Render for the .NET API container, and Neon PostgreSQL for persistent
+data.
 
 ## Release Flow
 
 1. Open a feature branch from the latest accepted development branch.
 2. Run the local checks before opening a pull request.
-3. Let Azure Pipelines restore, test, build, and package the application.
+3. Let CI restore, test, build, and package the application.
 4. Review the pipeline artifacts and test coverage.
 5. Merge only after CI is green.
-6. Manually run the pipeline with `deployToAzure` set to `true` for deployment.
-7. Run the smoke test against the deployed App Service URL.
+6. Deploy the frontend from Vercel and the API from Render.
+7. Run the smoke test against the deployed Render API URL.
 
 ## Deployment Architecture
 
@@ -22,26 +23,21 @@ DevOps, while keeping local development and portfolio review simple.
 flowchart LR
     Dev["Developer workstation"]
     GitHub["GitHub repository"]
-    AzureRepos["Azure DevOps repo mirror"]
-    Pipeline["Azure Pipelines<br/>restore, test, coverage, build"]
-    Artifacts["Release artifacts<br/>ZIP + optional Docker tar"]
-    AppService["Azure App Service<br/>F1 Free for portfolio demo"]
+    CI["CI<br/>restore, test, coverage, build"]
+    Vercel["Vercel<br/>React frontend"]
+    Render["Render<br/>.NET API container"]
     Sqlite[("SQLite<br/>local/demo")]
-    AzureSql[("Azure SQL<br/>optional free offer")]
+    Neon[("Neon PostgreSQL<br/>production data")]
     Smoke["Smoke test<br/>/health/live + /health/ready"]
-    Alerts["Cost alerts<br/>Azure budget"]
 
     Dev --> GitHub
-    Dev --> AzureRepos
-    GitHub --> Pipeline
-    AzureRepos --> Pipeline
-    Pipeline --> Artifacts
-    Artifacts -->|manual deploy gate| AppService
-    AppService --> Sqlite
-    AppService -. optional .-> AzureSql
-    AppService --> Smoke
-    Alerts -. guardrail .-> AppService
-    Alerts -. guardrail .-> AzureSql
+    GitHub --> CI
+    GitHub --> Vercel
+    GitHub --> Render
+    Vercel -->|HTTPS / JSON / SSE| Render
+    Render --> Sqlite
+    Render --> Neon
+    Render --> Smoke
 ```
 
 ## Local Verification
@@ -68,7 +64,7 @@ the Docker build step so container readiness can be validated later.
 | Setting | Purpose | Secret |
 | --- | --- | --- |
 | `ConnectionStrings__TodoApp` | Database connection string | Yes |
-| `Database__Provider` | `Sqlite` for local or `SqlServer` for Azure SQL | No |
+| `Database__Provider` | `Sqlite` for local or `Postgres` for Neon | No |
 | `Authentication__Authority` | JWT issuer authority | No |
 | `Authentication__Audience` | Expected JWT audience | No |
 | `App__PublicBaseUrl` | Public frontend URL used in email links | No |
@@ -83,51 +79,47 @@ the Docker build step so container readiness can be validated later.
 | `ASPNETCORE_ENVIRONMENT` | Runtime environment name | No |
 | `ASPNETCORE_URLS` | Container listen address | No |
 
-Secrets must be stored in Azure DevOps variable groups, Azure App Service
-configuration, or Azure Key Vault. They must not be committed to the repository.
+Secrets must be stored in Render and Vercel environment variables. They must
+not be committed to the repository.
 
 For local development, copy `.env.example` to `.env` at the repository root and
 fill in the SMTP values. The API loads `.env` at startup, and `.env` is ignored
 by git.
 
-## Cost-Conscious Azure Hosting
+## Cost-Conscious Hosting
 
 For portfolio demonstrations, prefer the lowest-cost setup first:
 
-- Use the App Service F1 Free tier for development and portfolio review only.
-- Keep deployment manually gated in Azure Pipelines.
-- Leave Always On disabled on free/shared hosting tiers.
-- Configure Azure Cost Management budgets and alerts before deploying.
-- Use SQLite locally until Azure SQL is genuinely needed.
-- If testing Azure SQL, use the free Azure SQL Database offer where available
-  and keep usage within the monthly allowance.
-- Delete or stop paid resources when the portfolio review period ends.
+- Use Vercel for the frontend static build.
+- Use Render's free web service for the API when acceptable, knowing it can
+  sleep after inactivity.
+- Use Neon PostgreSQL free limits for portfolio-scale data.
+- Use SQLite locally and Neon PostgreSQL for hosted portfolio data.
+- Keep demo data small and avoid enabling paid add-ons unless needed.
 
-Docker is not required to run Azure App Service from the published ZIP package.
-The Docker build remains in CI as a production-readiness validation and can be
-used later if the app moves to container hosting.
+Docker is used for the Render API deployment through the root `Dockerfile`.
+Vercel builds the frontend from `src/Taskora.Web`.
 
-See the [Azure setup checklist](AZURE_SETUP.md) for the App Service, optional
-Azure SQL, service connection, variables, smoke test, and budget-alert steps.
+Azure notes remain in [Azure setup checklist](AZURE_SETUP.md), but the preferred
+path is now Vercel + Render + Neon.
 
-## Azure Pipeline Variables
+## Deployment Variables
 
-| Variable | Description |
-| --- | --- |
-| `azureServiceConnection` | Azure DevOps service connection name |
-| `webAppName` | Target Azure Linux App Service name |
-| `smokeTestBaseUrl` | Optional deployed app URL used after deployment |
-
-The deployment stage is protected by the `deployToAzure` pipeline parameter.
-Keep it `false` for normal pull-request validation.
+| Platform | Variable | Description |
+| --- | --- | --- |
+| Vercel | `VITE_API_BASE_URL` | Deployed Render API base URL |
+| Render | `ConnectionStrings__TodoApp` | Neon PostgreSQL connection string |
+| Render | `Cors__AllowedOrigins__0` | Deployed Vercel frontend URL |
+| Render | `App__PublicBaseUrl` | Deployed Vercel frontend URL |
+| Render | `Database__Provider` | `Postgres` |
 
 ## Smoke Test
 
-Run the smoke test after local publish, container start, or Azure deployment:
+Run the smoke test after local publish, container start, or Render deployment:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ./scripts/SmokeTest.ps1 `
-  -BaseUrl "https://your-app.azurewebsites.net"
+  -BaseUrl "https://your-taskora-api.onrender.com"
 ```
 
 The script checks:
@@ -138,7 +130,7 @@ The script checks:
 ## Rollback
 
 1. Identify the last successful pipeline run.
-2. Redeploy the previous `drop` artifact from Azure DevOps.
+2. Redeploy the previous Render deployment or revert the GitHub commit.
 3. If the database schema changed, inspect the migration impact before
    rollback.
 4. Run the smoke test after redeployment.
