@@ -52,8 +52,8 @@ interface UserProfile {
 }
 
 const defaultProfile: UserProfile = {
-  displayName: 'Jadesola Aliu',
-  email: 'jadesola@example.com',
+  displayName: 'Salisu Adeboye',
+  email: 'salisu.adeboye@gmail.com',
 }
 
 const defaultAccount: AccountSession | null = null

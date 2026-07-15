@@ -16,7 +16,7 @@ public static class DevelopmentDataSeeder
         Guid.Parse("30000000-0000-0000-0000-000000000003");
     public static readonly Guid WorkspaceId =
         Guid.Parse("40000000-0000-0000-0000-000000000001");
-    public const string DemoOwnerEmail = "jadesola@example.com";
+    public const string DemoOwnerEmail = "salisu.adeboye@gmail.com";
     public const string DemoManagerEmail = "manager@example.com";
     public const string DemoMemberEmail = "member@example.com";
     public const string DemoPassword = "Portfolio123!";
@@ -46,7 +46,7 @@ public static class DevelopmentDataSeeder
         {
             var owner = UserProfile.Create(
                 OwnerId,
-                "Jadesola Aliu",
+                "Salisu Adeboye",
                 DemoOwnerEmail);
             var manager = UserProfile.Create(
                 ManagerId,
@@ -70,6 +70,14 @@ public static class DevelopmentDataSeeder
                 WorkspaceRole.Member);
             context.AddRange(owner, manager, member, workspace);
             await context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            var owner = await context.UserProfiles
+                .SingleOrDefaultAsync(
+                    user => user.Id == OwnerId,
+                    cancellationToken);
+            owner?.UpdateEmail(DemoOwnerEmail);
         }
 
         await AddMissingCredentialAsync(context, OwnerId, cancellationToken);

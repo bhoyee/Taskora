@@ -221,8 +221,8 @@ const updatedProjectDetails = {
 }
 const members = [{
   userId: 'user-1',
-  displayName: 'Jadesola Aliu',
-  email: 'jadesola@example.com',
+  displayName: 'Salisu Adeboye',
+  email: 'salisu.adeboye@gmail.com',
   role: 'Owner',
 }]
 const activity = [{
@@ -231,7 +231,7 @@ const activity = [{
   taskTitle: 'Ship portfolio',
   projectId: '10000000-0000-0000-0000-000000000001',
   projectName: 'Portfolio launch',
-  actor: 'Jadesola Aliu',
+  actor: 'Salisu Adeboye',
   action: 'StatusChanged',
   previousValue: 'Ready',
   currentValue: 'InProgress',
@@ -239,8 +239,8 @@ const activity = [{
 }]
 const accountProfile = {
   userId: 'user-1',
-  displayName: 'Jadesola Aliu',
-  email: 'jadesola@example.com',
+  displayName: 'Salisu Adeboye',
+  email: 'salisu.adeboye@gmail.com',
 }
 
 function mockApi() {
@@ -541,7 +541,7 @@ describe('delivery workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /profile/i }))
     expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Full name')).toHaveValue('Jadesola Aliu')
+    expect(screen.getByLabelText('Full name')).toHaveValue('Salisu Adeboye')
     expect(screen.getByLabelText('Workspace role')).toHaveValue('Owner')
     await user.clear(screen.getByLabelText('Email'))
     await user.type(screen.getByLabelText('Email'), 'jadesola.portfolio@example.com')

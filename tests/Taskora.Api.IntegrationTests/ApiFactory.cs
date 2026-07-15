@@ -30,7 +30,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                     ["Database:Provider"] = "Sqlite",
                     ["Email:Smtp:Enabled"] = "false",
                     ["Administration:SuperAdminEmails:0"] =
-                        "jadesola@example.com"
+                        "salisu.adeboye@gmail.com"
                 });
         });
         builder.ConfigureTestServices(services =>

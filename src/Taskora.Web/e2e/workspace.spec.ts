@@ -64,8 +64,8 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({
       json: [{
         userId: 'user-1',
-        displayName: 'Jadesola Aliu',
-        email: 'jadesola@example.com',
+        displayName: 'Salisu Adeboye',
+        email: 'salisu.adeboye@gmail.com',
         role: 'Owner',
       }],
     }))
@@ -80,7 +80,7 @@ test.beforeEach(async ({ page }) => {
           taskTitle: 'Ship portfolio',
           projectId: '10000000-0000-0000-0000-000000000001',
           projectName: 'Portfolio launch',
-          actor: 'Jadesola Aliu',
+          actor: 'Salisu Adeboye',
           action: 'StatusChanged',
           previousValue: 'Backlog',
           currentValue: 'Ready',
@@ -99,7 +99,7 @@ test.beforeEach(async ({ page }) => {
       json: [{
         sequence: 1,
         taskId: 'task-1',
-        actor: 'Jadesola Aliu',
+        actor: 'Salisu Adeboye',
         action: 'StatusChanged',
         previousValue: 'Backlog',
         currentValue: 'Ready',

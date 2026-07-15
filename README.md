@@ -306,7 +306,7 @@ Web: http://localhost:5173
 Demo account when demo data is enabled:
 
 ```text
-jadesola@example.com
+salisu.adeboye@gmail.com
 Portfolio123!
 ```
 
