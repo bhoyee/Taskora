@@ -322,6 +322,7 @@ App__PublicBaseUrl=https://your-frontend-host
 
 Database__Provider=Postgres
 ConnectionStrings__TodoApp=Host=your-neon-host.neon.tech;Port=5432;Database=neondb;Username=your-user;Password=your-password;SSL Mode=Require;Trust Server Certificate=true
+Database__EnsureCreatedOnStartup=false
 Database__ApplyMigrationsOnStartup=false
 
 DemoData__SeedOnStartup=false
@@ -390,6 +391,7 @@ Render can deploy the API from the included `render.yaml` and root
 ```text
 ASPNETCORE_ENVIRONMENT=Production
 Database__Provider=Postgres
+Database__EnsureCreatedOnStartup=false
 Database__ApplyMigrationsOnStartup=false
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
 App__PublicBaseUrl=https://your-taskora-app.vercel.app
@@ -410,6 +412,22 @@ The Render health check should use:
 
 ```text
 /health/live
+```
+
+For a brand-new Neon database, you can bootstrap the current schema once by
+temporarily setting these Render variables:
+
+```text
+Database__EnsureCreatedOnStartup=true
+Database__ApplyMigrationsOnStartup=false
+DemoData__SeedOnStartup=true
+```
+
+After the first successful deploy and login, set them back to:
+
+```text
+Database__EnsureCreatedOnStartup=false
+DemoData__SeedOnStartup=false
 ```
 
 Apply Neon migrations separately instead of during Render startup:

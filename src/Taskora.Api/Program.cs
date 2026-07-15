@@ -171,7 +171,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-if (ShouldApplyMigrations(app.Environment, app.Configuration))
+if (ShouldEnsureCreated(app.Configuration))
+{
+    await using var schemaScope = app.Services.CreateAsyncScope();
+    var logger = schemaScope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup");
+    var database = schemaScope.ServiceProvider
+        .GetRequiredService<TodoAppDbContext>();
+    logger.LogWarning(
+        "Ensuring the database schema exists. Use this only for initial portfolio database bootstrap.");
+    await database.Database.EnsureCreatedAsync();
+}
+else if (ShouldApplyMigrations(app.Environment, app.Configuration))
 {
     await using var migrationScope = app.Services.CreateAsyncScope();
     var logger = migrationScope.ServiceProvider
@@ -287,6 +299,11 @@ static bool ShouldApplyMigrations(
     bool.TryParse(
         configuration["Database:ApplyMigrationsOnStartup"],
         out var applyMigrations) && applyMigrations;
+
+static bool ShouldEnsureCreated(IConfiguration configuration) =>
+    bool.TryParse(
+        configuration["Database:EnsureCreatedOnStartup"],
+        out var ensureCreated) && ensureCreated;
 
 static bool ShouldSeedDemoData(
     IWebHostEnvironment environment,

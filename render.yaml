@@ -11,6 +11,8 @@ services:
         value: Production
       - key: Database__Provider
         value: Postgres
+      - key: Database__EnsureCreatedOnStartup
+        value: false
       - key: Database__ApplyMigrationsOnStartup
         value: false
       - key: DemoData__SeedOnStartup
