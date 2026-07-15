@@ -36,14 +36,9 @@ builder.Services.AddCors(options =>
         "ConfiguredFrontend",
         policy =>
         {
-            var origins = builder.Configuration
-                .GetSection("Cors:AllowedOrigins")
-                .Get<string[]>() ?? [];
-
-            if (origins.Length == 0 && builder.Environment.IsDevelopment())
-            {
-                origins = ["http://localhost:5173"];
-            }
+            var origins = GetAllowedOrigins(
+                builder.Configuration,
+                builder.Environment);
 
             if (origins.Length > 0)
             {
@@ -67,17 +62,13 @@ builder.Services.AddHealthChecks()
         "CORS configuration",
         () =>
         {
-            var origins = builder.Configuration
-                .GetSection("Cors:AllowedOrigins")
-                .Get<string[]>() ?? [];
-            if (origins.Length == 0 && builder.Environment.IsDevelopment())
-            {
-                origins = ["http://localhost:5173"];
-            }
+            var origins = GetAllowedOrigins(
+                builder.Configuration,
+                builder.Environment);
 
             return origins.Length == 0
                 ? HealthCheckResult.Degraded(
-                    "No frontend origins are configured. Set Cors:AllowedOrigins for production.")
+                    "No frontend origins are configured. Set Cors:AllowedOrigins or App:PublicBaseUrl for production.")
                 : HealthCheckResult.Healthy(
                     $"Allowed frontend origins: {string.Join(", ", origins)}.");
         },
@@ -304,6 +295,39 @@ static bool ShouldEnsureCreated(IConfiguration configuration) =>
     bool.TryParse(
         configuration["Database:EnsureCreatedOnStartup"],
         out var ensureCreated) && ensureCreated;
+
+static string[] GetAllowedOrigins(
+    IConfiguration configuration,
+    IWebHostEnvironment environment)
+{
+    var origins = new List<string>();
+    var configuredOrigins = configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>() ?? [];
+    origins.AddRange(configuredOrigins);
+
+    var publicBaseUrl = configuration["App:PublicBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(publicBaseUrl))
+    {
+        origins.Add(publicBaseUrl);
+    }
+
+    if (origins.Count == 0 && environment.IsDevelopment())
+    {
+        origins.Add("http://localhost:5173");
+    }
+
+    return origins
+        .Select(origin => origin.Trim().TrimEnd('/'))
+        .Where(origin => Uri.TryCreate(
+            origin,
+            UriKind.Absolute,
+            out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp ||
+             uri.Scheme == Uri.UriSchemeHttps))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+}
 
 static bool ShouldSeedDemoData(
     IWebHostEnvironment environment,

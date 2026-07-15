@@ -463,6 +463,9 @@ VITE_API_BASE_URL=https://your-taskora-api.onrender.com
 After Vercel gives you the final frontend URL, add that exact URL to Render as
 `Cors__AllowedOrigins__0` and `App__PublicBaseUrl`.
 
+`App__PublicBaseUrl` is also included in the API CORS policy, so the deployed
+frontend can call the Render API when both values use the same Vercel origin.
+
 ## Database and Migrations
 
 Restore the repository-pinned EF tool:
