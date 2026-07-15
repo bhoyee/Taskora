@@ -39,11 +39,26 @@ public sealed class ProviderConfigurationTests
     [Fact]
     public void AddInfrastructure_AcceptsNeonPostgresUrl()
     {
+        AssertPostgresProvider(
+            "postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require&channel_binding=require");
+    }
+
+    [Theory]
+    [InlineData("\"postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require\"")]
+    [InlineData("ConnectionStrings__TodoApp=postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require")]
+    public void AddInfrastructure_CleansCommonRenderConnectionStringPastes(
+        string connectionString)
+    {
+        AssertPostgresProvider(connectionString);
+    }
+
+    private static void AssertPostgresProvider(
+        string connectionString)
+    {
         var values = new Dictionary<string, string?>
         {
             ["Database:Provider"] = "Postgres",
-            ["ConnectionStrings:TodoApp"] =
-                "postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require&channel_binding=require"
+            ["ConnectionStrings:TodoApp"] = connectionString
         };
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(values)

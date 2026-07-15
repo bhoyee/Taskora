@@ -6,12 +6,13 @@ internal static class ConnectionStringNormalizer
 {
     public static string ForProvider(string provider, string connectionString)
     {
-        if (!IsPostgres(provider) || !IsPostgresUrl(connectionString))
+        var normalized = Clean(connectionString);
+        if (!IsPostgres(provider) || !IsPostgresUrl(normalized))
         {
-            return connectionString;
+            return normalized;
         }
 
-        var uri = new Uri(connectionString);
+        var uri = new Uri(normalized);
         var credentials = uri.UserInfo.Split(':', 2);
         var builder = new NpgsqlConnectionStringBuilder
         {
@@ -64,6 +65,20 @@ internal static class ConnectionStringNormalizer
         connectionString.StartsWith(
             "postgres://",
             StringComparison.OrdinalIgnoreCase);
+
+    private static string Clean(string connectionString)
+    {
+        var cleaned = connectionString.Trim().Trim('"', '\'');
+        const string environmentKey = "ConnectionStrings__TodoApp=";
+        if (cleaned.StartsWith(
+                environmentKey,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            cleaned = cleaned[environmentKey.Length..].Trim().Trim('"', '\'');
+        }
+
+        return cleaned;
+    }
 
     private static IEnumerable<KeyValuePair<string, string>> ParseQuery(
         string query)
