@@ -65,8 +65,9 @@ the Docker build step so container readiness can be validated later.
 | --- | --- | --- |
 | `ConnectionStrings__TodoApp` | Database connection string | Yes |
 | `Database__Provider` | `Sqlite` for local or `Postgres` for Neon | No |
-| `Authentication__Authority` | JWT issuer authority | No |
-| `Authentication__Audience` | Expected JWT audience | No |
+| `Authentication__Mode` | `AppToken` for portfolio auth or `Jwt` for external identity | No |
+| `Authentication__Authority` | JWT issuer authority when using external identity | No |
+| `Authentication__Audience` | Expected audience for app tokens or JWT | No |
 | `App__PublicBaseUrl` | Public frontend URL used in email links | No |
 | `Email__Smtp__Enabled` | Enables real SMTP email delivery when `true` | No |
 | `Email__Smtp__Host` | SMTP server hostname | No |

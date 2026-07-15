@@ -21,10 +21,10 @@ services:
         sync: false
       - key: Cors__AllowedOrigins__0
         sync: false
-      - key: Authentication__Authority
-        sync: false
+      - key: Authentication__Mode
+        value: AppToken
       - key: Authentication__Audience
-        sync: false
+        value: taskora-api
       - key: Administration__SuperAdminEmails__0
         sync: false
       - key: Email__Smtp__Enabled

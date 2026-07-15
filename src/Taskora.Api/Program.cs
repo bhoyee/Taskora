@@ -114,6 +114,13 @@ builder.Services.AddHealthChecks()
                     "Development header authentication is enabled.");
             }
 
+            if (SecurityServiceCollectionExtensions
+                .UsesAppTokenAuthentication(builder.Configuration))
+            {
+                return HealthCheckResult.Degraded(
+                    "Application account token authentication is enabled. Configure a JWT authority for external identity-provider validation.");
+            }
+
             var authority = builder.Configuration["Authentication:Authority"];
             var audience = builder.Configuration["Authentication:Audience"];
             return string.IsNullOrWhiteSpace(authority) ||
@@ -143,6 +150,19 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseCors("ConfiguredFrontend");
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals(
+            "/health/live",
+            StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsync("Healthy");
+        return;
+    }
+
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -185,12 +205,6 @@ app.MapHealthChecks(
     new HealthCheckOptions
     {
         Predicate = check => check.Tags.Contains("ready")
-    });
-app.MapHealthChecks(
-    "/health/live",
-    new HealthCheckOptions
-    {
-        Predicate = check => check.Tags.Contains("live")
     });
 app.MapHealthChecks(
     "/health/ready",
@@ -302,12 +316,16 @@ static void ValidateDeploymentConfiguration(
     Require(
         configuration.GetConnectionString("TodoApp"),
         "ConnectionStrings:TodoApp");
-    Require(
-        configuration["Authentication:Authority"],
-        "Authentication:Authority");
-    Require(
-        configuration["Authentication:Audience"],
-        "Authentication:Audience");
+    if (!SecurityServiceCollectionExtensions
+        .UsesAppTokenAuthentication(configuration))
+    {
+        Require(
+            configuration["Authentication:Authority"],
+            "Authentication:Authority");
+        Require(
+            configuration["Authentication:Audience"],
+            "Authentication:Audience");
+    }
 
     var origins = configuration
         .GetSection("Cors:AllowedOrigins")

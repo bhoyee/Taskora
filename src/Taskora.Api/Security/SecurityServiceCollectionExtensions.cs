@@ -15,7 +15,9 @@ internal static class SecurityServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
 
-        if (environment.IsDevelopment() || environment.IsEnvironment("Testing"))
+        if (environment.IsDevelopment() ||
+            environment.IsEnvironment("Testing") ||
+            UsesAppTokenAuthentication(configuration))
         {
             services.AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions,
@@ -42,5 +44,20 @@ internal static class SecurityServiceCollectionExtensions
 
         services.AddAuthorization();
         return services;
+    }
+
+    public static bool UsesAppTokenAuthentication(IConfiguration configuration)
+    {
+        var mode = configuration["Authentication:Mode"];
+        var authority = configuration["Authentication:Authority"];
+        if (mode?.Equals("Jwt", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return false;
+        }
+
+        return mode?.Equals("AppToken", StringComparison.OrdinalIgnoreCase) == true ||
+            string.IsNullOrWhiteSpace(authority) ||
+            authority.Equals("local", StringComparison.OrdinalIgnoreCase) ||
+            authority.Equals("app", StringComparison.OrdinalIgnoreCase);
     }
 }

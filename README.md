@@ -326,7 +326,8 @@ Database__ApplyMigrationsOnStartup=false
 
 DemoData__SeedOnStartup=false
 
-Authentication__Authority=https://your-token-issuer
+Authentication__Mode=AppToken
+Authentication__Authority=
 Authentication__Audience=todoapp-api
 Cors__AllowedOrigins__0=https://your-frontend-host
 
@@ -393,7 +394,8 @@ Database__ApplyMigrationsOnStartup=false
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
 App__PublicBaseUrl=https://your-taskora-app.vercel.app
 Cors__AllowedOrigins__0=https://your-taskora-app.vercel.app
-Authentication__Authority=<production auth authority>
+Authentication__Mode=AppToken
+Authentication__Authority=
 Authentication__Audience=taskora-api
 Administration__SuperAdminEmails__0=you@example.com
 Email__Smtp__Enabled=true
@@ -545,7 +547,8 @@ See:
 - `.env` is ignored by Git.
 - Secrets are supplied through environment variables or Azure settings.
 - Passwords are stored as PBKDF2 hashes.
-- Tokens expire and production JWT settings must be configured.
+- The portfolio deployment uses application account tokens; external JWT
+  authority settings can be added later for identity-provider integration.
 - CORS is restricted outside local development.
 - Role checks are enforced in the backend, not only hidden in the UI.
 - Super-admin operations are gated by configured email address.
