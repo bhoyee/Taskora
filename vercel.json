@@ -1,0 +1,11 @@
+{
+  "installCommand": "cd src/Taskora.Web && npm ci",
+  "buildCommand": "cd src/Taskora.Web && npm run build",
+  "outputDirectory": "src/Taskora.Web/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
