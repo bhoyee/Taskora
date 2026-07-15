@@ -6,6 +6,7 @@ using TodoApp.Api;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Endpoints;
 using TodoApp.Api.Notifications;
+using TodoApp.Api.Operations;
 using TodoApp.Api.Realtime;
 using TodoApp.Api.Security;
 using TodoApp.Infrastructure;
@@ -21,6 +22,8 @@ var operationLogs = new InMemoryLogStore(
 builder.Services.AddSingleton(operationLogs);
 builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
 builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
+builder.Services.AddSingleton<DatabaseBackupSchedulerStatus>();
+builder.Services.AddSingleton<DatabaseBackupService>();
 builder.Services.AddSingleton<WorkspaceEventBroadcaster>();
 
 ValidateDeploymentConfiguration(
@@ -134,6 +137,7 @@ builder.Services.AddTodoSecurity(
     builder.Environment,
     builder.Configuration);
 builder.Services.AddHostedService<DueDateReminderScheduler>();
+builder.Services.AddHostedService<DatabaseBackupScheduler>();
 
 var app = builder.Build();
 

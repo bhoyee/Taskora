@@ -236,6 +236,7 @@ export interface OperationsSummary {
   healthChecks: OperationHealthCheck[]
   runtime: OperationsRuntime
   reminderScheduler: ReminderScheduler
+  databaseBackups: DatabaseBackupScheduler
   recentLogs: OperationLogRecord[]
 }
 
@@ -271,6 +272,25 @@ export interface ReminderScheduler {
   lastError: string | null
 }
 
+export interface DatabaseBackupScheduler {
+  enabled: boolean
+  status: string
+  intervalHours: number
+  lastRunStartedAt: string | null
+  lastRunCompletedAt: string | null
+  nextRunAt: string | null
+  lastBackupFileName: string | null
+  lastBackupSizeBytes: number
+  lastError: string | null
+}
+
+export interface DatabaseBackupFile {
+  fileName: string
+  sizeBytes: number
+  createdAt: string
+  lastModifiedAt: string
+}
+
 export interface OperationLogRecord {
   timestamp: string
   level: string
@@ -278,6 +298,19 @@ export interface OperationLogRecord {
   message: string
   exception: string | null
   eventId: string | null
+}
+
+async function downloadFile(path: string): Promise<Blob> {
+  const response = await fetch(apiUrl(path), {
+    headers: {
+      ...identityHeaders(),
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`The API returned ${response.status}. Check that the API server is running.`)
+  }
+
+  return response.blob()
 }
 
 export interface WorkspaceRealtimeEvent {
@@ -754,6 +787,14 @@ export const api = {
     }),
   operationsSummary: () =>
     request<OperationsSummary>('/api/v1/operations/summary'),
+  operationBackups: () =>
+    request<DatabaseBackupFile[]>('/api/v1/operations/backups'),
+  createOperationBackup: () =>
+    request<DatabaseBackupFile>('/api/v1/operations/backups', {
+      method: 'POST',
+    }),
+  downloadOperationBackup: (fileName: string) =>
+    downloadFile(`/api/v1/operations/backups/${encodeURIComponent(fileName)}`),
   register: (
     displayName: string,
     email: string,

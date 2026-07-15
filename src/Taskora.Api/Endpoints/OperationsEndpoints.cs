@@ -2,6 +2,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TodoApp.Application.Abstractions;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Notifications;
+using TodoApp.Api.Operations;
 
 namespace TodoApp.Api.Endpoints;
 
@@ -18,6 +19,19 @@ internal static class OperationsEndpoints
             .WithName("GetOperationsSummary")
             .Produces<OperationsSummaryResponse>()
             .Produces(StatusCodes.Status403Forbidden);
+        group.MapGet("/backups", ListBackupsAsync)
+            .WithName("ListDatabaseBackups")
+            .Produces<IReadOnlyCollection<DatabaseBackupFile>>()
+            .Produces(StatusCodes.Status403Forbidden);
+        group.MapPost("/backups", CreateBackupAsync)
+            .WithName("CreateDatabaseBackup")
+            .Produces<DatabaseBackupFile>()
+            .Produces(StatusCodes.Status403Forbidden);
+        group.MapGet("/backups/{fileName}", DownloadBackupAsync)
+            .WithName("DownloadDatabaseBackup")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
 
         return endpoints;
     }
@@ -30,6 +44,7 @@ internal static class OperationsEndpoints
         InMemoryLogStore logs,
         IWebHostEnvironment environment,
         DueDateReminderSchedulerStatus reminderStatus,
+        DatabaseBackupSchedulerStatus backupStatus,
         CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(
@@ -59,6 +74,7 @@ internal static class OperationsEndpoints
         }
         var smtpEnabled = ReadBool(configuration["Email:Smtp:Enabled"]);
         var reminderSnapshot = reminderStatus.Snapshot;
+        var backupSnapshot = backupStatus.Snapshot;
 
         return Results.Ok(new OperationsSummaryResponse(
             true,
@@ -86,6 +102,16 @@ internal static class OperationsEndpoints
                 reminderSnapshot.LastProjectReminderCount,
                 reminderSnapshot.LastEmailCount,
                 reminderSnapshot.LastError),
+            new DatabaseBackupSchedulerResponse(
+                backupSnapshot.Enabled,
+                backupSnapshot.Status,
+                backupSnapshot.IntervalHours,
+                backupSnapshot.LastRunStartedAt,
+                backupSnapshot.LastRunCompletedAt,
+                backupSnapshot.NextRunAt,
+                backupSnapshot.LastBackupFileName,
+                backupSnapshot.LastBackupSizeBytes,
+                backupSnapshot.LastError),
             logs.Recent(50)
                 .Select(entry => new OperationLogRecord(
                     entry.Timestamp,
@@ -95,6 +121,71 @@ internal static class OperationsEndpoints
                     entry.Exception,
                     entry.EventId))
                 .ToArray()));
+    }
+
+    private static async Task<IResult> ListBackupsAsync(
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        DatabaseBackupService backups,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsSuperAdminAsync(
+                currentUser,
+                accounts,
+                configuration,
+                cancellationToken))
+        {
+            return Results.Forbid();
+        }
+
+        return Results.Ok(await backups.ListBackupsAsync(cancellationToken));
+    }
+
+    private static async Task<IResult> CreateBackupAsync(
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        DatabaseBackupService backups,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsSuperAdminAsync(
+                currentUser,
+                accounts,
+                configuration,
+                cancellationToken))
+        {
+            return Results.Forbid();
+        }
+
+        return Results.Ok(await backups.CreateBackupAsync(cancellationToken));
+    }
+
+    private static async Task<IResult> DownloadBackupAsync(
+        string fileName,
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        DatabaseBackupService backups,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsSuperAdminAsync(
+                currentUser,
+                accounts,
+                configuration,
+                cancellationToken))
+        {
+            return Results.Forbid();
+        }
+
+        var file = backups.GetBackupFile(fileName);
+        return file is null
+            ? Results.NotFound()
+            : Results.File(
+                file.FullName,
+                "application/json",
+                file.Name,
+                enableRangeProcessing: true);
     }
 
     private static bool IsSuperAdmin(
@@ -116,6 +207,19 @@ internal static class OperationsEndpoints
                 StringComparison.OrdinalIgnoreCase));
     }
 
+    private static async Task<bool> IsSuperAdminAsync(
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+        return account is not null &&
+            IsSuperAdmin(account.User.Email, configuration);
+    }
+
     private static bool ReadBool(string? value) =>
         bool.TryParse(value, out var result) && result;
 }
@@ -127,6 +231,7 @@ public sealed record OperationsSummaryResponse(
     IReadOnlyCollection<OperationHealthCheck> HealthChecks,
     OperationsRuntime Runtime,
     ReminderSchedulerResponse ReminderScheduler,
+    DatabaseBackupSchedulerResponse DatabaseBackups,
     IReadOnlyCollection<OperationLogRecord> RecentLogs);
 
 public sealed record OperationHealthCheck(
@@ -156,6 +261,17 @@ public sealed record ReminderSchedulerResponse(
     int LastTaskReminderCount,
     int LastProjectReminderCount,
     int LastEmailCount,
+    string? LastError);
+
+public sealed record DatabaseBackupSchedulerResponse(
+    bool Enabled,
+    string Status,
+    int IntervalHours,
+    DateTimeOffset? LastRunStartedAt,
+    DateTimeOffset? LastRunCompletedAt,
+    DateTimeOffset? NextRunAt,
+    string? LastBackupFileName,
+    long LastBackupSizeBytes,
     string? LastError);
 
 public sealed record OperationLogRecord(

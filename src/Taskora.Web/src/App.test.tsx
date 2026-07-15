@@ -57,6 +57,49 @@ const emptyDashboardAnalytics = {
   },
 }
 
+function operationsRuntime() {
+  return {
+    environment: 'Testing',
+    databaseProvider: 'Sqlite',
+    publicBaseUrl: 'http://localhost:5173',
+    corsAllowedOrigins: ['http://localhost:5173'],
+    emailMode: 'LogOnly',
+    smtpEnabled: false,
+    reminderSchedulerEnabled: true,
+    logRetentionDays: 30,
+    logMaxEntries: 200,
+  }
+}
+
+function operationsReminderScheduler() {
+  return {
+    enabled: true,
+    status: 'Healthy',
+    intervalMinutes: 1440,
+    lastRunStartedAt: null,
+    lastRunCompletedAt: null,
+    nextRunAt: null,
+    lastTaskReminderCount: 0,
+    lastProjectReminderCount: 0,
+    lastEmailCount: 0,
+    lastError: null,
+  }
+}
+
+function operationsDatabaseBackups() {
+  return {
+    enabled: false,
+    status: 'Disabled',
+    intervalHours: 24,
+    lastRunStartedAt: null,
+    lastRunCompletedAt: null,
+    nextRunAt: null,
+    lastBackupFileName: null,
+    lastBackupSizeBytes: 0,
+    lastError: null,
+  }
+}
+
 const dashboard = {
   projectCount: 1,
   activeTaskCount: 3,
@@ -317,12 +360,12 @@ function mockResponseFor(url: string, page = taskPage, activityItems = activity)
     generatedAt: '2026-07-11T12:00:00Z',
     overallHealth: 'Healthy',
     healthChecks: [],
-    logging: {
-      defaultLevel: 'Information',
-      aspNetCoreLevel: 'Warning',
-      message: 'Application logs are emitted through ASP.NET Core ILogger providers.',
-    },
+    runtime: operationsRuntime(),
+    reminderScheduler: operationsReminderScheduler(),
+    databaseBackups: operationsDatabaseBackups(),
+    recentLogs: [],
   }
+  if (url.includes('/operations/backups')) return []
   if (url.includes('/account/profile')) return {
     ...accountProfile,
     email: 'jadesola.portfolio@example.com',
@@ -594,13 +637,20 @@ describe('delivery workspace', () => {
             description: null,
             durationMilliseconds: 12.4,
           }],
-          logging: {
-            defaultLevel: 'Information',
-            aspNetCoreLevel: 'Warning',
+          runtime: operationsRuntime(),
+          reminderScheduler: operationsReminderScheduler(),
+          databaseBackups: operationsDatabaseBackups(),
+          recentLogs: [{
+            timestamp: '2026-07-11T12:00:00Z',
+            level: 'Information',
+            category: 'Tests',
             message: 'Use Azure App Service Log Stream or Application Insights in production.',
-          },
+            exception: null,
+            eventId: null,
+          }],
         })
       }
+      if (url.includes('/operations/backups')) return jsonResponse([])
       return jsonResponse(mockResponseFor(url, taskPage, activity))
     })
     const user = userEvent.setup()

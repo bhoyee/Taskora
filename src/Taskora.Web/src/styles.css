@@ -555,6 +555,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .log-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.log-summary span { border: 1px solid #e1e6eb; border-radius: 6px; background: #f8fafb; padding: 10px; color: #667281; font-size: 12px; overflow-wrap: anywhere; }.log-summary strong { display: block; color: #26313d; margin-bottom: 3px; }
 .operation-log-list { display: grid; gap: 8px; max-height: 430px; overflow: auto; }
 .operation-log-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid #e1e6eb; border-radius: 6px; background: #fbfcfd; }
+.operation-log-row.backup-row { grid-template-columns: 68px minmax(0, 1fr) auto; align-items: center; }
 .operation-log-row strong, .operation-log-row small { display: block; min-width: 0; overflow-wrap: anywhere; }
 .operation-log-row strong { color: #26313d; font-size: 13px; }
 .operation-log-row small { color: #6e7b88; margin-top: 4px; font-size: 11px; }
