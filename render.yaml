@@ -9,8 +9,6 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: ASPNETCORE_URLS
-        value: http://+:10000
       - key: Database__Provider
         value: Postgres
       - key: Database__ApplyMigrationsOnStartup

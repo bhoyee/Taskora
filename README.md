@@ -382,7 +382,6 @@ Render can deploy the API from the included `render.yaml` and root
 
 ```text
 ASPNETCORE_ENVIRONMENT=Production
-ASPNETCORE_URLS=http://+:10000
 Database__Provider=Postgres
 Database__ApplyMigrationsOnStartup=true
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
