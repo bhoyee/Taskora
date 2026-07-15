@@ -12,6 +12,10 @@ public interface IWorkspaceRepository
         Guid workspaceId,
         CancellationToken cancellationToken);
 
+    Task RemoveAsync(
+        Workspace workspace,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Workspace>> ListForUserAsync(
         Guid userId,
         CancellationToken cancellationToken);

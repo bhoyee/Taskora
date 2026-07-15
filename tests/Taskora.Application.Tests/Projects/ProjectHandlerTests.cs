@@ -370,6 +370,11 @@ public sealed class ProjectHandlerTests
             CancellationToken cancellationToken) =>
             Task.FromResult(workspace?.Id == workspaceId ? workspace : null);
 
+        public Task RemoveAsync(
+            Workspace workspaceToRemove,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
         public Task<IReadOnlyList<Workspace>> ListForUserAsync(
             Guid userId,
             CancellationToken cancellationToken) =>

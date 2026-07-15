@@ -82,6 +82,119 @@ public sealed class CreateWorkspaceHandler(
     }
 }
 
+public sealed class UpdateWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<WorkspaceDto>> HandleAsync(
+        UpdateWorkspaceCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return GetMyWorkspacesHandler.Unauthorized<WorkspaceDto>();
+        }
+
+        var workspace = await workspaces.GetByIdAsync(
+            command.WorkspaceId,
+            cancellationToken);
+        if (workspace is null ||
+            (!command.HasAdministrativeBypass &&
+             !workspace.HasMember(currentUser.UserId)))
+        {
+            return WorkspaceHandlerErrors.WorkspaceNotFound<WorkspaceDto>();
+        }
+
+        try
+        {
+            if (command.HasAdministrativeBypass)
+            {
+                workspace.Rename(workspace.OwnerId, command.Name);
+            }
+            else
+            {
+                workspace.Rename(currentUser.UserId, command.Name);
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            var role = workspace.HasMember(currentUser.UserId)
+                ? workspace.GetRole(currentUser.UserId)
+                : WorkspaceRole.Owner;
+            return Result<WorkspaceDto>.Success(
+                new WorkspaceDto(workspace.Id, workspace.Name, role));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Result<WorkspaceDto>.Failure(
+                new ApplicationError(
+                    "workspace.validation",
+                    exception.Message,
+                    ErrorType.Validation));
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<WorkspaceDto>.Failure(
+                new ApplicationError(
+                    "workspace.forbidden",
+                    exception.Message,
+                    ErrorType.Forbidden));
+        }
+    }
+}
+
+public sealed class DeleteWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteWorkspaceCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return GetMyWorkspacesHandler.Unauthorized<bool>();
+        }
+
+        var workspace = await workspaces.GetByIdAsync(
+            command.WorkspaceId,
+            cancellationToken);
+        if (workspace is null ||
+            (!command.HasAdministrativeBypass &&
+             !workspace.HasMember(currentUser.UserId)))
+        {
+            return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
+        }
+
+        var userWorkspaces = await workspaces.ListForUserAsync(
+            currentUser.UserId,
+            cancellationToken);
+        if (userWorkspaces.Count <= 1)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "workspace.last_workspace",
+                    "Create or switch to another workspace before deleting this one.",
+                    ErrorType.Conflict));
+        }
+
+        if (!command.HasAdministrativeBypass &&
+            workspace.GetRole(currentUser.UserId) != WorkspaceRole.Owner)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "workspace.forbidden",
+                    "Only the workspace owner can delete this workspace.",
+                    ErrorType.Forbidden));
+        }
+
+        await workspaces.RemoveAsync(workspace, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 public sealed class GetWorkspaceMembersHandler(
     IWorkspaceRepository workspaces,
     IUserProfileRepository profiles,
@@ -136,6 +249,15 @@ public sealed class GetWorkspaceMembersHandler(
 
         return Result<Workspace>.Success(workspace);
     }
+}
+
+file static class WorkspaceHandlerErrors
+{
+    public static Result<T> WorkspaceNotFound<T>() =>
+        Result<T>.Failure(new ApplicationError(
+            "workspace.not_found",
+            "The workspace was not found.",
+            ErrorType.NotFound));
 }
 
 public sealed class AddWorkspaceMemberHandler(

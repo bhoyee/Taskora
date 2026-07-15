@@ -405,6 +405,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
+  updateWorkspace: (workspaceId: string, name: string) =>
+    request<Workspace>(`/api/v1/workspaces/${workspaceId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    }),
+  deleteWorkspace: (workspaceId: string) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}`, {
+      method: 'DELETE',
+    }),
   members: (workspaceId: string) =>
     request<WorkspaceMember[]>(`/api/v1/workspaces/${workspaceId}/members`),
   removeMember: (workspaceId: string, userId: string) =>

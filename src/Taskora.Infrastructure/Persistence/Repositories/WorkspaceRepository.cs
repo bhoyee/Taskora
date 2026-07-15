@@ -23,6 +23,79 @@ public sealed class WorkspaceRepository(TodoAppDbContext context)
                 workspace => workspace.Id == workspaceId,
                 cancellationToken);
 
+    public async Task RemoveAsync(
+        Workspace workspace,
+        CancellationToken cancellationToken)
+    {
+        if (context.Database.ProviderName?.Contains(
+                "Npgsql",
+                StringComparison.OrdinalIgnoreCase) == true)
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM "TaskDependencies"
+                WHERE "TaskId" IN (
+                    SELECT "Tasks"."Id"
+                    FROM "Tasks"
+                    INNER JOIN "Projects"
+                        ON "Projects"."Id" = "Tasks"."ProjectId"
+                    WHERE "Projects"."WorkspaceId" = {workspace.Id}
+                )
+                OR "DependencyId" IN (
+                    SELECT "Tasks"."Id"
+                    FROM "Tasks"
+                    INNER JOIN "Projects"
+                        ON "Projects"."Id" = "Tasks"."ProjectId"
+                    WHERE "Projects"."WorkspaceId" = {workspace.Id}
+                )
+                """,
+                cancellationToken);
+        }
+        else
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM TaskDependencies
+                WHERE TaskId IN (
+                    SELECT Tasks.Id
+                    FROM Tasks
+                    INNER JOIN Projects
+                        ON Projects.Id = Tasks.ProjectId
+                    WHERE Projects.WorkspaceId = {workspace.Id}
+                )
+                OR DependencyId IN (
+                    SELECT Tasks.Id
+                    FROM Tasks
+                    INNER JOIN Projects
+                        ON Projects.Id = Tasks.ProjectId
+                    WHERE Projects.WorkspaceId = {workspace.Id}
+                )
+                """,
+                cancellationToken);
+        }
+
+        var tasks = await context.Tasks
+            .Where(task => context.Projects.Any(project =>
+                project.Id == task.ProjectId &&
+                project.WorkspaceId == workspace.Id))
+            .ToArrayAsync(cancellationToken);
+        var projects = await context.Projects
+            .Where(project => project.WorkspaceId == workspace.Id)
+            .ToArrayAsync(cancellationToken);
+        var invitations = await context.WorkspaceInvitations
+            .Where(invitation => invitation.WorkspaceId == workspace.Id)
+            .ToArrayAsync(cancellationToken);
+        var memberships = await context.WorkspaceMemberships
+            .Where(membership => membership.WorkspaceId == workspace.Id)
+            .ToArrayAsync(cancellationToken);
+
+        context.Tasks.RemoveRange(tasks);
+        context.Projects.RemoveRange(projects);
+        context.WorkspaceInvitations.RemoveRange(invitations);
+        context.WorkspaceMemberships.RemoveRange(memberships);
+        context.Workspaces.Remove(workspace);
+    }
+
     public async Task<IReadOnlyList<Workspace>> ListForUserAsync(
         Guid userId,
         CancellationToken cancellationToken) =>

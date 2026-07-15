@@ -6,6 +6,15 @@ public sealed record GetMyWorkspacesQuery;
 
 public sealed record CreateWorkspaceCommand(string Name);
 
+public sealed record UpdateWorkspaceCommand(
+    Guid WorkspaceId,
+    string Name,
+    bool HasAdministrativeBypass = false);
+
+public sealed record DeleteWorkspaceCommand(
+    Guid WorkspaceId,
+    bool HasAdministrativeBypass = false);
+
 public sealed record GetWorkspaceMembersQuery(Guid WorkspaceId);
 
 public sealed record AddWorkspaceMemberCommand(

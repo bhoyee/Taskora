@@ -103,6 +103,8 @@ main { min-width: 0; min-height: 100vh; padding: 30px 38px 24px; display: flex; 
 .workspace-switcher select { width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; background: white; padding: 9px 34px 9px 10px; transition: border-color .16s ease, box-shadow .16s ease; }
 .workspace-switcher select:hover, .workspace-switcher select:focus, .project-bar select:hover, .project-bar select:focus { border-color: #aeb8c4; box-shadow: 0 0 0 3px #147d6814; outline: 0; }
 .workspace-switcher label svg { position: absolute; right: 9px; bottom: 11px; width: 15px; pointer-events: none; color: #6d7885; }
+.workspace-action { width: 34px; height: 34px; border: 1px solid #d8dfe5; border-radius: 6px; background: white; color: #475466; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background-color .16s ease; }
+.workspace-action:hover:not(:disabled) { transform: translateY(-1px); border-color: #abc0d1; box-shadow: 0 7px 18px #18324514; }
 .workspace-create { margin-left: auto; display: flex; align-items: end; gap: 8px; }
 .workspace-create input { width: min(280px, 32vw); border: 1px solid #cbd2d9; border-radius: 6px; padding: 10px; }
 .icon-text { white-space: nowrap; }

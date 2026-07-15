@@ -43,6 +43,12 @@ public sealed class Workspace
     public static Workspace Create(Guid id, string name, Guid ownerId) =>
         new(id, name, ownerId);
 
+    public void Rename(Guid actorId, string name)
+    {
+        EnsureOwner(actorId);
+        Name = NormalizeName(name);
+    }
+
     public void AddMember(
         Guid actorId,
         Guid userId,

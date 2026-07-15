@@ -1,4 +1,5 @@
 using TodoApp.Api.Contracts;
+using TodoApp.Application.Abstractions;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Projects;
 using TodoApp.Application.Tasks.Activity;
@@ -27,6 +28,18 @@ internal static class WorkspaceEndpoints
             ApiResult.From(await handler.HandleAsync(
                 new CreateWorkspaceCommand(request.Name),
                 cancellationToken)));
+        group.MapPut("/{workspaceId:guid}", UpdateWorkspaceAsync)
+            .WithName("UpdateWorkspace")
+            .Produces<WorkspaceDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapDelete("/{workspaceId:guid}", DeleteWorkspaceAsync)
+            .WithName("DeleteWorkspace")
+            .Produces<bool>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         group.MapGet("/{workspaceId:guid}/members", async (
             Guid workspaceId,
             GetWorkspaceMembersHandler handler,
@@ -159,6 +172,77 @@ internal static class WorkspaceEndpoints
 
         return endpoints;
     }
+
+    private static async Task<IResult> UpdateWorkspaceAsync(
+        Guid workspaceId,
+        UpdateWorkspaceRequest request,
+        UpdateWorkspaceHandler handler,
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var isSuperAdmin = await IsSuperAdminAsync(
+            currentUser,
+            accounts,
+            configuration,
+            cancellationToken);
+
+        return ApiResult.From(await handler.HandleAsync(
+            new UpdateWorkspaceCommand(
+                workspaceId,
+                request.Name,
+                isSuperAdmin),
+            cancellationToken));
+    }
+
+    private static async Task<IResult> DeleteWorkspaceAsync(
+        Guid workspaceId,
+        DeleteWorkspaceHandler handler,
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var isSuperAdmin = await IsSuperAdminAsync(
+            currentUser,
+            accounts,
+            configuration,
+            cancellationToken);
+
+        return ApiResult.From(await handler.HandleAsync(
+            new DeleteWorkspaceCommand(workspaceId, isSuperAdmin),
+            cancellationToken));
+    }
+
+    private static async Task<bool> IsSuperAdminAsync(
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+        if (account is null)
+        {
+            return false;
+        }
+
+        var emails = configuration
+            .GetSection("Administration:SuperAdminEmails")
+            .Get<string[]>() ?? [];
+        var singleEmail = configuration["Administration:SuperAdminEmail"];
+        if (!string.IsNullOrWhiteSpace(singleEmail))
+        {
+            emails = [.. emails, singleEmail];
+        }
+
+        return emails.Any(candidate =>
+            account.User.Email.Equals(
+                candidate?.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 public sealed record CreateWorkspaceProjectRequest(
@@ -167,6 +251,8 @@ public sealed record CreateWorkspaceProjectRequest(
     DateOnly? TargetDate = null);
 
 public sealed record CreateWorkspaceRequest(string Name);
+
+public sealed record UpdateWorkspaceRequest(string Name);
 
 public sealed record InviteWorkspaceMemberRequest(
     string FullName,

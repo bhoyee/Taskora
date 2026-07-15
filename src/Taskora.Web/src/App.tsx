@@ -204,6 +204,9 @@ export default function App() {
   const [dashboardReport, setDashboardReport] = useState<WorkspaceReport | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [workspaceDeleteCandidate, setWorkspaceDeleteCandidate] =
+    useState<Workspace | null>(null)
+  const [workspaceDeleteBusy, setWorkspaceDeleteBusy] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
     localStorage.getItem('todoapp_workspace_id') ?? '')
   const [projects, setProjects] = useState<ProjectDetails[]>([])
@@ -710,6 +713,66 @@ export default function App() {
       throw reason
     }
   }
+  const updateWorkspace = async (workspaceId: string, name: string) => {
+    try {
+      setError('')
+      const updated = await api.updateWorkspace(workspaceId, name)
+      setWorkspaces((items) => items
+        .map((item) => item.id === updated.id ? updated : item)
+        .sort((left, right) => left.name.localeCompare(right.name)))
+      setWorkspace((current) => current?.id === updated.id ? updated : current)
+      setNotice(`Workspace ${updated.name} updated.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Workspace could not be updated.')
+      throw reason
+    }
+  }
+  const requestWorkspaceDelete = (workspaceId: string) => {
+    const candidate = workspaces.find((item) => item.id === workspaceId)
+    if (candidate) setWorkspaceDeleteCandidate(candidate)
+  }
+  const confirmWorkspaceDelete = async () => {
+    if (!workspaceDeleteCandidate) return
+    const workspaceToDelete = workspaceDeleteCandidate
+    try {
+      setWorkspaceDeleteBusy(true)
+      setError('')
+      await api.deleteWorkspace(workspaceToDelete.id)
+      const remaining = workspaces.filter((item) => item.id !== workspaceToDelete.id)
+      const next = remaining[0] ?? null
+      setWorkspaces(remaining)
+      setWorkspace(next)
+      setProjects([])
+      setProject(null)
+      setTasks([])
+      setCategories([])
+      setDashboard(emptyDashboard)
+      setDashboardReport(null)
+      setNotifications([])
+      setMembers([])
+      setInvitations([])
+      setActivity([])
+      setActivityTotal(0)
+      setSelectedWorkspaceId(next?.id ?? '')
+      setSelectedProjectId('')
+      setSelectedSprintId('')
+      if (next) {
+        localStorage.setItem('todoapp_workspace_id', next.id)
+      } else {
+        localStorage.removeItem('todoapp_workspace_id')
+      }
+      localStorage.removeItem('todoapp_project_id')
+      localStorage.removeItem('todoapp_sprint_id')
+      setWorkspaceDeleteCandidate(null)
+      setNotice(`Workspace ${workspaceToDelete.name} deleted permanently.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Workspace could not be deleted.')
+      throw reason
+    } finally {
+      setWorkspaceDeleteBusy(false)
+    }
+  }
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     const transition = boardTransitions[task.status]?.[target]
     if (!transition || !canMoveTask(task, target, currentUserId || account?.userId || '', workspace?.role ?? null)) return
@@ -898,8 +961,11 @@ export default function App() {
           <WorkspaceSwitcher
             workspaces={workspaces}
             selectedWorkspaceId={workspace?.id ?? selectedWorkspaceId}
+            isSuperAdmin={operations?.isSuperAdmin ?? false}
             onSwitch={switchWorkspace}
             onCreate={createWorkspace}
+            onUpdate={updateWorkspace}
+            onDelete={requestWorkspaceDelete}
           />
           <div className="topbar-search"><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPageNumber(1) }} placeholder="Search tasks, projects..." aria-label="Search tasks and projects" /></div>
           {(view === 'tasks' || view === 'board') && <button className="primary topbar-page-action" disabled={!project} onClick={() => setDialogOpen(true)} title={project ? 'Create task' : 'Create a project first'}><Plus size={17} /> New task</button>}
@@ -1200,6 +1266,14 @@ export default function App() {
           if (!projectDeleteBusy) setProjectDeleteCandidate(null)
         }}
         onConfirm={() => void confirmProjectDelete()}
+      />}
+      {workspaceDeleteCandidate && <WorkspaceDeleteDialog
+        workspace={workspaceDeleteCandidate}
+        busy={workspaceDeleteBusy}
+        onClose={() => {
+          if (!workspaceDeleteBusy) setWorkspaceDeleteCandidate(null)
+        }}
+        onConfirm={() => void confirmWorkspaceDelete()}
       />}
       {onboardingOpen && <OnboardingDialog
         step={onboardingStep}
@@ -1581,18 +1655,28 @@ function InvitationPage({
 function WorkspaceSwitcher({
   workspaces,
   selectedWorkspaceId,
+  isSuperAdmin,
   onSwitch,
   onCreate,
+  onUpdate,
+  onDelete,
 }: {
   workspaces: Workspace[]
   selectedWorkspaceId: string
+  isSuperAdmin: boolean
   onSwitch: (workspaceId: string) => void
   onCreate: (name: string) => Promise<void>
+  onUpdate: (workspaceId: string, name: string) => Promise<void>
+  onDelete: (workspaceId: string) => void
 }) {
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const selectedWorkspace = workspaces.find((item) => item.id === selectedWorkspaceId) ?? null
+  const canManage = selectedWorkspace?.role === 'Owner' || isSuperAdmin
+  const canDelete = canManage && workspaces.length > 1
 
   if (creating) {
     return <form className="workspace-create" onSubmit={(event) => {
@@ -1616,6 +1700,28 @@ function WorkspaceSwitcher({
     </form>
   }
 
+  if (editing && selectedWorkspace && canManage) {
+    return <form className="workspace-create" onSubmit={(event) => {
+      event.preventDefault()
+      if (!name.trim()) return
+      setBusy(true)
+      setError('')
+      onUpdate(selectedWorkspace.id, name.trim())
+        .then(() => {
+          setName('')
+          setEditing(false)
+        })
+        .catch((reason) => setError(
+          reason instanceof Error ? reason.message : 'Workspace could not be updated.'))
+        .finally(() => setBusy(false))
+    }}>
+      <input aria-label="Workspace name" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} autoFocus />
+      <button className="primary" disabled={busy}><Save size={16} /> {busy ? 'Saving...' : 'Save'}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+      {error && <p className="field-error">{error}</p>}
+    </form>
+  }
+
   return <div className="workspace-switcher">
     <label aria-label="Workspace">
       <select value={selectedWorkspaceId} onChange={(event) => onSwitch(event.target.value)}>
@@ -1624,6 +1730,21 @@ function WorkspaceSwitcher({
       <ChevronDown />
     </label>
     <button className="topbar-create" onClick={() => setCreating(true)} aria-label="Create workspace"><Plus size={20} /></button>
+    {canManage && selectedWorkspace && <button
+      className="icon-button workspace-action"
+      onClick={() => {
+        setName(selectedWorkspace.name)
+        setEditing(true)
+      }}
+      aria-label={`Edit ${selectedWorkspace.name}`}
+      title="Edit workspace name"
+    ><Pencil /></button>}
+    {canDelete && selectedWorkspace && <button
+      className="icon-button workspace-action danger-action"
+      onClick={() => onDelete(selectedWorkspace.id)}
+      aria-label={`Delete ${selectedWorkspace.name}`}
+      title="Delete workspace"
+    ><Trash2 /></button>}
   </div>
 }
 
@@ -1876,6 +1997,46 @@ function ProjectDeleteDialog({
         <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
         <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
           <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete project'}
+        </button>
+      </footer>
+    </dialog>
+  </div>
+}
+
+function WorkspaceDeleteDialog({
+  workspace,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  workspace: Workspace
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="danger-dialog" aria-labelledby="workspace-delete-title">
+      <header>
+        <div>
+          <p className="eyebrow">Permanent delete</p>
+          <h2 id="workspace-delete-title">Delete {workspace.name}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="danger-dialog-body">
+        <div className="danger-dialog-icon"><AlertTriangle /></div>
+        <div>
+          <p>
+            This will permanently delete the workspace, all projects, sprints,
+            tasks, notes, tags, activity history, members, and pending invites.
+          </p>
+          <strong>You must have another workspace available. This action cannot be rolled back.</strong>
+        </div>
+      </section>
+      <footer>
+        <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+          <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete workspace'}
         </button>
       </footer>
     </dialog>
