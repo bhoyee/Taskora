@@ -17,9 +17,11 @@ public static class DependencyInjection
         var provider =
             configuration["Database:Provider"] ?? "Sqlite";
         var connectionString =
-            configuration.GetConnectionString("TodoApp") ??
-            throw new InvalidOperationException(
-                "Connection string 'TodoApp' is required.");
+            ConnectionStringNormalizer.ForProvider(
+                provider,
+                configuration.GetConnectionString("TodoApp") ??
+                    throw new InvalidOperationException(
+                        "Connection string 'TodoApp' is required."));
 
         services.AddDbContext<TodoAppDbContext>(options =>
         {
@@ -31,7 +33,7 @@ public static class DependencyInjection
                     connectionString,
                     sql => sql.EnableRetryOnFailure());
             }
-            else if (IsPostgres(provider))
+            else if (ConnectionStringNormalizer.IsPostgres(provider))
             {
                 options.UseNpgsql(
                     connectionString,
@@ -139,8 +141,4 @@ public static class DependencyInjection
     private static int ReadInt(string? value, int defaultValue) =>
         int.TryParse(value, out var result) ? result : defaultValue;
 
-    private static bool IsPostgres(string provider) =>
-        provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase) ||
-        provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
-        provider.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
 }

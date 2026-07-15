@@ -12,6 +12,7 @@ public sealed class ProviderConfigurationTests
     [InlineData("SqlServer", "Microsoft.EntityFrameworkCore.SqlServer")]
     [InlineData("Postgres", "Npgsql.EntityFrameworkCore.PostgreSQL")]
     [InlineData("PostgreSQL", "Npgsql.EntityFrameworkCore.PostgreSQL")]
+    [InlineData("Npgsql", "Npgsql.EntityFrameworkCore.PostgreSQL")]
     public void AddInfrastructure_SelectsConfiguredProvider(
         string provider,
         string expectedProviderName)
@@ -33,6 +34,31 @@ public sealed class ProviderConfigurationTests
             .GetRequiredService<TodoAppDbContext>();
 
         Assert.Equal(expectedProviderName, context.Database.ProviderName);
+    }
+
+    [Fact]
+    public void AddInfrastructure_AcceptsNeonPostgresUrl()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Database:Provider"] = "Postgres",
+            ["ConnectionStrings:TodoApp"] =
+                "postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require&channel_binding=require"
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+        var services = new ServiceCollection();
+        services.AddInfrastructure(configuration);
+        using var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+
+        var context = scope.ServiceProvider
+            .GetRequiredService<TodoAppDbContext>();
+
+        Assert.Equal(
+            "Npgsql.EntityFrameworkCore.PostgreSQL",
+            context.Database.ProviderName);
     }
 
     private static string ConnectionStringFor(string provider)

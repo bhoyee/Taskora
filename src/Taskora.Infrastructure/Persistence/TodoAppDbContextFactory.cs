@@ -12,9 +12,11 @@ public sealed class TodoAppDbContextFactory
             Environment.GetEnvironmentVariable("Database__Provider") ??
             "Sqlite";
         var connectionString =
-            Environment.GetEnvironmentVariable(
-                "ConnectionStrings__TodoApp") ??
-            "Data Source=todoapp.db";
+            ConnectionStringNormalizer.ForProvider(
+                provider,
+                Environment.GetEnvironmentVariable(
+                    "ConnectionStrings__TodoApp") ??
+                "Data Source=todoapp.db");
         var builder = new DbContextOptionsBuilder<TodoAppDbContext>();
 
         if (provider.Equals(
@@ -25,7 +27,7 @@ public sealed class TodoAppDbContextFactory
                 connectionString,
                 sql => sql.EnableRetryOnFailure());
         }
-        else if (IsPostgres(provider))
+        else if (ConnectionStringNormalizer.IsPostgres(provider))
         {
             builder.UseNpgsql(
                 connectionString,
@@ -39,8 +41,4 @@ public sealed class TodoAppDbContextFactory
         return new TodoAppDbContext(builder.Options);
     }
 
-    private static bool IsPostgres(string provider) =>
-        provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase) ||
-        provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
-        provider.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
 }

@@ -368,7 +368,13 @@ Resend/SMTP     Email delivery
 ### Neon Database
 
 Create a Neon PostgreSQL project and copy the pooled or direct connection
-string. Use SSL in the connection string:
+string. Taskora accepts Neon's URL format:
+
+```text
+postgresql://user:password@host.neon.tech/neondb?sslmode=require&channel_binding=require
+```
+
+It also accepts Npgsql key/value format:
 
 ```text
 Database__Provider=Postgres
