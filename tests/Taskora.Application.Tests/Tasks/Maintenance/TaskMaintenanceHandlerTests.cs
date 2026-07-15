@@ -485,6 +485,11 @@ public sealed class TaskMaintenanceHandlerTests
             CancellationToken cancellationToken) =>
             Task.FromResult(project?.Id == projectId ? project : null);
 
+        public Task RemoveAsync(
+            Project projectToRemove,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
         public Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
             Guid workspaceId,
             CancellationToken cancellationToken) =>

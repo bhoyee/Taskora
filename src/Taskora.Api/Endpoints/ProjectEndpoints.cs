@@ -1,4 +1,5 @@
 using TodoApp.Api.Contracts;
+using TodoApp.Application.Abstractions;
 using TodoApp.Application.Projects;
 using TodoApp.Application.Projects.Board;
 using TodoApp.Application.Tasks.Metadata;
@@ -33,6 +34,11 @@ internal static class ProjectEndpoints
             .Produces<ProjectDto>()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapDelete("/{projectId:guid}", DeleteProjectAsync)
+            .WithName("DeleteProject")
+            .Produces<bool>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         group.MapGet("/{projectId:guid}/board", GetBoardAsync)
             .WithName("GetProjectBoard")
             .Produces<ProjectBoardDto>()
@@ -121,6 +127,26 @@ internal static class ProjectEndpoints
             new ArchiveProjectCommand(projectId),
             cancellationToken));
 
+    private static async Task<IResult> DeleteProjectAsync(
+        Guid projectId,
+        DeleteProjectHandler handler,
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var account = await accounts.GetByIdAsync(
+            currentUser.UserId,
+            cancellationToken);
+
+        var isSuperAdmin = account is not null &&
+            IsSuperAdmin(account.User.Email, configuration);
+
+        return ApiResult.From(await handler.HandleAsync(
+            new DeleteProjectCommand(projectId, isSuperAdmin),
+            cancellationToken));
+    }
+
     private static async Task<IResult> GetBoardAsync(
         Guid projectId,
         GetProjectBoardHandler handler,
@@ -194,6 +220,25 @@ internal static class ProjectEndpoints
         ApiResult.From(await handler.HandleAsync(
             new ChangeSprintStatusCommand(projectId, sprintId),
             cancellationToken));
+
+    private static bool IsSuperAdmin(
+        string email,
+        IConfiguration configuration)
+    {
+        var emails = configuration
+            .GetSection("Administration:SuperAdminEmails")
+            .Get<string[]>() ?? [];
+        var singleEmail = configuration["Administration:SuperAdminEmail"];
+        if (!string.IsNullOrWhiteSpace(singleEmail))
+        {
+            emails = [.. emails, singleEmail];
+        }
+
+        return emails.Any(candidate =>
+            email.Equals(
+                candidate?.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 public sealed record CreateCategoryRequest(string Name);

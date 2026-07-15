@@ -234,6 +234,60 @@ public sealed class ProjectHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    [Fact]
+    public async Task Delete_WhenCurrentUserIsManager_RemovesProject()
+    {
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.AddMember(OwnerId, ManagerId, WorkspaceRole.Manager);
+        var projects = new InMemoryProjectRepository(project);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteProjectHandler(
+            projects,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubCurrentUser(ManagerId));
+
+        var result = await handler.HandleAsync(
+            new DeleteProjectCommand(ProjectId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value);
+        Assert.Equal(ProjectId, projects.RemovedProject?.Id);
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Delete_WhenCurrentUserIsMember_ReturnsForbidden()
+    {
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.AddMember(OwnerId, MemberId, WorkspaceRole.Member);
+        var projects = new InMemoryProjectRepository(project);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteProjectHandler(
+            projects,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubCurrentUser(MemberId));
+
+        var result = await handler.HandleAsync(
+            new DeleteProjectCommand(ProjectId),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Null(projects.RemovedProject);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
     private sealed class InMemoryProjectRepository(params Project[] projects)
         : IProjectRepository
     {
@@ -241,6 +295,8 @@ public sealed class ProjectHandlerTests
             projects.ToDictionary(project => project.Id);
 
         public Project? AddedProject { get; private set; }
+
+        public Project? RemovedProject { get; private set; }
 
         public Task<Project?> GetByIdAsync(
             Guid projectId,
@@ -256,6 +312,15 @@ public sealed class ProjectHandlerTests
         {
             AddedProject = project;
             _projects.Add(project.Id, project);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(
+            Project project,
+            CancellationToken cancellationToken)
+        {
+            RemovedProject = project;
+            _projects.Remove(project.Id);
             return Task.CompletedTask;
         }
 

@@ -515,6 +515,10 @@ export const api = {
     request<ProjectDetails>(`/api/v1/projects/${projectId}/archive`, {
       method: 'POST',
     }),
+  deleteProject: (projectId: string) =>
+    request<boolean>(`/api/v1/projects/${projectId}`, {
+      method: 'DELETE',
+    }),
   project: (projectId = developmentProjectId) =>
     request<ProjectDetails>(`/api/v1/projects/${projectId}`),
   tasks: (

@@ -212,6 +212,48 @@ public sealed class ArchiveProjectHandler(
     }
 }
 
+public sealed class DeleteProjectHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteProjectCommand command,
+        CancellationToken cancellationToken)
+    {
+        var project = await projects.GetByIdAsync(
+            command.ProjectId,
+            cancellationToken);
+
+        if (project is null)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "project.not_found",
+                    "The project was not found.",
+                    ErrorType.NotFound));
+        }
+
+        if (!command.HasAdministrativeBypass)
+        {
+            var permission = await ProjectAccess.RequireManagerAsync(
+                workspaces,
+                currentUser,
+                project,
+                cancellationToken);
+            if (!permission.IsSuccess)
+            {
+                return Result<bool>.Failure(permission.Error);
+            }
+        }
+
+        await projects.RemoveAsync(project, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 internal static class ProjectAccess
 {
     public static async Task<Result<bool>> RequireManagerAsync(

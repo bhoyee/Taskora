@@ -573,6 +573,14 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .role-select svg { position: absolute; right: 8px; top: 8px; width: 15px; pointer-events: none; color: #667281; }
 .danger-action { color: #a6372e; }
 .danger-action:hover:not(:disabled) { background: #fce8e6; border-color: #e8b6b0; color: #8d2d26; }
+.danger-primary { background: #b6372f; border-color: #b6372f; color: white; }
+.danger-primary:hover:not(:disabled) { background: #982f28; border-color: #982f28; }
+.danger-dialog .danger-dialog-body { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 22px; color: #34404d; }
+.danger-dialog .danger-dialog-body p { margin: 0 0 8px; line-height: 1.5; }
+.danger-dialog .danger-dialog-body strong { color: #982f28; }
+.danger-dialog-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 999px; background: #fce8e6; color: #b6372f; }
+.danger-dialog-icon svg { width: 22px; height: 22px; }
+.danger-dialog footer { padding: 0 22px 22px; }
 .invite-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 160px auto; gap: 10px; align-items: end; }
 .invite-form label { position: relative; }
 .invite-form label svg { position: absolute; right: 9px; bottom: 11px; width: 15px; pointer-events: none; }

@@ -172,6 +172,10 @@ function allowedTaskTargets(
       canMoveTask(task, status as TaskStatus, currentUserId, workspaceRole))
 }
 
+function canManageProjects(workspaceRole?: Workspace['role'] | null) {
+  return workspaceRole === 'Owner' || workspaceRole === 'Manager'
+}
+
 const activityTypes = [
   'All',
   'TaskCreated',
@@ -204,6 +208,9 @@ export default function App() {
     localStorage.getItem('todoapp_workspace_id') ?? '')
   const [projects, setProjects] = useState<ProjectDetails[]>([])
   const [project, setProject] = useState<ProjectDetails | null>(null)
+  const [projectDeleteCandidate, setProjectDeleteCandidate] =
+    useState<ProjectDetails | null>(null)
+  const [projectDeleteBusy, setProjectDeleteBusy] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     localStorage.getItem('todoapp_project_id') ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(() =>
@@ -637,6 +644,50 @@ export default function App() {
       throw reason
     }
   }
+  const requestProjectDelete = (projectId: string) => {
+    const candidate = projects.find((item) => item.id === projectId)
+    if (candidate) setProjectDeleteCandidate(candidate)
+  }
+  const confirmProjectDelete = async () => {
+    if (!projectDeleteCandidate) return
+    const projectToDelete = projectDeleteCandidate
+    try {
+      setProjectDeleteBusy(true)
+      setError('')
+      await api.deleteProject(projectToDelete.id)
+      const remaining = projects.filter((item) => item.id !== projectToDelete.id)
+      const next = remaining[0] ?? null
+      setProjects(remaining)
+      setProject(next)
+      setTasks([])
+      setCategories([])
+      setSelectedProjectId(next?.id ?? '')
+      setSelectedSprintId('')
+      setPinnedProjectIds((current) => {
+        const nextPinned = new Set(current)
+        nextPinned.delete(projectToDelete.id)
+        localStorage.setItem(
+          `todoapp_pinned_projects_${currentUserId || account?.userId || ''}`,
+          JSON.stringify(Array.from(nextPinned)))
+        return nextPinned
+      })
+      if (next) {
+        localStorage.setItem('todoapp_project_id', next.id)
+      } else {
+        localStorage.removeItem('todoapp_project_id')
+      }
+      localStorage.removeItem('todoapp_sprint_id')
+      setPageNumber(1)
+      setProjectDeleteCandidate(null)
+      setNotice(`Project ${projectToDelete.name} deleted permanently.`)
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project could not be deleted.')
+      throw reason
+    } finally {
+      setProjectDeleteBusy(false)
+    }
+  }
   const createWorkspace = async (name: string) => {
     try {
       setError('')
@@ -937,6 +988,7 @@ export default function App() {
             onCreate={createProject}
             onUpdate={updateProject}
             onArchive={archiveProject}
+            onDelete={requestProjectDelete}
           />
           <section className="work-area">
             <div className="toolbar">
@@ -982,6 +1034,7 @@ export default function App() {
           onCreate={createProject}
           onUpdate={updateProject}
           onArchive={archiveProject}
+          onDelete={requestProjectDelete}
         />}
         {view === 'sprints' && <SprintsPage
           workspaceId={workspace?.id ?? selectedWorkspaceId}
@@ -998,6 +1051,7 @@ export default function App() {
           onCreate={createProject}
           onUpdate={updateProject}
           onArchive={archiveProject}
+          onDelete={requestProjectDelete}
           onCreateSprint={createSprint}
           onUpdateSprint={updateSprint}
           onChangeSprintStatus={changeSprintStatus}
@@ -1139,6 +1193,14 @@ export default function App() {
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
+      {projectDeleteCandidate && <ProjectDeleteDialog
+        project={projectDeleteCandidate}
+        busy={projectDeleteBusy}
+        onClose={() => {
+          if (!projectDeleteBusy) setProjectDeleteCandidate(null)
+        }}
+        onConfirm={() => void confirmProjectDelete()}
+      />}
       {onboardingOpen && <OnboardingDialog
         step={onboardingStep}
         onStepChange={setOnboardingStep}
@@ -1610,6 +1672,7 @@ function ProjectBar({
   onCreate,
   onUpdate,
   onArchive,
+  onDelete,
 }: {
   projects: ProjectDetails[]
   selectedProjectId: string
@@ -1632,6 +1695,7 @@ function ProjectBar({
     deliveryDate: string,
   ) => Promise<void>
   onArchive: (projectId: string) => Promise<void>
+  onDelete: (projectId: string) => void
 }) {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -1745,6 +1809,11 @@ function ProjectBar({
               .catch((reason) => setError(reason instanceof Error ? reason.message : 'Project could not be archived.'))
               .finally(() => setBusy(false))
           }}><Trash2 size={16} /> Archive</button>
+          <button
+            className="secondary danger-action"
+            disabled={busy}
+            onClick={() => onDelete(selectedProject.id)}
+          ><Trash2 size={16} /> Delete</button>
         </div>}
       </div>}
     </div>
@@ -1773,6 +1842,46 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
 }
 
+function ProjectDeleteDialog({
+  project,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  project: ProjectDetails
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="danger-dialog" aria-labelledby="project-delete-title">
+      <header>
+        <div>
+          <p className="eyebrow">Permanent delete</p>
+          <h2 id="project-delete-title">Delete {project.name}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="danger-dialog-body">
+        <div className="danger-dialog-icon"><AlertTriangle /></div>
+        <div>
+          <p>
+            This will permanently delete the project, its sprints, tasks,
+            notes, tags, activity history, and board data.
+          </p>
+          <strong>This action cannot be rolled back.</strong>
+        </div>
+      </section>
+      <footer>
+        <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+          <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete project'}
+        </button>
+      </footer>
+    </dialog>
+  </div>
+}
+
 function ProjectsPage({
   projects,
   selectedProjectId,
@@ -1785,6 +1894,7 @@ function ProjectsPage({
   onCreate,
   onUpdate,
   onArchive,
+  onDelete,
 }: {
   projects: ProjectDetails[]
   selectedProjectId: string
@@ -1806,6 +1916,7 @@ function ProjectsPage({
     deliveryDate: string,
   ) => Promise<void>
   onArchive: (projectId: string) => Promise<void>
+  onDelete: (projectId: string) => void
 }) {
   const projectPageSize = 6
   const [projectPage, setProjectPage] = useState(1)
@@ -1831,6 +1942,7 @@ function ProjectsPage({
       onCreate={onCreate}
       onUpdate={onUpdate}
       onArchive={onArchive}
+      onDelete={onDelete}
     />
     {projects.length
       ? <>
@@ -1860,6 +1972,10 @@ function ProjectsPage({
                   <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
                   <button className="secondary sprint-action" onClick={() => onOpenSprints(project.id)}><Clock3 size={16} /> Plan sprints</button>
                   <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+                  {canManageProjects(workspaceRole) && <button
+                    className="secondary danger-action"
+                    onClick={() => onDelete(project.id)}
+                  ><Trash2 size={16} /> Delete</button>}
                 </footer>
               </article>
             })}
@@ -1888,6 +2004,7 @@ function SprintsPage({
   onCreate,
   onUpdate,
   onArchive,
+  onDelete,
   onCreateSprint,
   onUpdateSprint,
   onChangeSprintStatus,
@@ -1912,6 +2029,7 @@ function SprintsPage({
     deliveryDate: string,
   ) => Promise<void>
   onArchive: (projectId: string) => Promise<void>
+  onDelete: (projectId: string) => void
   onCreateSprint: (
     projectId: string,
     name: string,
@@ -1970,6 +2088,7 @@ function SprintsPage({
       onCreate={onCreate}
       onUpdate={onUpdate}
       onArchive={onArchive}
+      onDelete={onDelete}
     />
     {selectedProject
       ? <>

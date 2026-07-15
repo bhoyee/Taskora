@@ -15,6 +15,10 @@ public sealed record UpdateProjectCommand(
 
 public sealed record ArchiveProjectCommand(Guid ProjectId);
 
+public sealed record DeleteProjectCommand(
+    Guid ProjectId,
+    bool HasAdministrativeBypass = false);
+
 public sealed record GetProjectByIdQuery(Guid ProjectId);
 
 public sealed record ListWorkspaceProjectsQuery(Guid WorkspaceId);

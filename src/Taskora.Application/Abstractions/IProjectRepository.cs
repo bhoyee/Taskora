@@ -10,6 +10,10 @@ public interface IProjectRepository
         Guid projectId,
         CancellationToken cancellationToken);
 
+    Task RemoveAsync(
+        Project project,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
         Guid workspaceId,
         CancellationToken cancellationToken);

@@ -24,6 +24,49 @@ public sealed class ProjectRepository(TodoAppDbContext context)
             project => project.Id == projectId,
             cancellationToken);
 
+    public async Task RemoveAsync(
+        Project project,
+        CancellationToken cancellationToken)
+    {
+        if (context.Database.ProviderName?.Contains(
+                "Npgsql",
+                StringComparison.OrdinalIgnoreCase) == true)
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM "TaskDependencies"
+                WHERE "TaskId" IN (
+                    SELECT "Id" FROM "Tasks" WHERE "ProjectId" = {project.Id}
+                )
+                OR "DependencyId" IN (
+                    SELECT "Id" FROM "Tasks" WHERE "ProjectId" = {project.Id}
+                )
+                """,
+                cancellationToken);
+        }
+        else
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM TaskDependencies
+                WHERE TaskId IN (
+                    SELECT Id FROM Tasks WHERE ProjectId = {project.Id}
+                )
+                OR DependencyId IN (
+                    SELECT Id FROM Tasks WHERE ProjectId = {project.Id}
+                )
+                """,
+                cancellationToken);
+        }
+
+        var projectTasks = await context.Tasks
+            .Where(task => task.ProjectId == project.Id)
+            .ToArrayAsync(cancellationToken);
+
+        context.Tasks.RemoveRange(projectTasks);
+        context.Projects.Remove(project);
+    }
+
     public async Task<IReadOnlyList<Project>> ListForWorkspaceAsync(
         Guid workspaceId,
         CancellationToken cancellationToken) =>
