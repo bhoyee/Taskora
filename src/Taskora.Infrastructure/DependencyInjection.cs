@@ -31,6 +31,12 @@ public static class DependencyInjection
                     connectionString,
                     sql => sql.EnableRetryOnFailure());
             }
+            else if (IsPostgres(provider))
+            {
+                options.UseNpgsql(
+                    connectionString,
+                    postgres => postgres.EnableRetryOnFailure());
+            }
             else
             {
                 options.UseSqlite(connectionString);
@@ -132,4 +138,9 @@ public static class DependencyInjection
 
     private static int ReadInt(string? value, int defaultValue) =>
         int.TryParse(value, out var result) ? result : defaultValue;
+
+    private static bool IsPostgres(string provider) =>
+        provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase) ||
+        provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
+        provider.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
 }

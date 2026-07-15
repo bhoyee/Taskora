@@ -10,6 +10,8 @@ public sealed class ProviderConfigurationTests
     [Theory]
     [InlineData("Sqlite", "Microsoft.EntityFrameworkCore.Sqlite")]
     [InlineData("SqlServer", "Microsoft.EntityFrameworkCore.SqlServer")]
+    [InlineData("Postgres", "Npgsql.EntityFrameworkCore.PostgreSQL")]
+    [InlineData("PostgreSQL", "Npgsql.EntityFrameworkCore.PostgreSQL")]
     public void AddInfrastructure_SelectsConfiguredProvider(
         string provider,
         string expectedProviderName)
@@ -17,9 +19,7 @@ public sealed class ProviderConfigurationTests
         var values = new Dictionary<string, string?>
         {
             ["Database:Provider"] = provider,
-            ["ConnectionStrings:TodoApp"] = provider == "Sqlite"
-                ? "Data Source=:memory:"
-                : "Server=(localdb)\\mssqllocaldb;Database=TodoApp;Trusted_Connection=True;"
+            ["ConnectionStrings:TodoApp"] = ConnectionStringFor(provider)
         };
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(values)
@@ -33,5 +33,20 @@ public sealed class ProviderConfigurationTests
             .GetRequiredService<TodoAppDbContext>();
 
         Assert.Equal(expectedProviderName, context.Database.ProviderName);
+    }
+
+    private static string ConnectionStringFor(string provider)
+    {
+        if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Data Source=:memory:";
+        }
+
+        if (provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Server=(localdb)\\mssqllocaldb;Database=TodoApp;Trusted_Connection=True;";
+        }
+
+        return "Host=localhost;Port=5432;Database=taskora;Username=taskora;Password=taskora";
     }
 }

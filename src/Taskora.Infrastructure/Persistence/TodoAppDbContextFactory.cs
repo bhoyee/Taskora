@@ -25,6 +25,12 @@ public sealed class TodoAppDbContextFactory
                 connectionString,
                 sql => sql.EnableRetryOnFailure());
         }
+        else if (IsPostgres(provider))
+        {
+            builder.UseNpgsql(
+                connectionString,
+                postgres => postgres.EnableRetryOnFailure());
+        }
         else
         {
             builder.UseSqlite(connectionString);
@@ -32,4 +38,9 @@ public sealed class TodoAppDbContextFactory
 
         return new TodoAppDbContext(builder.Options);
     }
+
+    private static bool IsPostgres(string provider) =>
+        provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase) ||
+        provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
+        provider.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
 }
