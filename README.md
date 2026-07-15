@@ -322,7 +322,7 @@ App__PublicBaseUrl=https://your-frontend-host
 
 Database__Provider=Postgres
 ConnectionStrings__TodoApp=Host=your-neon-host.neon.tech;Port=5432;Database=neondb;Username=your-user;Password=your-password;SSL Mode=Require;Trust Server Certificate=true
-Database__ApplyMigrationsOnStartup=true
+Database__ApplyMigrationsOnStartup=false
 
 DemoData__SeedOnStartup=false
 
@@ -383,7 +383,7 @@ Render can deploy the API from the included `render.yaml` and root
 ```text
 ASPNETCORE_ENVIRONMENT=Production
 Database__Provider=Postgres
-Database__ApplyMigrationsOnStartup=true
+Database__ApplyMigrationsOnStartup=false
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
 App__PublicBaseUrl=https://your-taskora-app.vercel.app
 Cors__AllowedOrigins__0=https://your-taskora-app.vercel.app
@@ -402,6 +402,20 @@ The Render health check should use:
 
 ```text
 /health/live
+```
+
+Apply Neon migrations separately instead of during Render startup:
+
+```powershell
+$env:Database__Provider="Postgres"
+$env:ConnectionStrings__TodoApp="<Neon PostgreSQL connection string>"
+dotnet tool restore
+dotnet tool run dotnet-ef database update `
+  --configuration Release `
+  --project src/Taskora.Infrastructure/Taskora.Infrastructure.csproj `
+  --startup-project src/Taskora.Api/Taskora.Api.csproj
+Remove-Item Env:Database__Provider
+Remove-Item Env:ConnectionStrings__TodoApp
 ```
 
 ### Vercel Frontend
