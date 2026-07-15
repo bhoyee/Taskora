@@ -3656,7 +3656,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
   const check = (name: string) =>
     summary.healthChecks.find((item) =>
       item.name.toLowerCase() === name.toLowerCase())
-  const api = check('API running')
+  const apiHealth = check('API running')
   const database = check('Database')
   const email = check('Email notifications')
   const reminders = check('Due date reminder runner')
@@ -3669,7 +3669,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
       .then((items) => {
         if (mounted) setBackups(items)
       })
-      .catch((reason) => {
+      .catch((reason: unknown) => {
         if (mounted) setBackupError(
           reason instanceof Error ? reason.message : 'Backup files could not be loaded.')
       })
@@ -3688,7 +3688,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
         created,
         ...items.filter((item) => item.fileName !== created.fileName),
       ])
-    } catch (reason) {
+    } catch (reason: unknown) {
       setBackupError(reason instanceof Error ? reason.message : 'Backup could not be created.')
     } finally {
       setBackupBusy(false)
@@ -3708,7 +3708,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-    } catch (reason) {
+    } catch (reason: unknown) {
       setBackupError(reason instanceof Error ? reason.message : 'Backup could not be downloaded.')
     } finally {
       setBackupBusy(false)
@@ -3725,7 +3725,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
     </div>
 
     <div className="operations-overview">
-      <OperationCard title="API running" value={api?.status ?? 'Unknown'} detail={statusText(api)} icon={<Activity />} />
+      <OperationCard title="API running" value={apiHealth?.status ?? 'Unknown'} detail={statusText(apiHealth)} icon={<Activity />} />
       <OperationCard title="Database" value={database?.status ?? 'Unknown'} detail={statusText(database)} icon={<CircleGauge />} />
       <OperationCard title="Email" value={email?.status ?? 'Unknown'} detail={statusText(email)} icon={<Bell />} />
       <OperationCard title="Reminders" value={summary.reminderScheduler.status} detail={statusText(reminders)} icon={<Clock3 />} />
