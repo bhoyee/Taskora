@@ -426,7 +426,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .calendar-event time span { margin-top: 3px; font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .calendar-event div strong, .calendar-event div small { display: block; min-width: 0; overflow-wrap: anywhere; }
 .calendar-event div small { margin-top: 3px; color: #667281; font-size: 12px; font-weight: 800; }
-.work-area { background: white; border: 1px solid #d7dce2; border-radius: 8px; min-height: 420px; overflow: hidden; }
+.work-area { background: white; border: 1px solid #d7dce2; border-radius: 8px; min-height: 420px; overflow: hidden; display: flex; flex-direction: column; }
 .toolbar { padding: 14px 16px; border-bottom: 1px solid #e2e6ea; display: flex; justify-content: space-between; gap: 16px; }
 .task-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #e2e6ea; background: #f7faf9; color: #42505f; font-size: 13px; }
 .task-filter-banner button { border: 0; border-radius: 5px; background: #e1eee9; color: #17624f; padding: 6px 9px; font-weight: 800; }
@@ -452,9 +452,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .priority-line { width: 3px; border-radius: 3px; background: #b8c0c9; }.priority-line.critical { background: #c33f35; }.priority-line.high { background: #e49625; }.priority-line.medium { background: #4388c7; }.priority-line.low { background: #4d9b78; }
 .status, .deadline { font-size: 12px; font-weight: 700; }.status { width: fit-content; padding: 4px 7px; border-radius: 4px; background: #e8edf2; }.status.inprogress { background: #dcecf8; color: #28638e; }.status.blocked { background: #fbe4e1; color: #a6372e; }.status.completed { background: #def1e9; color: #287258; }
 .deadline.overdue { color: #b23b30; }.deadline.atrisk { color: #9a6508; }.deadline.completed { color: #367861; }.score strong, .score small { display: block; }.score small { color: #7a8591; font-size: 11px; margin-top: 2px; }
-.board { display: grid; grid-template-columns: repeat(5, minmax(210px, 1fr)); gap: 10px; padding: 14px; overflow-x: auto; background: #eef1f4; min-height: 430px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(210px, 1fr)); gap: 10px; padding: 14px; overflow: auto; background: #eef1f4; height: clamp(430px, calc(100vh - 330px), 680px); min-height: 430px; overscroll-behavior: contain; }
 .board.moving { pointer-events: none; opacity: .72; }
-.board-column { --column-accent: #778390; --column-bg: #f2f4f6; min-height: 390px; padding: 7px; border-top: 3px solid var(--column-accent); background: var(--column-bg); border-radius: 6px; transition: background .15s, box-shadow .15s, opacity .15s; }
+.board-column { --column-accent: #778390; --column-bg: #f2f4f6; min-height: 0; padding: 7px; border-top: 3px solid var(--column-accent); background: var(--column-bg); border-radius: 6px; transition: background .15s, box-shadow .15s, opacity .15s; display: flex; flex-direction: column; }
 .board-column.backlog { --column-accent: #687483; --column-bg: #f1f3f5; }
 .board-column.ready { --column-accent: #b7791f; --column-bg: #fff7e8; }
 .board-column.inprogress { --column-accent: #2875a5; --column-bg: #edf7fc; }
@@ -462,7 +462,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .board-column.completed { --column-accent: #287258; --column-bg: #edf8f3; }
 .board-column > header { display: flex; justify-content: space-between; padding: 5px 3px 10px; color: var(--column-accent); font-weight: 800; font-size: 13px; }
 .board-column > header small { min-width: 23px; text-align: center; background: #ffffffb8; border-radius: 10px; padding: 1px 7px; color: #4b5662; }
-.board-column-body { min-height: 335px; }
+.board-column-body { min-height: 0; overflow-y: auto; padding-right: 2px; overscroll-behavior: contain; }
 .board-column.drag-active:not(.valid-target) { opacity: .45; }
 .board-column.valid-target { box-shadow: inset 0 0 0 2px var(--column-accent); }
 .board-column.drag-over { background: white; box-shadow: inset 0 0 0 3px var(--column-accent); }
