@@ -4335,10 +4335,20 @@ function BoardColumn({
 }
 
 function compareBacklogDueDates(left: TaskItem, right: TaskItem) {
-  if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate)
-  if (left.dueDate && !right.dueDate) return -1
-  if (!left.dueDate && right.dueDate) return 1
-  return 0
+  return taskDueDateKey(left.dueDate) - taskDueDateKey(right.dueDate)
+}
+
+function taskDueDateKey(dueDate: string | null) {
+  if (!dueDate) return Number.POSITIVE_INFINITY
+
+  const isoDate = dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoDate) {
+    const [, year, month, day] = isoDate
+    return Date.UTC(Number(year), Number(month) - 1, Number(day))
+  }
+
+  const parsed = Date.parse(dueDate)
+  return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
 }
 
 function compareCreatedAtDesc(left: TaskItem, right: TaskItem) {
