@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { TaskPage } from './api'
+import type { TaskItem, TaskPage } from './api'
 
 const dashboardAnalytics = {
   statusBreakdown: [
@@ -176,6 +176,7 @@ const taskPage: TaskPage = {
     createdByUserId: 'user-1',
     assignedUserId: null,
     createdAt: '2026-07-06T09:00:00Z',
+    sprintId: null,
     categoryId: 'category-1',
     title: 'Ship portfolio',
     status: 'InProgress',
@@ -202,7 +203,7 @@ const taskPage: TaskPage = {
     },
   }],
 }
-const secondTask = {
+const secondTask: TaskItem = {
   ...taskPage.items[0],
   id: 'task-2',
   title: 'Review deployment runbook',
