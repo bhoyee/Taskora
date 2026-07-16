@@ -4347,6 +4347,12 @@ function taskDueDateKey(dueDate: string | null) {
     return Date.UTC(Number(year), Number(month) - 1, Number(day))
   }
 
+  const dayFirstDate = dueDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (dayFirstDate) {
+    const [, day, month, year] = dayFirstDate
+    return Date.UTC(Number(year), Number(month) - 1, Number(day))
+  }
+
   const parsed = Date.parse(dueDate)
   return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
 }

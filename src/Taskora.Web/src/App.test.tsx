@@ -211,23 +211,23 @@ const earlyBacklogTask = {
   ...taskPage.items[0],
   id: 'task-early',
   title: 'Early backlog task',
-  status: 'Backlog',
-  dueDate: '2026-07-08',
+  status: 'Backlog' as const,
+  dueDate: '30/07/2026',
   createdAt: '2026-07-01T09:00:00Z',
 }
 const laterBacklogTask = {
   ...taskPage.items[0],
   id: 'task-later',
   title: 'Later backlog task',
-  status: 'Backlog',
-  dueDate: '2026-07-20',
+  status: 'Backlog' as const,
+  dueDate: '07/08/2026',
   createdAt: '2026-07-02T09:00:00Z',
 }
 const unscheduledBacklogTask = {
   ...taskPage.items[0],
   id: 'task-unscheduled',
   title: 'Unscheduled backlog task',
-  status: 'Backlog',
+  status: 'Backlog' as const,
   dueDate: null,
   createdAt: '2026-07-03T09:00:00Z',
 }
