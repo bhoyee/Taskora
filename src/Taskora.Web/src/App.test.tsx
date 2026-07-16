@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import type { TaskPage } from './api'
 
 const dashboardAnalytics = {
   statusBreakdown: [
@@ -168,7 +169,7 @@ const workspaceReport = {
     deadlineHealth: 'AtRisk',
   }],
 }
-const taskPage = {
+const taskPage: TaskPage = {
   totalCount: 1,
   items: [{
     id: 'task-1',
@@ -310,7 +311,7 @@ const accountProfile = {
   email: 'salisu.adeboye@gmail.com',
 }
 
-function mockApi(page = taskPage) {
+function mockApi(page: TaskPage = taskPage) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
       const url = String(input)
@@ -377,7 +378,7 @@ function mockMemberWorkspaceWithoutProjectsApi() {
     })
 }
 
-function mockResponseFor(url: string, page = taskPage, activityItems = activity) {
+function mockResponseFor(url: string, page: TaskPage = taskPage, activityItems = activity) {
   if (url.includes('/account/me')) return accountProfile
   if (url.includes('/operations/summary')) return {
     isSuperAdmin: false,
