@@ -207,6 +207,30 @@ const secondTask = {
   title: 'Review deployment runbook',
   status: 'Ready',
 }
+const earlyBacklogTask = {
+  ...taskPage.items[0],
+  id: 'task-early',
+  title: 'Early backlog task',
+  status: 'Backlog',
+  dueDate: '2026-07-08',
+  createdAt: '2026-07-01T09:00:00Z',
+}
+const laterBacklogTask = {
+  ...taskPage.items[0],
+  id: 'task-later',
+  title: 'Later backlog task',
+  status: 'Backlog',
+  dueDate: '2026-07-20',
+  createdAt: '2026-07-02T09:00:00Z',
+}
+const unscheduledBacklogTask = {
+  ...taskPage.items[0],
+  id: 'task-unscheduled',
+  title: 'Unscheduled backlog task',
+  status: 'Backlog',
+  dueDate: null,
+  createdAt: '2026-07-03T09:00:00Z',
+}
 const workspaces = [{
   id: 'workspace-1',
   name: 'Portfolio team',
@@ -286,11 +310,11 @@ const accountProfile = {
   email: 'salisu.adeboye@gmail.com',
 }
 
-function mockApi() {
+function mockApi(page = taskPage) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
       const url = String(input)
-      const value = mockResponseFor(url, taskPage)
+      const value = mockResponseFor(url, page)
       return new Response(JSON.stringify(value), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -549,6 +573,23 @@ describe('delivery workspace', () => {
     expect(within(dialog).getByLabelText('Risk reduction')).toHaveValue(3)
     const effort = within(dialog).getByLabelText('Effort') as HTMLSelectElement
     expect(Array.from(effort.options).map((option) => option.value)).toEqual(['1', '2', '3', '5', '8'])
+  })
+
+  it('orders backlog tasks by earliest due date first', async () => {
+    window.history.replaceState(null, '', '/#board')
+    mockApi({
+      totalCount: 3,
+      items: [unscheduledBacklogTask, laterBacklogTask, earlyBacklogTask],
+    })
+
+    render(<App />)
+
+    const backlog = await screen.findByRole('region', { name: 'Backlog tasks' })
+    expect(within(backlog).getAllByText(/backlog task/i).map((item) => item.textContent)).toEqual([
+      'Early backlog task',
+      'Later backlog task',
+      'Unscheduled backlog task',
+    ])
   })
 
   it('opens an existing task for planning and workflow changes', async () => {

@@ -4303,9 +4303,17 @@ function BoardColumn({
   validTarget: boolean
 }) {
   const orderedTasks = [...tasks].sort((left, right) => {
+    if (status === 'Backlog') {
+      const dueDateOrder = compareBacklogDueDates(left, right)
+      if (dueDateOrder !== 0) return dueDateOrder
+    }
+
     const leftPinned = pinnedTaskIds.has(left.id) ? 0 : 1
     const rightPinned = pinnedTaskIds.has(right.id) ? 0 : 1
-    return leftPinned - rightPinned
+    const pinnedOrder = leftPinned - rightPinned
+    if (pinnedOrder !== 0) return pinnedOrder
+
+    return compareCreatedAtDesc(left, right)
   })
   const { isOver, setNodeRef } = useDroppable({
     id: status,
@@ -4324,6 +4332,20 @@ function BoardColumn({
       {!tasks.length && <span className="column-empty">No tasks</span>}
     </div>
   </section>
+}
+
+function compareBacklogDueDates(left: TaskItem, right: TaskItem) {
+  if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate)
+  if (left.dueDate && !right.dueDate) return -1
+  if (!left.dueDate && right.dueDate) return 1
+  return 0
+}
+
+function compareCreatedAtDesc(left: TaskItem, right: TaskItem) {
+  const createdOrder = right.createdAt.localeCompare(left.createdAt)
+  if (createdOrder !== 0) return createdOrder
+
+  return left.title.localeCompare(right.title)
 }
 
 function BoardCard({
