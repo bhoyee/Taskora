@@ -4386,9 +4386,8 @@ function BoardCard({
     {...listeners}
   >
     <div className="board-task-heading">
-      <GripVertical aria-hidden="true" />
-      <strong>{task.title}</strong>
-      <div className="board-task-actions">
+      <div className="board-task-toolbar">
+        <GripVertical aria-hidden="true" />
         <button
           className={`pin-button ${pinned ? 'active' : ''}`}
           onClick={(event) => {
@@ -4434,6 +4433,7 @@ function BoardCard({
           title="Delete task"
         ><Trash2 /></button>}
       </div>
+      <strong>{task.title}</strong>
     </div>
     <div className="board-task-meta">
       <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>
