@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import type { FormEvent, MouseEvent, ReactNode } from 'react'
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor,
   useDraggable, useDroppable, useSensor, useSensors,
@@ -1125,6 +1125,7 @@ export default function App() {
           </section>
         </>}
         {view === 'projects' && <ProjectsPage
+          workspaceId={workspace?.id ?? selectedWorkspaceId}
           projects={projects}
           selectedProjectId={project?.id ?? selectedProjectId}
           workspaceRole={workspace?.role ?? null}
@@ -2092,6 +2093,7 @@ function WorkspaceDeleteDialog({
 }
 
 function ProjectsPage({
+  workspaceId,
   projects,
   selectedProjectId,
   workspaceRole,
@@ -2105,6 +2107,7 @@ function ProjectsPage({
   onArchive,
   onDelete,
 }: {
+  workspaceId: string
   projects: ProjectDetails[]
   selectedProjectId: string
   workspaceRole: Workspace['role'] | null
@@ -2129,6 +2132,7 @@ function ProjectsPage({
 }) {
   const projectPageSize = 6
   const [projectPage, setProjectPage] = useState(1)
+  const [selectedProject, setSelectedProject] = useState<ProjectDetails | null>(null)
   const totalProjectPages = Math.max(1, Math.ceil(projects.length / projectPageSize))
   const visibleProjects = projects.slice(
     (projectPage - 1) * projectPageSize,
@@ -2139,6 +2143,15 @@ function ProjectsPage({
       setProjectPage(totalProjectPages)
     }
   }, [projectPage, totalProjectPages])
+  useEffect(() => {
+    if (selectedProject && !projects.some((project) => project.id === selectedProject.id)) {
+      setSelectedProject(null)
+    }
+  }, [projects, selectedProject])
+
+  const stopProjectAction = (event: MouseEvent) => {
+    event.stopPropagation()
+  }
 
   return <section className="projects-page">
     <ProjectBar
@@ -2159,7 +2172,20 @@ function ProjectsPage({
             {visibleProjects.map((project) => {
               const delivery = deliveryStatus(project.targetDate)
               const pinned = pinnedProjectIds.has(project.id)
-              return <article className={`project-card ${project.id === selectedProjectId ? 'selected' : ''}`} key={project.id}>
+              return <article
+                className={`project-card clickable ${project.id === selectedProjectId ? 'selected' : ''}`}
+                key={project.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedProject(project)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSelectedProject(project)
+                  }
+                }}
+                aria-label={`Open ${project.name} project details`}
+              >
                 <header>
                   <div>
                     <p className="eyebrow">Project</p>
@@ -2167,7 +2193,10 @@ function ProjectsPage({
                   </div>
                   <button
                     className={`pin-button ${pinned ? 'active' : ''}`}
-                    onClick={() => onTogglePin(project.id)}
+                    onClick={(event) => {
+                      stopProjectAction(event)
+                      onTogglePin(project.id)
+                    }}
                     aria-label={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}
                     title={pinned ? 'Unpin project' : 'Pin project'}
                   ><Pin /></button>
@@ -2178,12 +2207,24 @@ function ProjectsPage({
                   {delivery && <span className={`delivery-badge ${delivery.tone}`}>{delivery.label}</span>}
                 </div>
                 <footer>
-                  <button className="secondary" onClick={() => onSwitch(project.id)}>Select</button>
-                  <button className="secondary sprint-action" onClick={() => onOpenSprints(project.id)}><Clock3 size={16} /> Plan sprints</button>
-                  <button className="primary" onClick={() => onOpenTasks(project.id)}><LayoutList size={16} /> Open tasks</button>
+                  <button className="secondary" onClick={(event) => {
+                    stopProjectAction(event)
+                    onSwitch(project.id)
+                  }}>Select</button>
+                  <button className="secondary sprint-action" onClick={(event) => {
+                    stopProjectAction(event)
+                    onOpenSprints(project.id)
+                  }}><Clock3 size={16} /> Plan sprints</button>
+                  <button className="primary" onClick={(event) => {
+                    stopProjectAction(event)
+                    onOpenTasks(project.id)
+                  }}><LayoutList size={16} /> Open tasks</button>
                   {canManageProjects(workspaceRole) && <button
                     className="secondary danger-action"
-                    onClick={() => onDelete(project.id)}
+                    onClick={(event) => {
+                      stopProjectAction(event)
+                      onDelete(project.id)
+                    }}
                   ><Trash2 size={16} /> Delete</button>}
                 </footer>
               </article>
@@ -2198,7 +2239,140 @@ function ProjectsPage({
           />
         </>
       : <div className="empty"><FolderPlus /><h2>No project yet</h2><p>Create a project before adding delivery tasks.</p></div>}
+    {selectedProject && <ProjectDetailsDialog
+      workspaceId={workspaceId}
+      project={selectedProject}
+      onClose={() => setSelectedProject(null)}
+    />}
   </section>
+}
+
+function ProjectDetailsDialog({
+  workspaceId,
+  project,
+  onClose,
+}: {
+  workspaceId: string
+  project: ProjectDetails
+  onClose: () => void
+}) {
+  const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    setError('')
+    loadBoardTasks(workspaceId, '', project.id, '')
+      .then((page) => {
+        if (mounted) setTasks(page.items)
+      })
+      .catch((reason) => {
+        if (mounted) setError(reason instanceof Error ? reason.message : 'Project tasks could not be loaded.')
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [workspaceId, project.id])
+
+  const orderedSprints = [...project.sprints].sort((left, right) =>
+    left.startDate.localeCompare(right.startDate) || left.name.localeCompare(right.name))
+  const sprintNames = new Map(project.sprints.map((sprint) => [sprint.id, sprint.name]))
+  const statusCounts = tasks.reduce<Record<TaskStatus, number>>((counts, task) => {
+    counts[task.status] += 1
+    return counts
+  }, { Backlog: 0, Ready: 0, InProgress: 0, Blocked: 0, Completed: 0 })
+  const activeSprints = project.sprints.filter((sprint) => sprint.status === 'Active').length
+  const plannedSprints = project.sprints.filter((sprint) => sprint.status === 'Planned').length
+  const openTasks = tasks.length - statusCounts.Completed
+  const orderedTasks = [...tasks].sort((left, right) =>
+    compareBacklogDueDates(left, right) ||
+    statusLabels[left.status].localeCompare(statusLabels[right.status]) ||
+    compareCreatedAtDesc(left, right))
+
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="project-details-dialog" aria-labelledby="project-detail-title">
+      <header>
+        <div>
+          <p className="eyebrow">Project details</p>
+          <h2 id="project-detail-title">{project.name}</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="sprint-detail-body">
+        <div className="sprint-detail-grid">
+          <article>
+            <span>Delivery date</span>
+            <strong>{project.targetDate ? formatDate(project.targetDate) : 'Not set'}</strong>
+          </article>
+          <article>
+            <span>Open work</span>
+            <strong>{openTasks}</strong>
+          </article>
+          <article>
+            <span>Sprints</span>
+            <strong>{project.sprints.length}</strong>
+          </article>
+          <article>
+            <span>Active cycles</span>
+            <strong>{activeSprints || plannedSprints ? `${activeSprints} active, ${plannedSprints} planned` : 'None'}</strong>
+          </article>
+        </div>
+        <section className="sprint-goal">
+          <span>Goal</span>
+          <p>{project.description || 'No project goal recorded yet.'}</p>
+        </section>
+        <section className="sprint-status-summary" aria-label="Project task status summary">
+          {Object.entries(statusCounts).map(([status, count]) =>
+            <span key={status}><i className={`status-dot ${status.toLowerCase()}`} /> {statusLabels[status as TaskStatus]} <strong>{count}</strong></span>)}
+        </section>
+        <section className="project-sprint-summary">
+          <header>
+            <h3>Sprints under this project</h3>
+            <span>{project.sprints.length} sprint{project.sprints.length === 1 ? '' : 's'}</span>
+          </header>
+          {orderedSprints.length
+            ? <div className="project-sprint-list">
+                {orderedSprints.map((sprint, index) => <article key={sprint.id}>
+                  <span className="sprint-number">Sprint {index + 1}</span>
+                  <div>
+                    <strong>{sprint.name}</strong>
+                    <small>{sprint.goal || 'No sprint goal recorded yet.'}</small>
+                  </div>
+                  <span className={`sprint-status ${sprint.status.toLowerCase()}`}>{sprint.status}</span>
+                  <small>{formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}</small>
+                </article>)}
+              </div>
+            : <div className="empty compact"><Clock3 /><h2>No sprints yet</h2><p>Create sprints to group this project into delivery cycles.</p></div>}
+        </section>
+        <section className="sprint-task-table">
+          <header>
+            <h3>Tasks under this project</h3>
+            <span>{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+          </header>
+          {loading && <div className="loading compact">Loading project tasks...</div>}
+          {error && <p className="field-error">{error}</p>}
+          {!loading && !error && (orderedTasks.length
+            ? <div className="sprint-task-list">
+                {orderedTasks.map((task) => <article key={task.id}>
+                  <div>
+                    <strong>{task.title}</strong>
+                    <span>{task.sprintId ? sprintNames.get(task.sprintId) ?? 'Sprint unavailable' : 'No sprint'}{task.tags.length ? ` - ${task.tags.join(', ')}` : ''}</span>
+                  </div>
+                  <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+                  <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No deadline'}</span>
+                </article>)}
+              </div>
+            : <div className="empty compact"><LayoutList /><h2>No tasks under this project</h2><p>Create tasks from the Tasks or Board page after selecting this project.</p></div>)}
+        </section>
+      </section>
+    </dialog>
+  </div>
 }
 
 function SprintsPage({
