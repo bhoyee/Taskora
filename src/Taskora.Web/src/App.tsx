@@ -59,6 +59,7 @@ const defaultProfile: UserProfile = {
 const defaultAccount: AccountSession | null = null
 const todayInput = new Date().toISOString().slice(0, 10)
 const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+const boardTaskPageSize = 100
 type DashboardWarning = Dashboard['warnings'][number]
 type NotificationItem = DashboardWarning & {
   id: string
@@ -174,6 +175,45 @@ function allowedTaskTargets(
 
 function canManageProjects(workspaceRole?: Workspace['role'] | null) {
   return workspaceRole === 'Owner' || workspaceRole === 'Manager'
+}
+
+async function loadBoardTasks(
+  workspaceId: string,
+  search: string,
+  projectId: string,
+  sprintId: string,
+) {
+  const firstPage = await api.tasks(
+    workspaceId,
+    search,
+    1,
+    boardTaskPageSize,
+    projectId,
+    sprintId)
+
+  if (firstPage.items.length >= firstPage.totalCount) {
+    return firstPage
+  }
+
+  const totalPages = Math.ceil(firstPage.totalCount / boardTaskPageSize)
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      api.tasks(
+        workspaceId,
+        search,
+        index + 2,
+        boardTaskPageSize,
+        projectId,
+        sprintId)),
+  )
+
+  return {
+    totalCount: firstPage.totalCount,
+    items: [
+      ...firstPage.items,
+      ...remainingPages.flatMap((page) => page.items),
+    ],
+  }
 }
 
 const activityTypes = [
@@ -326,7 +366,9 @@ export default function App() {
         api.dashboard(selected.id),
         api.report(selected.id, undefined, undefined, selectedProject?.id),
         selectedProject
-          ? api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id, nextSprintId)
+          ? view === 'board'
+            ? loadBoardTasks(selected.id, search, selectedProject.id, nextSprintId)
+            : api.tasks(selected.id, search, pageNumber, pageSize, selectedProject.id, nextSprintId)
           : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
@@ -387,7 +429,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  useEffect(() => { void load() }, [view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
@@ -396,7 +438,7 @@ export default function App() {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
-  }, [loading, loggedOut, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  }, [loading, loggedOut, view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (!selectedWorkspaceId || loading || loggedOut) return undefined
 
@@ -423,7 +465,7 @@ export default function App() {
       window.clearTimeout(refreshTimer)
       controller.abort()
     }
-  }, [selectedWorkspaceId, loading, loggedOut, pageNumber, search, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  }, [selectedWorkspaceId, loading, loggedOut, view, pageNumber, search, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -1065,7 +1107,7 @@ export default function App() {
               </div>
             </div>
             {drilldown !== 'all' && <div className="task-filter-banner">
-              <span>Showing {drilldownLabels[drilldown].toLowerCase()} tasks on this page.</span>
+              <span>Showing {drilldownLabels[drilldown].toLowerCase()} tasks{view === 'tasks' ? ' on this page' : ''}.</span>
               <button onClick={() => setDrilldown('all')}>Clear filter</button>
             </div>}
 
@@ -1073,7 +1115,7 @@ export default function App() {
               view === 'tasks'
                 ? <TaskList tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} />
                 : <Board tasks={visible} categories={categories} sprints={project?.sprints ?? []} members={members} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} pinnedTaskIds={pinnedTaskIds} onEdit={(task) => void openTaskEditor(task)} onDelete={(task) => void deleteTask(task)} onMove={moveTask} onNote={(task) => void openTaskNotes(task)} onTogglePin={togglePinnedTask} onLockedMoveAttempt={(message) => setError(message)} />}
-            {!loading && <Pagination
+            {!loading && view === 'tasks' && <Pagination
               pageNumber={pageNumber}
               pageSize={pageSize}
               totalCount={filteredTaskTotal}
