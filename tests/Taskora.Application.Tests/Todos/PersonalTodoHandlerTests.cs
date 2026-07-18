@@ -1,4 +1,5 @@
 using TodoApp.Application.Abstractions;
+using TodoApp.Application.Notifications;
 using TodoApp.Application.Todos;
 using TodoApp.Domain.Todos;
 
@@ -27,6 +28,7 @@ public sealed class PersonalTodoHandlerTests
             unitOfWork,
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
+            new RecordingEmailSender(),
             new StubCurrentUser(userId));
 
         var result = await handler.HandleAsync(
@@ -43,8 +45,57 @@ public sealed class PersonalTodoHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    [Fact]
+    public async Task List_SendsCarryOverEmailWhenTodayFallbackMovesTodos()
+    {
+        var userId = Guid.NewGuid();
+        var oldTodo = PersonalTodo.Create(
+            Guid.NewGuid(),
+            userId,
+            "Finish yesterday follow-up",
+            new DateOnly(2026, 7, 17),
+            null,
+            Now.AddDays(-1));
+        var repository = new StubPersonalTodoRepository(
+            [oldTodo],
+            [
+                new PersonalTodoOwner(
+                    userId,
+                    "Jadesola Aliu",
+                    "jadesola@example.com")
+            ]);
+        var unitOfWork = new RecordingUnitOfWork();
+        var emailSender = new RecordingEmailSender();
+        var handler = new ListPersonalTodosHandler(
+            repository,
+            unitOfWork,
+            new StubClock(Now),
+            new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
+            emailSender,
+            new StubCurrentUser(userId));
+
+        var result = await handler.HandleAsync(
+            new ListPersonalTodosQuery(
+                new DateOnly(2026, 7, 18),
+                null,
+                1,
+                10),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new DateOnly(2026, 7, 18), oldTodo.TodoDate);
+        Assert.Equal(new DateOnly(2026, 7, 17), oldTodo.CarriedOverFromDate);
+        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Single(emailSender.Messages);
+        Assert.Contains(
+            "Finish yesterday follow-up",
+            emailSender.Messages[0].Body,
+            StringComparison.Ordinal);
+    }
+
     private sealed class StubPersonalTodoRepository(
-        IReadOnlyList<PersonalTodo> searchTodos)
+        IReadOnlyList<PersonalTodo> searchTodos,
+        IReadOnlyList<PersonalTodoOwner>? owners = null)
         : IPersonalTodoRepository
     {
         public int UserCarryOverLookupCount { get; private set; }
@@ -70,7 +121,13 @@ public sealed class PersonalTodoHandlerTests
             CancellationToken cancellationToken)
         {
             UserCarryOverLookupCount++;
-            return Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
+            return Task.FromResult<IReadOnlyList<PersonalTodo>>(
+                searchTodos
+                    .Where(todo =>
+                        todo.UserId == userId &&
+                        !todo.IsCompleted &&
+                        todo.TodoDate < targetDate)
+                    .ToArray());
         }
 
         public Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
@@ -81,7 +138,9 @@ public sealed class PersonalTodoHandlerTests
         public Task<IReadOnlyList<PersonalTodoOwner>> ListOwnersAsync(
             IReadOnlyCollection<Guid> userIds,
             CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<PersonalTodoOwner>>([]);
+            Task.FromResult<IReadOnlyList<PersonalTodoOwner>>(
+                owners?.Where(owner => userIds.Contains(owner.UserId)).ToArray() ??
+                []);
 
         public Task RemoveAsync(
             PersonalTodo todo,
@@ -96,6 +155,19 @@ public sealed class PersonalTodoHandlerTests
         public Task SaveChangesAsync(CancellationToken cancellationToken)
         {
             SaveCount++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingEmailSender : INotificationEmailSender
+    {
+        public List<NotificationEmailMessage> Messages { get; } = [];
+
+        public Task SendAsync(
+            NotificationEmailMessage message,
+            CancellationToken cancellationToken)
+        {
+            Messages.Add(message);
             return Task.CompletedTask;
         }
     }

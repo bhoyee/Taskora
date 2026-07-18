@@ -31,7 +31,7 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
         }
 
         var carryOvers = overdueTodos
-            .Select(todo => new PersonalTodoCarryOverItem(
+            .Select(todo => new PersonalTodoCarryOverCandidate(
                 todo.UserId,
                 todo.Title,
                 todo.TodoDate,
@@ -62,7 +62,14 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
             }
 
             await emailSender.SendAsync(
-                BuildCarryOverMessage(owner, group.ToArray(), today),
+                PersonalTodoCarryOverEmailFactory.Build(
+                    owner,
+                    group
+                        .Select(item => new PersonalTodoCarryOverEmailItem(
+                            item.Title,
+                            item.FromDate))
+                        .ToArray(),
+                    today),
                 cancellationToken);
             notifiedUsers++;
             emailCount++;
@@ -74,9 +81,22 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
             emailCount);
     }
 
-    private static NotificationEmailMessage BuildCarryOverMessage(
+    private sealed record PersonalTodoCarryOverCandidate(
+        Guid UserId,
+        string Title,
+        DateOnly FromDate,
+        DateOnly ToDate);
+}
+
+public sealed record PersonalTodoCarryOverEmailItem(
+    string Title,
+    DateOnly FromDate);
+
+public static class PersonalTodoCarryOverEmailFactory
+{
+    public static NotificationEmailMessage Build(
         PersonalTodoOwner owner,
-        IReadOnlyCollection<PersonalTodoCarryOverItem> items,
+        IReadOnlyCollection<PersonalTodoCarryOverEmailItem> items,
         DateOnly today)
     {
         var body = new StringBuilder();
@@ -113,10 +133,4 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
             $"My Day carryover: {items.Count} todo{(items.Count == 1 ? string.Empty : "s")} moved to today",
             body.ToString());
     }
-
-    private sealed record PersonalTodoCarryOverItem(
-        Guid UserId,
-        string Title,
-        DateOnly FromDate,
-        DateOnly ToDate);
 }

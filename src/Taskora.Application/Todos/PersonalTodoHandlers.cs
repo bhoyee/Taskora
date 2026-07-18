@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Notifications;
 using TodoApp.Domain.Common;
 using TodoApp.Domain.Todos;
 using static TodoApp.Application.Todos.PersonalTodoHandlerHelpers;
@@ -11,6 +12,7 @@ public sealed class ListPersonalTodosHandler(
     IUnitOfWork unitOfWork,
     IClock clock,
     IBusinessDateProvider dates,
+    INotificationEmailSender emailSender,
     ICurrentUser currentUser)
 {
     public async Task<Result<PagedResult<PersonalTodoDto>>> HandleAsync(
@@ -44,6 +46,11 @@ public sealed class ListPersonalTodosHandler(
                 currentUser.UserId,
                 today,
                 cancellationToken);
+            var carryOverItems = carried
+                .Select(todo => new PersonalTodoCarryOverEmailItem(
+                    todo.Title,
+                    todo.TodoDate))
+                .ToArray();
             foreach (var todo in carried)
             {
                 todo.CarryOverTo(today, clock.UtcNow);
@@ -52,6 +59,10 @@ public sealed class ListPersonalTodosHandler(
             if (carried.Count > 0)
             {
                 await unitOfWork.SaveChangesAsync(cancellationToken);
+                await SendCarryOverEmailAsync(
+                    carryOverItems,
+                    today,
+                    cancellationToken);
             }
         }
 
@@ -72,6 +83,28 @@ public sealed class ListPersonalTodosHandler(
                 searchResult.TotalCount,
                 query.PageNumber,
                 query.PageSize));
+    }
+
+    private async Task SendCarryOverEmailAsync(
+        IReadOnlyCollection<PersonalTodoCarryOverEmailItem> items,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        var owners = await todos.ListOwnersAsync(
+            [currentUser.UserId],
+            cancellationToken);
+        var owner = owners.FirstOrDefault();
+        if (owner is null || string.IsNullOrWhiteSpace(owner.Email))
+        {
+            return;
+        }
+
+        await emailSender.SendAsync(
+            PersonalTodoCarryOverEmailFactory.Build(
+                owner,
+                items,
+                today),
+            cancellationToken);
     }
 }
 
