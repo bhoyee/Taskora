@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations'
+type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations' | 'backups'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations']
+const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -986,7 +986,10 @@ export default function App() {
           <button className={view === 'calendar' ? 'active' : ''} onClick={() => openView('calendar')}><CalendarDays size={18} /> Calendar</button>
           <button className={view === 'activity' ? 'active' : ''} onClick={() => openView('activity')}><Activity size={18} /> Activity</button>
           <button className={view === 'team' ? 'active' : ''} onClick={() => openView('team')}><UserPlus size={18} /> Team</button>
-          {operations?.isSuperAdmin && <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>}
+          {operations?.isSuperAdmin && <>
+            <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>
+            <button className={view === 'backups' ? 'active' : ''} onClick={() => openView('backups')}><Save size={18} /> Database Backups</button>
+          </>}
         </nav>
         <PinnedProjects
           projects={projects}
@@ -1297,6 +1300,7 @@ export default function App() {
           onLogout={logout}
         />}
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
+        {view === 'backups' && operations?.isSuperAdmin && <DatabaseBackupsPage summary={operations} />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
@@ -3866,9 +3870,6 @@ function NotificationDigest({
 }
 
 function OperationsPage({ summary }: { summary: OperationsSummary }) {
-  const [backups, setBackups] = useState<DatabaseBackupFile[]>([])
-  const [backupBusy, setBackupBusy] = useState(false)
-  const [backupError, setBackupError] = useState('')
   const check = (name: string) =>
     summary.healthChecks.find((item) =>
       item.name.toLowerCase() === name.toLowerCase())
@@ -3878,58 +3879,6 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
   const reminders = check('Due date reminder runner')
   const statusText = (item?: OperationHealthCheck) =>
     item?.description ?? item?.status ?? 'Not reported'
-
-  useEffect(() => {
-    let mounted = true
-    api.operationBackups()
-      .then((items) => {
-        if (mounted) setBackups(items)
-      })
-      .catch((reason: unknown) => {
-        if (mounted) setBackupError(
-          reason instanceof Error ? reason.message : 'Backup files could not be loaded.')
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [summary.generatedAt])
-
-  const createBackup = async () => {
-    try {
-      setBackupBusy(true)
-      setBackupError('')
-      const created = await api.createOperationBackup()
-      setBackups((items) => [
-        created,
-        ...items.filter((item) => item.fileName !== created.fileName),
-      ])
-    } catch (reason: unknown) {
-      setBackupError(reason instanceof Error ? reason.message : 'Backup could not be created.')
-    } finally {
-      setBackupBusy(false)
-    }
-  }
-
-  const downloadBackup = async (fileName: string) => {
-    try {
-      setBackupBusy(true)
-      setBackupError('')
-      const blob = await api.downloadOperationBackup(fileName)
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-    } catch (reason: unknown) {
-      setBackupError(reason instanceof Error ? reason.message : 'Backup could not be downloaded.')
-    } finally {
-      setBackupBusy(false)
-    }
-  }
 
   return <section className="panel-page operations-page" aria-label="Operations health and logs">
     <div className="activity-toolbar">
@@ -3945,7 +3894,6 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
       <OperationCard title="Database" value={database?.status ?? 'Unknown'} detail={statusText(database)} icon={<CircleGauge />} />
       <OperationCard title="Email" value={email?.status ?? 'Unknown'} detail={statusText(email)} icon={<Bell />} />
       <OperationCard title="Reminders" value={summary.reminderScheduler.status} detail={statusText(reminders)} icon={<Clock3 />} />
-      <OperationCard title="Backups" value={summary.databaseBackups.status} detail={summary.databaseBackups.enabled ? `Every ${summary.databaseBackups.intervalHours} hours` : 'Disabled'} icon={<Save />} />
     </div>
 
     <div className="operations-grid">
@@ -4008,42 +3956,6 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
         </div>
       </article>
 
-      <article className="profile-card">
-        <div className="profile-heading">
-          <span className="metric-icon"><Save /></span>
-          <div>
-            <h2>Database backups</h2>
-            <p>Automatic snapshots with 7-day retention by default.</p>
-          </div>
-        </div>
-        <div className="log-summary">
-          <span><strong>Status</strong>{summary.databaseBackups.status}</span>
-          <span><strong>Interval</strong>{summary.databaseBackups.intervalHours ? `${summary.databaseBackups.intervalHours} hours` : 'Not configured'}</span>
-          <span><strong>Last backup</strong>{summary.databaseBackups.lastBackupFileName ?? 'Not run yet'}</span>
-          <span><strong>Last run</strong>{summary.databaseBackups.lastRunCompletedAt ? new Date(summary.databaseBackups.lastRunCompletedAt).toLocaleString() : 'Not run yet'}</span>
-          <span><strong>Next run</strong>{summary.databaseBackups.nextRunAt ? new Date(summary.databaseBackups.nextRunAt).toLocaleString() : 'Pending'}</span>
-          <span><strong>Last error</strong>{summary.databaseBackups.lastError ?? 'None'}</span>
-        </div>
-        <footer>
-          <button className="primary" disabled={backupBusy} onClick={() => void createBackup()}>
-            <Save size={16} /> {backupBusy ? 'Working...' : 'Create backup now'}
-          </button>
-        </footer>
-        {backupError && <p className="field-error">{backupError}</p>}
-        <div className="operation-log-list compact">
-          {backups.length
-            ? backups.map((backup) => <article className="operation-log-row backup-row" key={backup.fileName}>
-                <span className="log-level">JSON</span>
-                <div>
-                  <strong>{backup.fileName}</strong>
-                  <small>{formatBytes(backup.sizeBytes)} - created {new Date(backup.createdAt).toLocaleString()}</small>
-                </div>
-                <button className="secondary" disabled={backupBusy} onClick={() => void downloadBackup(backup.fileName)}>Download</button>
-              </article>)
-            : <div className="empty compact"><Save /><h2>No backups yet</h2><p>Create one manually or enable the backup scheduler.</p></div>}
-        </div>
-      </article>
-
       <article className="profile-card operations-wide">
         <div className="profile-heading">
           <span className="metric-icon"><LayoutList /></span>
@@ -4063,6 +3975,127 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
                 </div>
               </article>)
             : <div className="empty compact"><Activity /><h2>No logs captured yet</h2><p>Use the application or run a reminder/email action to generate log entries.</p></div>}
+        </div>
+      </article>
+    </div>
+  </section>
+}
+
+function DatabaseBackupsPage({ summary }: { summary: OperationsSummary }) {
+  const [backups, setBackups] = useState<DatabaseBackupFile[]>([])
+  const [backupBusy, setBackupBusy] = useState(false)
+  const [backupError, setBackupError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    api.operationBackups()
+      .then((items) => {
+        if (mounted) setBackups(items)
+      })
+      .catch((reason: unknown) => {
+        if (mounted) setBackupError(
+          reason instanceof Error ? reason.message : 'Backup files could not be loaded.')
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [summary.generatedAt])
+
+  const createBackup = async () => {
+    try {
+      setBackupBusy(true)
+      setBackupError('')
+      const created = await api.createOperationBackup()
+      setBackups((items) => [
+        created,
+        ...items.filter((item) => item.fileName !== created.fileName),
+      ])
+    } catch (reason: unknown) {
+      setBackupError(reason instanceof Error ? reason.message : 'Backup could not be created.')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  const downloadBackup = async (fileName: string) => {
+    try {
+      setBackupBusy(true)
+      setBackupError('')
+      const blob = await api.downloadOperationBackup(fileName)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (reason: unknown) {
+      setBackupError(reason instanceof Error ? reason.message : 'Backup could not be downloaded.')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  return <section className="panel-page operations-page" aria-label="Database backup operations">
+    <div className="activity-toolbar">
+      <div>
+        <p className="eyebrow">Super admin</p>
+        <h2>Database backups</h2>
+        <p>Automatic snapshots with 7-day retention by default.</p>
+      </div>
+      <button className="primary" disabled={backupBusy} onClick={() => void createBackup()}>
+        <Save size={16} /> {backupBusy ? 'Working...' : 'Create backup now'}
+      </button>
+    </div>
+
+    <div className="operations-overview">
+      <OperationCard title="Status" value={summary.databaseBackups.status} detail={summary.databaseBackups.enabled ? 'Scheduler enabled' : 'Scheduler disabled'} icon={<Save />} />
+      <OperationCard title="Interval" value={summary.databaseBackups.intervalHours ? `${summary.databaseBackups.intervalHours}h` : 'Unset'} detail="Automatic backup cadence" icon={<Clock3 />} />
+      <OperationCard title="Last backup" value={summary.databaseBackups.lastBackupFileName ? 'Created' : 'None'} detail={summary.databaseBackups.lastBackupFileName ?? 'Not run yet'} icon={<CheckCircle2 />} />
+      <OperationCard title="Files" value={String(backups.length)} detail="Available backup downloads" icon={<LayoutList />} />
+    </div>
+
+    <div className="operations-grid">
+      <article className="profile-card">
+        <div className="profile-heading">
+          <span className="metric-icon"><Settings2 /></span>
+          <div>
+            <h2>Backup scheduler</h2>
+            <p>Current automatic backup runtime state.</p>
+          </div>
+        </div>
+        <div className="log-summary">
+          <span><strong>Status</strong>{summary.databaseBackups.status}</span>
+          <span><strong>Interval</strong>{summary.databaseBackups.intervalHours ? `${summary.databaseBackups.intervalHours} hours` : 'Not configured'}</span>
+          <span><strong>Last backup</strong>{summary.databaseBackups.lastBackupFileName ?? 'Not run yet'}</span>
+          <span><strong>Last run</strong>{summary.databaseBackups.lastRunCompletedAt ? new Date(summary.databaseBackups.lastRunCompletedAt).toLocaleString() : 'Not run yet'}</span>
+          <span><strong>Next run</strong>{summary.databaseBackups.nextRunAt ? new Date(summary.databaseBackups.nextRunAt).toLocaleString() : 'Pending'}</span>
+          <span><strong>Last error</strong>{summary.databaseBackups.lastError ?? 'None'}</span>
+        </div>
+      </article>
+
+      <article className="profile-card operations-wide">
+        <div className="profile-heading">
+          <span className="metric-icon"><Save /></span>
+          <div>
+            <h2>Backup files</h2>
+            <p>Download JSON database snapshots for recovery or audit review.</p>
+          </div>
+        </div>
+        {backupError && <p className="field-error">{backupError}</p>}
+        <div className="operation-log-list compact">
+          {backups.length
+            ? backups.map((backup) => <article className="operation-log-row backup-row" key={backup.fileName}>
+                <span className="log-level">JSON</span>
+                <div>
+                  <strong>{backup.fileName}</strong>
+                  <small>{formatBytes(backup.sizeBytes)} - created {new Date(backup.createdAt).toLocaleString()}</small>
+                </div>
+                <button className="secondary" disabled={backupBusy} onClick={() => void downloadBackup(backup.fileName)}>Download</button>
+              </article>)
+            : <div className="empty compact"><Save /><h2>No backups yet</h2><p>Create one manually or wait for the startup scheduler to complete.</p></div>}
         </div>
       </article>
     </div>
