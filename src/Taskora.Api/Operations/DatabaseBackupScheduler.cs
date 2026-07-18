@@ -21,7 +21,8 @@ public sealed class DatabaseBackupScheduler(
             24);
         var interval = TimeSpan.FromHours(intervalHours);
         var runOnStartup = ReadBool(
-            configuration["Operations:Backups:RunOnStartup"]);
+            configuration["Operations:Backups:RunOnStartup"],
+            true);
         var nextRun = DateTimeOffset.UtcNow.Add(runOnStartup
             ? TimeSpan.Zero
             : interval);
@@ -59,8 +60,8 @@ public sealed class DatabaseBackupScheduler(
         }
     }
 
-    private static bool ReadBool(string? value) =>
-        bool.TryParse(value, out var result) && result;
+    private static bool ReadBool(string? value, bool fallback) =>
+        bool.TryParse(value, out var result) ? result : fallback;
 
     private static int ReadPositiveInt(string? value, int fallback) =>
         int.TryParse(value, out var result) && result > 0
