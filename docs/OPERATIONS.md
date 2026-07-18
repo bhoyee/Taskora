@@ -26,8 +26,10 @@ flowchart LR
     CI["CI<br/>restore, test, coverage, build"]
     Vercel["Vercel<br/>React frontend"]
     Render["Render<br/>.NET API container"]
+    Jobs["Hosted background services<br/>reminders, carry-over, backups"]
     Sqlite[("SQLite<br/>local/demo")]
     Neon[("Neon PostgreSQL<br/>production data")]
+    Smtp["SMTP provider<br/>email delivery"]
     Smoke["Smoke test<br/>/health/live + /health/ready"]
 
     Dev --> GitHub
@@ -35,10 +37,39 @@ flowchart LR
     GitHub --> Vercel
     GitHub --> Render
     Vercel -->|HTTPS / JSON / SSE| Render
+    Render --> Jobs
+    Jobs --> Render
     Render --> Sqlite
     Render --> Neon
+    Render --> Smtp
     Render --> Smoke
 ```
+
+## Background Services
+
+Taskora runs scheduled work inside the Render API container as ASP.NET Core
+hosted services:
+
+- `DueDateReminderScheduler` runs on
+  `Notifications__Scheduler__IntervalMinutes`. It sends task due-date
+  reminders, project delivery-date reminders, and personal todo carry-over
+  summaries.
+- `DatabaseBackupScheduler` runs on `Operations__Backups__IntervalHours`. It
+  creates backup files, exposes them on the super-admin Database Backups page,
+  and prunes files older than `Operations__Backups__RetentionDays`.
+
+The My Day endpoint also has a fallback carry-over path. If a user opens My Day
+before the scheduler runs, unfinished personal todos are carried into the
+current business day and the same email summary is sent.
+
+Carry-over uses the configured business timezone:
+
+```text
+App__TimeZoneId=Europe/London
+```
+
+This avoids depending on the cloud server's physical region or UTC date when
+deciding when a new business day begins.
 
 ## Local Verification
 
@@ -69,6 +100,7 @@ the Docker build step so container readiness can be validated later.
 | `Authentication__Authority` | JWT issuer authority when using external identity | No |
 | `Authentication__Audience` | Expected audience for app tokens or JWT | No |
 | `App__PublicBaseUrl` | Public frontend URL used in email links | No |
+| `App__TimeZoneId` | Business timezone for carry-over and date-sensitive jobs | No |
 | `Email__Smtp__Enabled` | Enables real SMTP email delivery when `true` | No |
 | `Email__Smtp__Host` | SMTP server hostname | No |
 | `Email__Smtp__Port` | SMTP server port, usually `587` | No |
@@ -112,6 +144,7 @@ path is now Vercel + Render + Neon.
 | Render | `ConnectionStrings__TodoApp` | Neon PostgreSQL connection string |
 | Render | `Cors__AllowedOrigins__0` | Deployed Vercel frontend URL |
 | Render | `App__PublicBaseUrl` | Deployed Vercel frontend URL |
+| Render | `App__TimeZoneId` | Business timezone, e.g. `Europe/London` |
 | Render | `Database__Provider` | `Postgres` |
 
 ## Smoke Test
@@ -145,3 +178,7 @@ The script checks:
 - Responses include correlation IDs for log tracing.
 - Application logs should be reviewed after deployment for authentication,
   database, or startup errors.
+- The Operations page should show the reminder scheduler status, next run, last
+  task/project reminder counts, todo carry-over count, and email count.
+- The Database Backups page should show the backup scheduler status and at
+  least one backup after startup/manual creation.

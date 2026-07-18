@@ -30,6 +30,8 @@ monitoring, sprint planning, and CI/CD.
 - Categories, tags, and task notes with writer name and timestamp.
 - Personal Todo page for daily private work with CRUD, search, pagination,
   complete/reopen, mobile layout, and automatic carry-over after midnight.
+- Hosted background services for due-date reminders, personal todo carry-over
+  notifications, and database backups.
 - Dashboard cards, task progress donut, weekly flow chart, workload chart,
   project health, risk register, decision log, release readiness, activity, and
   reports.
@@ -91,18 +93,23 @@ early.
 flowchart LR
     Web["Taskora.Web<br/>React + TypeScript"]
     Api["Taskora.Api<br/>HTTP, auth, health, composition"]
+    Jobs["Hosted background services<br/>reminders, carry-over, backups"]
     Application["Taskora.Application<br/>Use cases, commands, queries, ports"]
     Domain["Taskora.Domain<br/>Entities, value objects, business rules"]
     Infrastructure["Taskora.Infrastructure<br/>EF Core, repositories, email, logs"]
     Database[("SQLite local<br/>Neon PostgreSQL production")]
+    Smtp["SMTP provider<br/>Resend or compatible"]
 
     Web -->|HTTPS / JSON / SSE| Api
     Api --> Application
     Api --> Infrastructure
+    Jobs --> Application
+    Jobs --> Infrastructure
     Application --> Domain
     Infrastructure --> Application
     Infrastructure --> Domain
     Infrastructure --> Database
+    Infrastructure --> Smtp
 ```
 
 ### Why This Architecture
@@ -111,6 +118,9 @@ flowchart LR
   EF Core, and deployment concerns.
 - The application layer models real use cases such as creating tasks, assigning
   work, inviting members, generating reports, and sending reminders.
+- Hosted background services sit beside HTTP endpoints so scheduled work such
+  as reminders, personal todo carry-over, and database backups can run without
+  a user clicking a button.
 - Infrastructure can be swapped or tested behind interfaces.
 - The API stays focused on HTTP contracts, validation, authentication,
   authorization, and composition.
@@ -214,14 +224,39 @@ the UI without a full page refresh. The frontend also uses silent refresh
 patterns so board and dashboard updates do not blank the page during normal
 work.
 
+Background notification jobs run inside the API container as hosted services.
+They use the configured business timezone (`App__TimeZoneId`, default
+`Europe/London`) so personal todo carry-over happens on the intended local day
+instead of depending on the cloud server's physical region.
+
 Notifications include:
 
 - In-app notification feed.
 - Task assignment notifications.
 - Due-date reminders two days before, 24 hours before, and on the due date.
 - Project delivery-date reminders.
+- Personal todo carry-over summaries when unfinished My Day todos move into
+  the next business day.
 - Dashboard warnings for overdue, blocked, or at-risk work.
 - SMTP email delivery when configured.
+
+## Background Jobs
+
+Taskora runs scheduled work through ASP.NET Core hosted services in
+`Taskora.Api`:
+
+- `DueDateReminderScheduler`: runs on
+  `Notifications__Scheduler__IntervalMinutes` and sends task due-date, project
+  delivery-date, and personal todo carry-over emails.
+- `DatabaseBackupScheduler`: runs on
+  `Operations__Backups__IntervalHours`, creates database backup files, and
+  prunes old backups using `Operations__Backups__RetentionDays`.
+- My Day fallback carry-over: if a user opens My Day before the scheduler has
+  run, the endpoint safely carries unfinished personal todos into the current
+  business day and sends the same carry-over email summary.
+
+These jobs are visible from the super-admin Operations and Database Backups
+pages so their status is not hidden in server logs only.
 
 ## Operations
 
@@ -232,6 +267,8 @@ Health and operations features are designed for deployment support:
 - `/health` provides a general health endpoint.
 - Super-admin-only Operations page shows API, database, reminder scheduler,
   logging configuration, and recent application log entries.
+- Super-admin-only Database Backups page shows automatic backup scheduler
+  state, available backup files, and manual backup/download actions.
 - Logs are retained according to `Operations__Logs__RetentionDays`.
 - Super-admin access is configured through
   `Administration__SuperAdminEmails__0`.
@@ -319,6 +356,7 @@ Important settings:
 
 ```text
 App__PublicBaseUrl=https://your-frontend-host
+App__TimeZoneId=Europe/London
 
 Database__Provider=Postgres
 ConnectionStrings__TodoApp=Host=your-neon-host.neon.tech;Port=5432;Database=neondb;Username=your-user;Password=your-password;SSL Mode=Require;Trust Server Certificate=true
@@ -339,6 +377,10 @@ Notifications__Scheduler__IntervalMinutes=1440
 
 Operations__Logs__RetentionDays=30
 Operations__Logs__MaxEntries=200
+Operations__Backups__Enabled=true
+Operations__Backups__RetentionDays=7
+Operations__Backups__IntervalHours=24
+Operations__Backups__RunOnStartup=true
 
 Email__Smtp__Enabled=true
 Email__Smtp__Host=smtp.example.com
@@ -395,6 +437,7 @@ Database__EnsureCreatedOnStartup=false
 Database__ApplyMigrationsOnStartup=false
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
 App__PublicBaseUrl=https://your-taskora-app.vercel.app
+App__TimeZoneId=Europe/London
 Cors__AllowedOrigins__0=https://your-taskora-app.vercel.app
 Authentication__Mode=AppToken
 Authentication__Authority=

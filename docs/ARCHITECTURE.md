@@ -53,6 +53,8 @@ docs/
 
 - HTTP endpoints, authentication, authorization, and composition root.
 - API contracts, middleware, OpenAPI, health checks, and logging.
+- Hosted background services for scheduled reminders, personal todo carry-over,
+  and database backups.
 - References Application and Infrastructure.
 
 ### Taskora.Web
@@ -64,6 +66,9 @@ docs/
 
 ```text
 Web -> API -> Application -> Domain
+       |
+       v
+  Hosted jobs -> Application
              ^
              |
        Infrastructure
@@ -71,6 +76,11 @@ Web -> API -> Application -> Domain
 
 Infrastructure implements interfaces owned by the Application layer. Domain
 code remains independent of delivery and persistence technology.
+
+Hosted jobs run inside the API process as ASP.NET Core `BackgroundService`
+implementations. They call the same application use cases and infrastructure
+ports as HTTP endpoints, which keeps scheduled behaviour testable and avoids a
+second deployment unit for this portfolio-scale product.
 
 ## Domain Model Direction
 
@@ -123,6 +133,8 @@ milestone after the core task model is stable.
 ## Cross-Cutting Concerns
 
 - Dependency injection at the API composition root.
+- Background processing through hosted services for due-date reminders,
+  personal todo carry-over notifications, and database backups.
 - Structured logging and correlation identifiers.
 - Central exception handling.
 - Authentication and policy-based authorization.
@@ -147,3 +159,5 @@ Each record will state context, decision, alternatives, and consequences.
 3. Use React and TypeScript for the web client.
 4. Use EF Core with SQLite locally and PostgreSQL when hosted.
 5. Keep the application layer independent of ASP.NET Core.
+6. Run scheduled operational work as hosted services before introducing a
+   separate worker service.
