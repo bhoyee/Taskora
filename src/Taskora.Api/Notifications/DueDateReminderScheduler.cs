@@ -56,10 +56,15 @@ public sealed class DueDateReminderScheduler(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var handler = scope.ServiceProvider
+            var dueDateHandler = scope.ServiceProvider
                 .GetRequiredService<SendDueDateNotificationsHandler>();
-            var result = await handler.HandleAsync(
+            var carryOverHandler = scope.ServiceProvider
+                .GetRequiredService<SendPersonalTodoCarryOverNotificationsHandler>();
+            var dueDateResult = await dueDateHandler.HandleAsync(
                 new SendDueDateNotificationsCommand(),
+                cancellationToken);
+            var carryOverResult = await carryOverHandler.HandleAsync(
+                new SendPersonalTodoCarryOverNotificationsCommand(),
                 cancellationToken);
             var completedAt = DateTimeOffset.UtcNow;
             var nextRunAt = completedAt.Add(interval);
@@ -67,14 +72,16 @@ public sealed class DueDateReminderScheduler(
             status.MarkSucceeded(
                 completedAt,
                 nextRunAt,
-                result.TaskReminderCount,
-                result.ProjectReminderCount,
-                result.EmailCount);
+                dueDateResult.TaskReminderCount,
+                dueDateResult.ProjectReminderCount,
+                carryOverResult.TodoCarryOverCount,
+                dueDateResult.EmailCount + carryOverResult.EmailCount);
             logger.LogInformation(
-                "Automatic due-date reminder run completed. Task reminders: {TaskReminderCount}. Project reminders: {ProjectReminderCount}. Emails: {EmailCount}. Next run: {NextRunAt}.",
-                result.TaskReminderCount,
-                result.ProjectReminderCount,
-                result.EmailCount,
+                "Automatic notification run completed. Task reminders: {TaskReminderCount}. Project reminders: {ProjectReminderCount}. Todo carryovers: {TodoCarryOverCount}. Emails: {EmailCount}. Next run: {NextRunAt}.",
+                dueDateResult.TaskReminderCount,
+                dueDateResult.ProjectReminderCount,
+                carryOverResult.TodoCarryOverCount,
+                dueDateResult.EmailCount + carryOverResult.EmailCount,
                 nextRunAt);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

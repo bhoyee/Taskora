@@ -51,6 +51,7 @@ public sealed class DueDateReminderSchedulerStatus
         DateTimeOffset nextRunAt,
         int taskReminders,
         int projectReminders,
+        int todoCarryOvers,
         int emails)
     {
         lock (_sync)
@@ -62,6 +63,7 @@ public sealed class DueDateReminderSchedulerStatus
                 NextRunAt = nextRunAt,
                 LastTaskReminderCount = taskReminders,
                 LastProjectReminderCount = projectReminders,
+                LastTodoCarryOverCount = todoCarryOvers,
                 LastEmailCount = emails,
                 LastError = null
             };
@@ -95,6 +97,7 @@ public sealed record SchedulerSnapshot(
     DateTimeOffset? NextRunAt,
     int LastTaskReminderCount,
     int LastProjectReminderCount,
+    int LastTodoCarryOverCount,
     int LastEmailCount,
     string? LastError)
 {
@@ -108,6 +111,7 @@ public sealed record SchedulerSnapshot(
             NextRunAt: null,
             LastTaskReminderCount: 0,
             LastProjectReminderCount: 0,
+            LastTodoCarryOverCount: 0,
             LastEmailCount: 0,
             LastError: null);
 }

@@ -105,6 +105,39 @@ function notificationId(warning: DashboardWarning) {
   ].join('|')
 }
 
+function carryOverNotificationFromTodos(
+  todos: PersonalTodo[],
+  selectedDate: string,
+): DashboardWarning[] {
+  const carried = todos.filter((todo) =>
+    todo.carriedOverFromDate &&
+    todo.todoDate === selectedDate &&
+    !todo.isCompleted)
+  if (!carried.length) {
+    return []
+  }
+
+  const oldestDate = carried
+    .map((todo) => todo.carriedOverFromDate)
+    .filter((date): date is string => Boolean(date))
+    .sort()[0]
+  const sampleTitles = carried
+    .slice(0, 3)
+    .map((todo) => todo.title)
+    .join(', ')
+  const moreCount = carried.length > 3
+    ? `, plus ${carried.length - 3} more`
+    : ''
+
+  return [{
+    type: 'PersonalTodoCarryOver',
+    severity: 'warning',
+    title: `${carried.length} My Day todo${carried.length === 1 ? '' : 's'} carried over`,
+    message: `${sampleTitles}${moreCount} moved into today from ${oldestDate ? formatDate(oldestDate) : 'an earlier date'}.`,
+    dueDate: selectedDate,
+  }]
+}
+
 function notificationReadKey(userId: string, workspaceId: string) {
   return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
 }
@@ -290,6 +323,7 @@ export default function App() {
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
+  const [todoNotifications, setTodoNotifications] = useState<Dashboard['warnings']>([])
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() =>
     readStoredNotificationIds(
       localStorage.getItem('todoapp_current_user_id') ?? '',
@@ -422,6 +456,7 @@ export default function App() {
         todoPageSize)
       setTodos(page.items)
       setTodoTotal(page.totalCount)
+      setTodoNotifications(carryOverNotificationFromTodos(page.items, date))
     } catch (reason) {
       setTodoError(reason instanceof Error ? reason.message : 'Todos could not be loaded.')
     } finally {
@@ -506,7 +541,7 @@ export default function App() {
   const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
   const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
   const notificationItems = useMemo<NotificationItem[]>(
-    () => notifications.map((warning) => {
+    () => [...notifications, ...todoNotifications].map((warning) => {
       const id = notificationId(warning)
       return {
         ...warning,
@@ -514,7 +549,7 @@ export default function App() {
         read: readNotificationIds.has(id),
       }
     }),
-    [notifications, readNotificationIds])
+    [notifications, todoNotifications, readNotificationIds])
   const persistReadNotifications = (ids: Set<string>) => {
     localStorage.setItem(
       notificationReadKey(
@@ -541,6 +576,7 @@ export default function App() {
     setAccount(null)
     setCurrentUserId('')
     setOperations(null)
+    setTodoNotifications([])
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
     window.location.hash = 'home'
@@ -791,6 +827,7 @@ export default function App() {
       setDashboard(emptyDashboard)
       setDashboardReport(null)
       setNotifications([])
+      setTodoNotifications([])
       setMembers([])
       setInvitations([])
       setActivity([])
@@ -3940,8 +3977,8 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
         <div className="profile-heading">
           <span className="metric-icon"><Clock3 /></span>
           <div>
-            <h2>Automatic reminders</h2>
-            <p>Background task and project deadline reminders.</p>
+            <h2>Automatic notifications</h2>
+            <p>Background deadline reminders and My Day carryover alerts.</p>
           </div>
         </div>
         <div className="log-summary">
@@ -3951,6 +3988,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
           <span><strong>Next run</strong>{summary.reminderScheduler.nextRunAt ? new Date(summary.reminderScheduler.nextRunAt).toLocaleString() : 'Pending'}</span>
           <span><strong>Task reminders</strong>{summary.reminderScheduler.lastTaskReminderCount}</span>
           <span><strong>Project reminders</strong>{summary.reminderScheduler.lastProjectReminderCount}</span>
+          <span><strong>Todo carryovers</strong>{summary.reminderScheduler.lastTodoCarryOverCount}</span>
           <span><strong>Emails sent</strong>{summary.reminderScheduler.lastEmailCount}</span>
           <span><strong>Last error</strong>{summary.reminderScheduler.lastError ?? 'None'}</span>
         </div>

@@ -13,6 +13,11 @@ public sealed record PersonalTodoSearchResult(
     IReadOnlyList<PersonalTodo> Items,
     int TotalCount);
 
+public sealed record PersonalTodoOwner(
+    Guid UserId,
+    string DisplayName,
+    string Email);
+
 public interface IPersonalTodoRepository
 {
     Task AddAsync(
@@ -30,6 +35,14 @@ public interface IPersonalTodoRepository
     Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
         Guid userId,
         DateOnly targetDate,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
+        DateOnly targetDate,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PersonalTodoOwner>> ListOwnersAsync(
+        IReadOnlyCollection<Guid> userIds,
         CancellationToken cancellationToken);
 
     Task RemoveAsync(

@@ -82,6 +82,7 @@ function operationsReminderScheduler() {
     nextRunAt: null,
     lastTaskReminderCount: 0,
     lastProjectReminderCount: 0,
+    lastTodoCarryOverCount: 0,
     lastEmailCount: 0,
     lastError: null,
   }

@@ -268,6 +268,7 @@ export interface ReminderScheduler {
   nextRunAt: string | null
   lastTaskReminderCount: number
   lastProjectReminderCount: number
+  lastTodoCarryOverCount: number
   lastEmailCount: number
   lastError: string | null
 }

@@ -45,6 +45,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<GetPortfolioDashboardHandler>();
         services.AddScoped<GetWorkspaceReportHandler>();
         services.AddScoped<SendDueDateNotificationsHandler>();
+        services.AddScoped<SendPersonalTodoCarryOverNotificationsHandler>();
         services.AddScoped<UpdateProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();
         services.AddScoped<DeleteProjectHandler>();

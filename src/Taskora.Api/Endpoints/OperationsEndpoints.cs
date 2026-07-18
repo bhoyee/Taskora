@@ -100,6 +100,7 @@ internal static class OperationsEndpoints
                 reminderSnapshot.NextRunAt,
                 reminderSnapshot.LastTaskReminderCount,
                 reminderSnapshot.LastProjectReminderCount,
+                reminderSnapshot.LastTodoCarryOverCount,
                 reminderSnapshot.LastEmailCount,
                 reminderSnapshot.LastError),
             new DatabaseBackupSchedulerResponse(
@@ -260,6 +261,7 @@ public sealed record ReminderSchedulerResponse(
     DateTimeOffset? NextRunAt,
     int LastTaskReminderCount,
     int LastProjectReminderCount,
+    int LastTodoCarryOverCount,
     int LastEmailCount,
     string? LastError);
 

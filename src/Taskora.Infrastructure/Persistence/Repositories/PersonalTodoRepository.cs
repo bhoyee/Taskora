@@ -66,6 +66,39 @@ public sealed class PersonalTodoRepository(TodoAppDbContext context)
             .ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
+        DateOnly targetDate,
+        CancellationToken cancellationToken)
+    {
+        return await context.PersonalTodos
+            .Where(todo =>
+                !todo.IsCompleted &&
+                todo.TodoDate < targetDate)
+            .OrderBy(todo => todo.UserId)
+            .ThenBy(todo => todo.TodoDate)
+            .ThenByDescending(todo => todo.CreatedAt)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PersonalTodoOwner>> ListOwnersAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await context.UserProfiles
+            .AsNoTracking()
+            .Where(user => userIds.Contains(user.Id))
+            .Select(user => new PersonalTodoOwner(
+                user.Id,
+                user.DisplayName,
+                user.Email))
+            .ToArrayAsync(cancellationToken);
+    }
+
     public Task RemoveAsync(
         PersonalTodo todo,
         CancellationToken cancellationToken)
