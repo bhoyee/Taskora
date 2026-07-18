@@ -14,13 +14,14 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
     IPersonalTodoRepository todos,
     INotificationEmailSender emailSender,
     IUnitOfWork unitOfWork,
-    IClock clock)
+    IClock clock,
+    IBusinessDateProvider dates)
 {
     public async Task<PersonalTodoCarryOverRunDto> HandleAsync(
         SendPersonalTodoCarryOverNotificationsCommand command,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = dates.Today;
         var overdueTodos = await todos.ListIncompleteBeforeAsync(
             today,
             cancellationToken);

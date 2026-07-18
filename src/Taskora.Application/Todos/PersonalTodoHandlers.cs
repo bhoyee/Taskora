@@ -10,6 +10,7 @@ public sealed class ListPersonalTodosHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
     IClock clock,
+    IBusinessDateProvider dates,
     ICurrentUser currentUser)
 {
     public async Task<Result<PagedResult<PersonalTodoDto>>> HandleAsync(
@@ -35,20 +36,23 @@ public sealed class ListPersonalTodosHandler(
                 "Page size must be between 1 and 100.");
         }
 
-        var targetDate = query.Date ??
-            DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
-        var carried = await todos.ListIncompleteBeforeAsync(
-            currentUser.UserId,
-            targetDate,
-            cancellationToken);
-        foreach (var todo in carried)
+        var today = dates.Today;
+        var targetDate = query.Date ?? today;
+        if (targetDate == today)
         {
-            todo.CarryOverTo(targetDate, clock.UtcNow);
-        }
+            var carried = await todos.ListIncompleteBeforeAsync(
+                currentUser.UserId,
+                today,
+                cancellationToken);
+            foreach (var todo in carried)
+            {
+                todo.CarryOverTo(today, clock.UtcNow);
+            }
 
-        if (carried.Count > 0)
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            if (carried.Count > 0)
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
         }
 
         var searchResult = await todos.SearchAsync(

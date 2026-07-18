@@ -13,11 +13,13 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Personal_todos_support_crud_for_signed_in_user()
     {
+        var marker = $"crud-{Guid.NewGuid():N}";
+        var title = $"Review portfolio notes {marker}";
         var created = await _client.PostAsJsonAsync(
             "/api/v1/todos",
             new
             {
-                title = "Review portfolio notes",
+                title,
                 todoDate = "2026-07-13",
                 notes = "Keep it short"
             });
@@ -26,11 +28,11 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
         var createdJson = await created.Content.ReadFromJsonAsync<JsonElement>();
         var todoId = createdJson.GetProperty("id").GetGuid();
         Assert.Equal(
-            "Review portfolio notes",
+            title,
             createdJson.GetProperty("title").GetString());
 
         var list = await _client.GetFromJsonAsync<JsonElement>(
-            "/api/v1/todos?date=2026-07-13&search=portfolio&pageNumber=1&pageSize=10");
+            $"/api/v1/todos?date=2026-07-13&search={marker}&pageNumber=1&pageSize=10");
         Assert.Equal(1, list.GetProperty("totalCount").GetInt32());
         Assert.Single(list.GetProperty("items").EnumerateArray());
 
@@ -38,7 +40,7 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
             $"/api/v1/todos/{todoId}",
             new
             {
-                title = "Review portfolio notes again",
+                title = $"Review portfolio notes again {marker}",
                 todoDate = "2026-07-13",
                 notes = "Add screenshots"
             });
@@ -66,12 +68,12 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
 
         var empty = await _client.GetFromJsonAsync<JsonElement>(
-            "/api/v1/todos?date=2026-07-13");
+            $"/api/v1/todos?date=2026-07-13&search={marker}");
         Assert.Empty(empty.GetProperty("items").EnumerateArray());
     }
 
     [Fact]
-    public async Task Incomplete_todos_are_carried_over_to_selected_later_date()
+    public async Task Incomplete_todos_are_not_carried_over_to_future_selected_date()
     {
         var marker = $"carry-{Guid.NewGuid():N}";
         var title = $"Carry this forward {marker}";
@@ -80,19 +82,24 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
             new
             {
                 title,
-                todoDate = "2026-07-13",
+                todoDate = "2099-01-01",
                 notes = "Still open"
             });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var list = await _client.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/todos?date=2026-07-14&search={marker}&pageNumber=1&pageSize=10");
-        var item = list.GetProperty("items")[0];
+        var futureList = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/todos?date=2099-01-02&search={marker}&pageNumber=1&pageSize=10");
+        Assert.Equal(0, futureList.GetProperty("totalCount").GetInt32());
+        Assert.Empty(futureList.GetProperty("items").EnumerateArray());
 
-        Assert.Equal(1, list.GetProperty("totalCount").GetInt32());
+        var originalDateList = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/todos?date=2099-01-01&search={marker}&pageNumber=1&pageSize=10");
+        var item = originalDateList.GetProperty("items")[0];
+
+        Assert.Equal(1, originalDateList.GetProperty("totalCount").GetInt32());
         Assert.Equal(title, item.GetProperty("title").GetString());
-        Assert.Equal("2026-07-14", item.GetProperty("todoDate").GetString());
-        Assert.Equal("2026-07-13", item.GetProperty("originalTodoDate").GetString());
-        Assert.Equal("2026-07-13", item.GetProperty("carriedOverFromDate").GetString());
+        Assert.Equal("2099-01-01", item.GetProperty("todoDate").GetString());
+        Assert.Equal("2099-01-01", item.GetProperty("originalTodoDate").GetString());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("carriedOverFromDate").ValueKind);
     }
 }

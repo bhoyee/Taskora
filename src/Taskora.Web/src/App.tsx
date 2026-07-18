@@ -3968,6 +3968,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
           <span><strong>Environment</strong>{summary.runtime.environment}</span>
           <span><strong>Database</strong>{summary.runtime.databaseProvider}</span>
           <span><strong>Frontend URL</strong>{summary.runtime.publicBaseUrl}</span>
+          <span><strong>Business timezone</strong>{summary.runtime.timeZoneId}</span>
           <span><strong>Email mode</strong>{summary.runtime.emailMode}</span>
           <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
           <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? `Every ${summary.reminderScheduler.intervalMinutes} min` : 'Disabled'}</span>

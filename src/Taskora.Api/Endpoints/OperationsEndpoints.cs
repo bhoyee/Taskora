@@ -45,6 +45,7 @@ internal static class OperationsEndpoints
         IWebHostEnvironment environment,
         DueDateReminderSchedulerStatus reminderStatus,
         DatabaseBackupSchedulerStatus backupStatus,
+        IBusinessDateProvider dates,
         CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(
@@ -85,6 +86,7 @@ internal static class OperationsEndpoints
                 environment.EnvironmentName,
                 configuration["Database:Provider"] ?? "Sqlite",
                 configuration["App:PublicBaseUrl"] ?? "http://localhost:5173",
+                dates.TimeZoneId,
                 corsOrigins,
                 smtpEnabled ? "SMTP" : "LogOnly",
                 smtpEnabled,
@@ -245,6 +247,7 @@ public sealed record OperationsRuntime(
     string Environment,
     string DatabaseProvider,
     string PublicBaseUrl,
+    string TimeZoneId,
     IReadOnlyCollection<string> CorsAllowedOrigins,
     string EmailMode,
     bool SmtpEnabled,

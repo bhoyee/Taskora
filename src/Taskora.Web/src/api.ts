@@ -251,6 +251,7 @@ export interface OperationsRuntime {
   environment: string
   databaseProvider: string
   publicBaseUrl: string
+  timeZoneId: string
   corsAllowedOrigins: string[]
   emailMode: string
   smtpEnabled: boolean

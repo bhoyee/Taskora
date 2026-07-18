@@ -63,6 +63,7 @@ function operationsRuntime() {
     environment: 'Testing',
     databaseProvider: 'Sqlite',
     publicBaseUrl: 'http://localhost:5173',
+    timeZoneId: 'Europe/London',
     corsAllowedOrigins: ['http://localhost:5173'],
     emailMode: 'LogOnly',
     smtpEnabled: false,

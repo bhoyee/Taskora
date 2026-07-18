@@ -102,6 +102,14 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(
             provider => provider.GetRequiredService<TodoAppDbContext>());
         services.AddSingleton<IClock, SystemClock>();
+        services.Configure<BusinessDateOptions>(options =>
+        {
+            options.TimeZoneId = string.IsNullOrWhiteSpace(
+                configuration["App:TimeZoneId"])
+                ? "Europe/London"
+                : configuration["App:TimeZoneId"]!;
+        });
+        services.AddSingleton<IBusinessDateProvider, BusinessDateProvider>();
         services.AddSingleton<IIdentifierGenerator,
             GuidIdentifierGenerator>();
 

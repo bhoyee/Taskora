@@ -1,64 +1,54 @@
 using TodoApp.Application.Abstractions;
-using TodoApp.Application.Notifications;
+using TodoApp.Application.Todos;
 using TodoApp.Domain.Todos;
 
-namespace TodoApp.Application.Tests.Notifications;
+namespace TodoApp.Application.Tests.Todos;
 
-public sealed class PersonalTodoCarryOverNotificationHandlerTests
+public sealed class PersonalTodoHandlerTests
 {
     private static readonly DateTimeOffset Now =
-        new(2026, 7, 18, 1, 0, 0, TimeSpan.Zero);
+        new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task Handle_CarriesOverIncompleteTodosAndEmailsOwners()
+    public async Task List_DoesNotCarryOverTodosWhenViewingFutureDate()
     {
         var userId = Guid.NewGuid();
         var oldTodo = PersonalTodo.Create(
             Guid.NewGuid(),
             userId,
-            "Review sprint notes",
-            new DateOnly(2026, 7, 17),
+            "Finish daily checklist",
+            new DateOnly(2026, 7, 18),
             null,
-            Now.AddDays(-1));
-        var repository = new StubPersonalTodoRepository(
-            [oldTodo],
-            [
-                new PersonalTodoOwner(
-                    userId,
-                    "Jadesola Aliu",
-                    "jadesola@example.com")
-            ]);
-        var emailSender = new RecordingEmailSender();
+            Now);
+        var repository = new StubPersonalTodoRepository([oldTodo]);
         var unitOfWork = new RecordingUnitOfWork();
-        var handler = new SendPersonalTodoCarryOverNotificationsHandler(
+        var handler = new ListPersonalTodosHandler(
             repository,
-            emailSender,
             unitOfWork,
             new StubClock(Now),
-            new StubBusinessDateProvider(new DateOnly(2026, 7, 18)));
+            new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
+            new StubCurrentUser(userId));
 
         var result = await handler.HandleAsync(
-            new SendPersonalTodoCarryOverNotificationsCommand(),
+            new ListPersonalTodosQuery(
+                new DateOnly(2026, 7, 19),
+                null,
+                1,
+                10),
             CancellationToken.None);
 
-        Assert.Equal(1, result.TodoCarryOverCount);
-        Assert.Equal(1, result.UserNotificationCount);
-        Assert.Equal(1, result.EmailCount);
+        Assert.True(result.IsSuccess);
         Assert.Equal(new DateOnly(2026, 7, 18), oldTodo.TodoDate);
-        Assert.Equal(new DateOnly(2026, 7, 17), oldTodo.CarriedOverFromDate);
-        Assert.Equal(1, unitOfWork.SaveCount);
-        Assert.Single(emailSender.Messages);
-        Assert.Contains(
-            "Review sprint notes",
-            emailSender.Messages[0].Body,
-            StringComparison.Ordinal);
+        Assert.Equal(0, repository.UserCarryOverLookupCount);
+        Assert.Equal(0, unitOfWork.SaveCount);
     }
 
     private sealed class StubPersonalTodoRepository(
-        IReadOnlyList<PersonalTodo> overdueTodos,
-        IReadOnlyList<PersonalTodoOwner> owners)
+        IReadOnlyList<PersonalTodo> searchTodos)
         : IPersonalTodoRepository
     {
+        public int UserCarryOverLookupCount { get; private set; }
+
         public Task AddAsync(
             PersonalTodo todo,
             CancellationToken cancellationToken) =>
@@ -72,41 +62,31 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         public Task<PersonalTodoSearchResult> SearchAsync(
             PersonalTodoSearchCriteria criteria,
             CancellationToken cancellationToken) =>
-            Task.FromResult(new PersonalTodoSearchResult([], 0));
+            Task.FromResult(new PersonalTodoSearchResult(searchTodos, searchTodos.Count));
 
         public Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
             Guid userId,
             DateOnly targetDate,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
+            CancellationToken cancellationToken)
+        {
+            UserCarryOverLookupCount++;
+            return Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
+        }
 
         public Task<IReadOnlyList<PersonalTodo>> ListIncompleteBeforeAsync(
             DateOnly targetDate,
             CancellationToken cancellationToken) =>
-            Task.FromResult(overdueTodos);
+            Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
 
         public Task<IReadOnlyList<PersonalTodoOwner>> ListOwnersAsync(
             IReadOnlyCollection<Guid> userIds,
             CancellationToken cancellationToken) =>
-            Task.FromResult(owners);
+            Task.FromResult<IReadOnlyList<PersonalTodoOwner>>([]);
 
         public Task RemoveAsync(
             PersonalTodo todo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
-    }
-
-    private sealed class RecordingEmailSender : INotificationEmailSender
-    {
-        public List<NotificationEmailMessage> Messages { get; } = [];
-
-        public Task SendAsync(
-            NotificationEmailMessage message,
-            CancellationToken cancellationToken)
-        {
-            Messages.Add(message);
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class RecordingUnitOfWork : IUnitOfWork
@@ -131,5 +111,12 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         public DateOnly Today { get; } = today;
 
         public string TimeZoneId => "Europe/London";
+    }
+
+    private sealed class StubCurrentUser(Guid userId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+
+        public Guid UserId { get; } = userId;
     }
 }
