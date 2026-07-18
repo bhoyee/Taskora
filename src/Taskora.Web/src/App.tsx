@@ -134,6 +134,8 @@ function carryOverNotificationFromTodos(
     severity: 'warning',
     title: `${carried.length} My Day todo${carried.length === 1 ? '' : 's'} carried over`,
     message: `${sampleTitles}${moreCount} moved into today from ${oldestDate ? formatDate(oldestDate) : 'an earlier date'}.`,
+    projectId: null,
+    taskId: null,
     dueDate: selectedDate,
   }]
 }
