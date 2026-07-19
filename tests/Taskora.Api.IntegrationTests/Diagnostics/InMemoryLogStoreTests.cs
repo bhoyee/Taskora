@@ -15,12 +15,14 @@ public sealed class InMemoryLogStoreTests
             "Old",
             "Expired log",
             null,
+            null,
             null));
         store.Add(new OperationLogEntry(
             DateTimeOffset.UtcNow,
             "Information",
             "Current",
             "Active log",
+            null,
             null,
             null));
 
@@ -47,6 +49,7 @@ public sealed class InMemoryLogStoreTests
             "Information",
             "Test",
             message,
+            null,
             null,
             null);
 }

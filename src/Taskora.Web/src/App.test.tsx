@@ -70,6 +70,8 @@ function operationsRuntime() {
     reminderSchedulerEnabled: true,
     logRetentionDays: 30,
     logMaxEntries: 200,
+    logFileEnabled: true,
+    logDirectory: 'App_Data/logs',
   }
 }
 
@@ -692,6 +694,7 @@ describe('delivery workspace', () => {
             message: 'Use Azure App Service Log Stream or Application Insights in production.',
             exception: null,
             eventId: null,
+            correlationId: 'portfolio-test-123',
           }],
         })
       }

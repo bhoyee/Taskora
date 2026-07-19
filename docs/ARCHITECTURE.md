@@ -136,6 +136,8 @@ milestone after the core task model is stable.
 - Background processing through hosted services for due-date reminders,
   personal todo carry-over notifications, and database backups.
 - Structured logging and correlation identifiers.
+- JSONL file logging and in-memory operations logs for production
+  troubleshooting.
 - Central exception handling.
 - Authentication and policy-based authorization.
 - Configuration through environment-specific providers.

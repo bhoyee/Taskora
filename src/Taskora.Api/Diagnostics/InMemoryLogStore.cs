@@ -52,4 +52,5 @@ public sealed record OperationLogEntry(
     string Category,
     string Message,
     string? Exception,
-    string? EventId);
+    string? EventId,
+    string? CorrelationId);

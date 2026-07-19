@@ -258,6 +258,8 @@ export interface OperationsRuntime {
   reminderSchedulerEnabled: boolean
   logRetentionDays: number
   logMaxEntries: number
+  logFileEnabled: boolean
+  logDirectory: string
 }
 
 export interface ReminderScheduler {
@@ -300,6 +302,7 @@ export interface OperationLogRecord {
   message: string
   exception: string | null
   eventId: string | null
+  correlationId: string | null
 }
 
 async function downloadFile(path: string): Promise<Blob> {

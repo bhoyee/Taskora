@@ -3973,6 +3973,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
           <span><strong>CORS</strong>{summary.runtime.corsAllowedOrigins.length ? summary.runtime.corsAllowedOrigins.join(', ') : 'No origins configured'}</span>
           <span><strong>Reminder scheduler</strong>{summary.runtime.reminderSchedulerEnabled ? `Every ${summary.reminderScheduler.intervalMinutes} min` : 'Disabled'}</span>
           <span><strong>Log retention</strong>{`${summary.runtime.logRetentionDays} days / ${summary.runtime.logMaxEntries} entries`}</span>
+          <span><strong>File logs</strong>{summary.runtime.logFileEnabled ? summary.runtime.logDirectory : 'Disabled'}</span>
         </div>
       </article>
 
@@ -4011,7 +4012,7 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
                 <span className="log-level">{entry.level}</span>
                 <div>
                   <strong>{entry.message}</strong>
-                  <small>{entry.category} - {new Date(entry.timestamp).toLocaleString()}{entry.eventId ? ` - event ${entry.eventId}` : ''}</small>
+                  <small>{entry.category} - {new Date(entry.timestamp).toLocaleString()}{entry.eventId ? ` - event ${entry.eventId}` : ''}{entry.correlationId ? ` - trace ${entry.correlationId}` : ''}</small>
                   {entry.exception && <p>{entry.exception}</p>}
                 </div>
               </article>)

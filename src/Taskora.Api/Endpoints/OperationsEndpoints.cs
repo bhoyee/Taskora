@@ -92,7 +92,9 @@ internal static class OperationsEndpoints
                 smtpEnabled,
                 reminderSnapshot.Enabled,
                 logs.RetentionDays,
-                logs.MaxEntries),
+                logs.MaxEntries,
+                ReadBool(configuration["Operations:Logs:FileEnabled"], true),
+                configuration["Operations:Logs:Directory"] ?? "App_Data/logs"),
             new ReminderSchedulerResponse(
                 reminderSnapshot.Enabled,
                 reminderSnapshot.Status,
@@ -122,7 +124,8 @@ internal static class OperationsEndpoints
                     entry.Category,
                     entry.Message,
                     entry.Exception,
-                    entry.EventId))
+                    entry.EventId,
+                    entry.CorrelationId))
                 .ToArray()));
     }
 
@@ -223,8 +226,8 @@ internal static class OperationsEndpoints
             IsSuperAdmin(account.User.Email, configuration);
     }
 
-    private static bool ReadBool(string? value) =>
-        bool.TryParse(value, out var result) && result;
+    private static bool ReadBool(string? value, bool defaultValue = false) =>
+        bool.TryParse(value, out var result) ? result : defaultValue;
 }
 
 public sealed record OperationsSummaryResponse(
@@ -253,7 +256,9 @@ public sealed record OperationsRuntime(
     bool SmtpEnabled,
     bool ReminderSchedulerEnabled,
     int LogRetentionDays,
-    int LogMaxEntries);
+    int LogMaxEntries,
+    bool LogFileEnabled,
+    string LogDirectory);
 
 public sealed record ReminderSchedulerResponse(
     bool Enabled,
@@ -285,4 +290,5 @@ public sealed record OperationLogRecord(
     string Category,
     string Message,
     string? Exception,
-    string? EventId);
+    string? EventId,
+    string? CorrelationId);

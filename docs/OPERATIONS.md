@@ -101,6 +101,8 @@ the Docker build step so container readiness can be validated later.
 | `Authentication__Audience` | Expected audience for app tokens or JWT | No |
 | `App__PublicBaseUrl` | Public frontend URL used in email links | No |
 | `App__TimeZoneId` | Business timezone for carry-over and date-sensitive jobs | No |
+| `Operations__Logs__FileEnabled` | Enables JSONL log file output | No |
+| `Operations__Logs__Directory` | Folder for daily `taskora-*.jsonl` files | No |
 | `Email__Smtp__Enabled` | Enables real SMTP email delivery when `true` | No |
 | `Email__Smtp__Host` | SMTP server hostname | No |
 | `Email__Smtp__Port` | SMTP server port, usually `587` | No |
@@ -178,6 +180,11 @@ The script checks:
 - Responses include correlation IDs for log tracing.
 - Application logs should be reviewed after deployment for authentication,
   database, or startup errors.
+- Application logs are available from the Render log stream, the super-admin
+  Operations page, and JSONL files in `Operations__Logs__Directory` when file
+  logging is enabled.
+- Each API response includes `X-Correlation-ID`; use that value to find the
+  matching entry in Operations logs or daily JSONL log files.
 - The Operations page should show the reminder scheduler status, next run, last
   task/project reminder counts, todo carry-over count, and email count.
 - The Database Backups page should show the backup scheduler status and at

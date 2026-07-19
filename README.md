@@ -39,6 +39,8 @@ monitoring, sprint planning, and CI/CD.
 - First-run onboarding tour with replayable help guidance from the avatar menu.
 - Super-admin-only Operations page for API health, database health, scheduler
   status, log settings, and recent application logs.
+- JSON-lines application log files with correlation IDs for easier production
+  troubleshooting.
 - Seed/demo data mode for portfolio walkthroughs.
 - Azure DevOps pipeline for restore, build, tests, frontend build, migrations,
   packaging, and optional deployment.
@@ -269,6 +271,10 @@ Health and operations features are designed for deployment support:
   logging configuration, and recent application log entries.
 - Super-admin-only Database Backups page shows automatic backup scheduler
   state, available backup files, and manual backup/download actions.
+- Application logs are written to the platform log stream and to JSONL files
+  when `Operations__Logs__FileEnabled=true`.
+- Log entries include correlation IDs so one failed API request can be traced
+  across the response header, Operations page, and log file.
 - Logs are retained according to `Operations__Logs__RetentionDays`.
 - Super-admin access is configured through
   `Administration__SuperAdminEmails__0`.
@@ -377,6 +383,8 @@ Notifications__Scheduler__IntervalMinutes=1440
 
 Operations__Logs__RetentionDays=30
 Operations__Logs__MaxEntries=200
+Operations__Logs__FileEnabled=true
+Operations__Logs__Directory=App_Data/logs
 Operations__Backups__Enabled=true
 Operations__Backups__RetentionDays=7
 Operations__Backups__IntervalHours=24

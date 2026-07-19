@@ -280,6 +280,11 @@ ServiceFabricBackup/
 *.db-shm
 *.db-wal
 
+# Taskora runtime logs
+App_Data/logs/
+src/Taskora.Api/App_Data/logs/
+*.jsonl
+
 # Business Intelligence projects
 *.rdl.data
 *.bim.layout

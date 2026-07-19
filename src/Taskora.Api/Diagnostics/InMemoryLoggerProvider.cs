@@ -3,22 +3,31 @@ using Microsoft.Extensions.Logging;
 namespace TodoApp.Api.Diagnostics;
 
 public sealed class InMemoryLoggerProvider(InMemoryLogStore store)
-    : ILoggerProvider
+    : ILoggerProvider, ISupportExternalScope
 {
+    private IExternalScopeProvider _scopeProvider =
+        new LoggerExternalScopeProvider();
+
     public ILogger CreateLogger(string categoryName) =>
-        new InMemoryLogger(categoryName, store);
+        new InMemoryLogger(categoryName, store, this);
 
     public void Dispose()
     {
     }
 
+    public void SetScopeProvider(IExternalScopeProvider scopeProvider)
+    {
+        _scopeProvider = scopeProvider;
+    }
+
     private sealed class InMemoryLogger(
         string categoryName,
-        InMemoryLogStore store) : ILogger
+        InMemoryLogStore store,
+        InMemoryLoggerProvider provider) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull =>
-            NullScope.Instance;
+            provider._scopeProvider.Push(state);
 
         public bool IsEnabled(LogLevel logLevel) =>
             logLevel >= LogLevel.Information;
@@ -41,16 +50,8 @@ public sealed class InMemoryLoggerProvider(InMemoryLogStore store)
                 categoryName,
                 formatter(state, exception),
                 exception?.Message,
-                eventId.Id == 0 ? null : eventId.Id.ToString()));
-        }
-    }
-
-    private sealed class NullScope : IDisposable
-    {
-        public static readonly NullScope Instance = new();
-
-        public void Dispose()
-        {
+                eventId.Id == 0 ? null : eventId.Id.ToString(),
+                ScopeReader.FindCorrelationId(provider._scopeProvider)));
         }
     }
 }

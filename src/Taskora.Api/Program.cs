@@ -21,6 +21,23 @@ var operationLogs = new InMemoryLogStore(
     ReadPositiveInt(builder.Configuration["Operations:Logs:RetentionDays"], 30));
 builder.Services.AddSingleton(operationLogs);
 builder.Logging.AddProvider(new InMemoryLoggerProvider(operationLogs));
+var fileLogOptions = new FileLoggerOptions
+{
+    Enabled = ReadBool(
+        builder.Configuration["Operations:Logs:FileEnabled"],
+        true),
+    Directory = string.IsNullOrWhiteSpace(
+        builder.Configuration["Operations:Logs:Directory"])
+        ? "App_Data/logs"
+        : builder.Configuration["Operations:Logs:Directory"]!,
+    RetentionDays = ReadPositiveInt(
+        builder.Configuration["Operations:Logs:RetentionDays"],
+        30)
+};
+if (fileLogOptions.Enabled)
+{
+    builder.Logging.AddProvider(new FileLoggerProvider(fileLogOptions));
+}
 builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
 builder.Services.AddSingleton<DatabaseBackupSchedulerStatus>();
 builder.Services.AddSingleton<DatabaseBackupService>();
@@ -341,8 +358,8 @@ static bool ShouldSeedDemoData(
         configuration["DemoData:SeedOnStartup"],
         out var seedDemoData) && seedDemoData;
 
-static bool ReadBool(string? value) =>
-    bool.TryParse(value, out var result) && result;
+static bool ReadBool(string? value, bool defaultValue = false) =>
+    bool.TryParse(value, out var result) ? result : defaultValue;
 
 static int ReadPositiveInt(string? value, int defaultValue) =>
     int.TryParse(value, out var result) && result > 0
