@@ -30,6 +30,8 @@ public sealed class DatabaseBackupScheduler(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // The hosted service sleeps until the next planned backup, then
+            // records success/failure for the super-admin backup dashboard.
             var delay = nextRun - DateTimeOffset.UtcNow;
             if (delay > TimeSpan.Zero)
             {

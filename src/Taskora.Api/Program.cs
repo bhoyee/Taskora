@@ -16,6 +16,9 @@ using TodoApp.Infrastructure.Persistence.Seeding;
 LoadEnvironmentFile();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Keep a short in-memory log window for the super-admin Operations UI, while
+// also writing durable JSONL files for local/server troubleshooting.
 var operationLogs = new InMemoryLogStore(
     ReadPositiveInt(builder.Configuration["Operations:Logs:MaxEntries"], 200),
     ReadPositiveInt(builder.Configuration["Operations:Logs:RetentionDays"], 30));
@@ -158,6 +161,8 @@ builder.Services.AddHostedService<DatabaseBackupScheduler>();
 
 var app = builder.Build();
 
+// Correlation IDs are added before exception handling so failed requests can
+// still be matched between the browser response, Operations page, and log file.
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseHttpsRedirection();

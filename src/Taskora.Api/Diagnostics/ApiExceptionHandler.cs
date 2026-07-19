@@ -13,6 +13,8 @@ internal sealed class ApiExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
+        // Bad JSON/body errors are expected client mistakes; unexpected server
+        // failures are logged with the active correlation id scope.
         if (exception is not BadHttpRequestException)
         {
             logger.LogError(

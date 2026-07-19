@@ -47,6 +47,8 @@ public sealed class DueDateReminderScheduler(
         TimeSpan interval,
         CancellationToken cancellationToken)
     {
+        // One scheduler pass covers both deadline reminders and My Day carryover
+        // alerts, so Operations can show a single notification-run status.
         var startedAt = DateTimeOffset.UtcNow;
         status.MarkRunning(startedAt);
         logger.LogInformation(

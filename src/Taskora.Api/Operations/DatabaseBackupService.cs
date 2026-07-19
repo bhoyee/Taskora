@@ -102,6 +102,8 @@ public sealed class DatabaseBackupService(
         TodoAppDbContext database,
         CancellationToken cancellationToken)
     {
+        // EF Core supplies the table metadata, then provider-specific quoting
+        // lets the same backup code read from SQLite locally or Postgres on Neon.
         var tables = database.Model
             .GetEntityTypes()
             .Select(entity => new

@@ -42,6 +42,8 @@ public sealed class FileLoggerProvider(FileLoggerOptions options)
         string message,
         Exception? exception)
     {
+        // Keep this logger dependency-free so it works on Render, local
+        // development, and simple portfolio hosting without extra services.
         if (!options.Enabled || level < LogLevel.Information)
         {
             return;
