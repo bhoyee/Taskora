@@ -30,6 +30,9 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
         Assert.Equal(
             title,
             createdJson.GetProperty("title").GetString());
+        Assert.Equal(
+            "Medium",
+            createdJson.GetProperty("priority").GetString());
 
         var list = await _client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/todos?date=2026-07-13&search={marker}&pageNumber=1&pageSize=10");
@@ -42,9 +45,15 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
             {
                 title = $"Review portfolio notes again {marker}",
                 todoDate = "2026-07-13",
-                notes = "Add screenshots"
+                notes = "Add screenshots",
+                priority = "High"
             });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal(
+            "High",
+            (await updated.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("priority")
+            .GetString());
 
         var completed = await _client.PostAsync(
             $"/api/v1/todos/{todoId}/complete",
@@ -101,5 +110,60 @@ public sealed class PersonalTodoEndpointTests(ApiFactory factory)
         Assert.Equal("2099-01-01", item.GetProperty("todoDate").GetString());
         Assert.Equal("2099-01-01", item.GetProperty("originalTodoDate").GetString());
         Assert.Equal(JsonValueKind.Null, item.GetProperty("carriedOverFromDate").ValueKind);
+    }
+
+    [Fact]
+    public async Task Daily_routines_support_crud_and_generate_high_priority_todos()
+    {
+        var marker = $"routine-{Guid.NewGuid():N}";
+        var created = await _client.PostAsJsonAsync(
+            "/api/v1/todos/routines",
+            new
+            {
+                title = $"Review delivery board {marker}",
+                notes = "Check blockers first.",
+                startDate = "2026-07-20"
+            });
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var createdJson = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var routineId = createdJson.GetProperty("id").GetGuid();
+        Assert.Equal("High", createdJson.GetProperty("priority").GetString());
+        Assert.True(createdJson.GetProperty("isActive").GetBoolean());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/v1/todos/routines?pageNumber=1&pageSize=10");
+        Assert.Contains(
+            list.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == routineId);
+
+        var updated = await _client.PutAsJsonAsync(
+            $"/api/v1/todos/routines/{routineId}",
+            new
+            {
+                title = $"Review delivery board updated {marker}",
+                notes = "Check release risks first.",
+                priority = "Critical",
+                startDate = "2026-07-20",
+                endDate = "2026-07-25",
+                isActive = true
+            });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal(
+            "Critical",
+            (await updated.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("priority")
+            .GetString());
+
+        var today = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/todos?date=2026-07-20&search={marker}&pageNumber=1&pageSize=10");
+        var generated = Assert.Single(today.GetProperty("items").EnumerateArray());
+        Assert.Equal("Critical", generated.GetProperty("priority").GetString());
+        Assert.Equal(routineId, generated.GetProperty("dailyRoutineId").GetGuid());
+        Assert.True(generated.GetProperty("isGeneratedFromDailyRoutine").GetBoolean());
+
+        var deleted = await _client.DeleteAsync(
+            $"/api/v1/todos/routines/{routineId}");
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
     }
 }

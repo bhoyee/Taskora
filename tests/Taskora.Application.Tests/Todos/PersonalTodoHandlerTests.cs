@@ -29,6 +29,7 @@ public sealed class PersonalTodoHandlerTests
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
             new RecordingEmailSender(),
+            CreateRoutineGenerator(repository, unitOfWork),
             new StubCurrentUser(userId));
 
         var result = await handler.HandleAsync(
@@ -72,6 +73,7 @@ public sealed class PersonalTodoHandlerTests
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
             emailSender,
+            CreateRoutineGenerator(repository, unitOfWork),
             new StubCurrentUser(userId));
 
         var result = await handler.HandleAsync(
@@ -190,5 +192,57 @@ public sealed class PersonalTodoHandlerTests
         public bool IsAuthenticated => true;
 
         public Guid UserId { get; } = userId;
+    }
+
+    private static GenerateDailyRoutineTodosHandler CreateRoutineGenerator(
+        IPersonalTodoRepository todos,
+        IUnitOfWork unitOfWork) =>
+        new(
+            new EmptyDailyRoutineRepository(),
+            todos,
+            unitOfWork,
+            new StubIdentifierGenerator(),
+            new StubClock(Now),
+            new StubBusinessDateProvider(new DateOnly(2026, 7, 18)));
+
+    private sealed class EmptyDailyRoutineRepository : IDailyRoutineRepository
+    {
+        public Task AddAsync(
+            DailyRoutine routine,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<DailyRoutine?> GetByIdAsync(
+            Guid routineId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<DailyRoutine?>(null);
+
+        public Task<DailyRoutineSearchResult> SearchAsync(
+            Guid userId,
+            int pageNumber,
+            int pageSize,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new DailyRoutineSearchResult([], 0));
+
+        public Task<IReadOnlyList<DailyRoutine>> ListDueForGenerationAsync(
+            DateOnly businessDate,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DailyRoutine>>([]);
+
+        public Task<bool> GeneratedTodoExistsAsync(
+            Guid routineId,
+            DateOnly businessDate,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(false);
+
+        public Task RemoveAsync(
+            DailyRoutine routine,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubIdentifierGenerator : IIdentifierGenerator
+    {
+        public Guid NewId() => Guid.NewGuid();
     }
 }

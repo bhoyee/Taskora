@@ -310,6 +310,39 @@ const activity = [{
   currentValue: 'InProgress',
   occurredAt: '2026-07-06T10:00:00Z',
 }]
+const todoPage = {
+  totalCount: 1,
+  items: [{
+    id: 'todo-1',
+    title: 'Review daily routine',
+    todoDate: '2026-07-18',
+    originalTodoDate: '2026-07-18',
+    carriedOverFromDate: null,
+    notes: 'Keep the portfolio fresh.',
+    priority: 'High',
+    dailyRoutineId: 'routine-1',
+    isGeneratedFromDailyRoutine: true,
+    isCompleted: false,
+    createdAt: '2026-07-18T08:00:00Z',
+    updatedAt: '2026-07-18T08:00:00Z',
+    completedAt: null,
+  }],
+}
+const dailyRoutinePage = {
+  totalCount: 1,
+  items: [{
+    id: 'routine-1',
+    title: 'Review daily routine',
+    notes: 'Keep the portfolio fresh.',
+    priority: 'High',
+    startDate: '2026-07-18',
+    endDate: null,
+    isActive: true,
+    lastGeneratedDate: '2026-07-18',
+    createdAt: '2026-07-18T07:00:00Z',
+    updatedAt: '2026-07-18T08:00:00Z',
+  }],
+}
 const accountProfile = {
   userId: 'user-1',
   displayName: 'Salisu Adeboye',
@@ -414,6 +447,8 @@ function mockResponseFor(url: string, page: TaskPage = taskPage, activityItems =
   if (url.includes('/workspaces/workspace-1/projects')) return [projectDetails]
   if (url.includes('/workspaces/workspace-1/members')) return members
   if (url.endsWith('/workspaces')) return workspaces
+  if (url.includes('/api/v1/todos/routines')) return dailyRoutinePage
+  if (url.includes('/api/v1/todos')) return todoPage
   if (url.includes('/api/v1/projects/10000000-0000-0000-0000-000000000001')) return projectDetails
   if (url.includes('/api/v1/tasks/task-1')) return taskPage.items[0]
   if (url.includes('/api/v1/tasks/task-2')) return secondTask
@@ -503,6 +538,9 @@ function mockWorkspaceManagementApi() {
       if (url.includes('workspaceId=workspace-2') && url.includes('/tasks')) {
         return jsonResponse({ totalCount: 0, items: [] })
       }
+
+      if (url.includes('/api/v1/todos/routines')) return jsonResponse(dailyRoutinePage)
+      if (url.includes('/api/v1/todos')) return jsonResponse(todoPage)
 
       if (url.includes('/workspaces/workspace-2/activity')) {
         return jsonResponse(emptyActivityPage())

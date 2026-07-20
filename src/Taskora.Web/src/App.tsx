@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import { api, streamWorkspaceEvents } from './api'
 import type {
-  AccountSession, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
-  DatabaseBackupFile, Sprint, TaskItem, TaskStatus, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
+  AccountSession, DailyRoutine, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
+  DatabaseBackupFile, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
@@ -38,6 +38,7 @@ type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'rep
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
 const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups']
+const todoPriorities: TodoPriority[] = ['Low', 'Medium', 'High', 'Critical']
 
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
@@ -275,6 +276,12 @@ export default function App() {
   const [todoLoading, setTodoLoading] = useState(false)
   const [todoError, setTodoError] = useState('')
   const todoPageSize = 10
+  const [dailyRoutines, setDailyRoutines] = useState<DailyRoutine[]>([])
+  const [dailyRoutineTotal, setDailyRoutineTotal] = useState(0)
+  const [dailyRoutinePageNumber, setDailyRoutinePageNumber] = useState(1)
+  const [dailyRoutineLoading, setDailyRoutineLoading] = useState(false)
+  const [dailyRoutineError, setDailyRoutineError] = useState('')
+  const dailyRoutinePageSize = 6
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [dashboardReport, setDashboardReport] = useState<WorkspaceReport | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -466,11 +473,36 @@ export default function App() {
     }
   }
 
+  const loadDailyRoutines = async (
+    pageNumber = dailyRoutinePageNumber,
+  ) => {
+    try {
+      setDailyRoutineLoading(true)
+      setDailyRoutineError('')
+      const page = await api.dailyRoutines(
+        pageNumber,
+        dailyRoutinePageSize)
+      setDailyRoutines(page.items)
+      setDailyRoutineTotal(page.totalCount)
+    } catch (reason) {
+      setDailyRoutineError(
+        reason instanceof Error
+          ? reason.message
+          : 'Daily routines could not be loaded.')
+    } finally {
+      setDailyRoutineLoading(false)
+    }
+  }
+
   useEffect(() => { void load() }, [view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
   }, [todoDate, todoSearch, todoPageNumber, loggedOut])
+  useEffect(() => {
+    if (loggedOut) return
+    void loadDailyRoutines(dailyRoutinePageNumber)
+  }, [dailyRoutinePageNumber, loggedOut])
   useEffect(() => {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
@@ -1210,6 +1242,12 @@ export default function App() {
         {view === 'myday' && <TodoPage
           todos={todos}
           totalCount={todoTotal}
+          dailyRoutines={dailyRoutines}
+          dailyRoutineTotalCount={dailyRoutineTotal}
+          dailyRoutinePageNumber={dailyRoutinePageNumber}
+          dailyRoutinePageSize={dailyRoutinePageSize}
+          dailyRoutineLoading={dailyRoutineLoading}
+          dailyRoutineError={dailyRoutineError}
           selectedDate={todoDate}
           search={todoSearch}
           pageNumber={todoPageNumber}
@@ -1226,16 +1264,16 @@ export default function App() {
           }}
           onPageChange={setTodoPageNumber}
           onReload={() => void loadTodos()}
-          onCreate={async (title, date, notes) => {
+          onCreate={async (title, date, notes, priority) => {
             setTodoError('')
-            const created = await api.createTodo(title, date, notes)
+            const created = await api.createTodo(title, date, notes, priority)
             setNotice(`Todo ${created.title} created.`)
             setTodoPageNumber(1)
             await loadTodos(date, todoSearch, 1)
           }}
-          onUpdate={async (todo, title, date, notes) => {
+          onUpdate={async (todo, title, date, notes, priority) => {
             setTodoError('')
-            const updated = await api.updateTodo(todo.id, title, date, notes)
+            const updated = await api.updateTodo(todo.id, title, date, notes, priority)
             setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
             if (updated.todoDate !== todoDate) await loadTodos(todoDate, todoSearch, todoPageNumber)
             setNotice(`Todo ${updated.title} updated.`)
@@ -1252,6 +1290,28 @@ export default function App() {
             await api.deleteTodo(todo.id)
             setNotice(`Todo ${todo.title} deleted.`)
             await loadTodos(todoDate, todoSearch, todoPageNumber)
+          }}
+          onDailyRoutinePageChange={setDailyRoutinePageNumber}
+          onDailyRoutineReload={() => void loadDailyRoutines()}
+          onCreateDailyRoutine={async (title, notes, priority, startDate, endDate) => {
+            setDailyRoutineError('')
+            const created = await api.createDailyRoutine(title, notes, priority, startDate, endDate)
+            setNotice(`Daily routine ${created.title} created.`)
+            setDailyRoutinePageNumber(1)
+            await loadDailyRoutines(1)
+            await loadTodos(todoDate, todoSearch, todoPageNumber)
+          }}
+          onUpdateDailyRoutine={async (routine, title, notes, priority, startDate, endDate, isActive) => {
+            setDailyRoutineError('')
+            const updated = await api.updateDailyRoutine(routine.id, title, notes, priority, startDate, endDate, isActive)
+            setDailyRoutines((items) => items.map((item) => item.id === routine.id ? updated : item))
+            setNotice(`Daily routine ${updated.title} updated.`)
+          }}
+          onDeleteDailyRoutine={async (routine) => {
+            setDailyRoutineError('')
+            await api.deleteDailyRoutine(routine.id)
+            setNotice(`Daily routine ${routine.title} deleted.`)
+            await loadDailyRoutines(dailyRoutinePageNumber)
           }}
         />}
         {view === 'calendar' && <CalendarPage projects={projects} tasks={tasks} selectedProject={project} />}
@@ -3106,6 +3166,12 @@ function NotificationBell({
 function TodoPage({
   todos,
   totalCount,
+  dailyRoutines,
+  dailyRoutineTotalCount,
+  dailyRoutinePageNumber,
+  dailyRoutinePageSize,
+  dailyRoutineLoading,
+  dailyRoutineError,
   selectedDate,
   search,
   pageNumber,
@@ -3120,9 +3186,20 @@ function TodoPage({
   onUpdate,
   onToggle,
   onDelete,
+  onDailyRoutinePageChange,
+  onDailyRoutineReload,
+  onCreateDailyRoutine,
+  onUpdateDailyRoutine,
+  onDeleteDailyRoutine,
 }: {
   todos: PersonalTodo[]
   totalCount: number
+  dailyRoutines: DailyRoutine[]
+  dailyRoutineTotalCount: number
+  dailyRoutinePageNumber: number
+  dailyRoutinePageSize: number
+  dailyRoutineLoading: boolean
+  dailyRoutineError: string
   selectedDate: string
   search: string
   pageNumber: number
@@ -3133,35 +3210,84 @@ function TodoPage({
   onSearchChange: (search: string) => void
   onPageChange: (page: number) => void
   onReload: () => void
-  onCreate: (title: string, date: string, notes: string) => Promise<void>
-  onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string) => Promise<void>
+  onCreate: (title: string, date: string, notes: string, priority: TodoPriority) => Promise<void>
+  onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string, priority: TodoPriority) => Promise<void>
   onToggle: (todo: PersonalTodo) => Promise<void>
   onDelete: (todo: PersonalTodo) => Promise<void>
+  onDailyRoutinePageChange: (page: number) => void
+  onDailyRoutineReload: () => void
+  onCreateDailyRoutine: (title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string) => Promise<void>
+  onUpdateDailyRoutine: (routine: DailyRoutine, title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string, isActive: boolean) => Promise<void>
+  onDeleteDailyRoutine: (routine: DailyRoutine) => Promise<void>
 }) {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
+  const [priority, setPriority] = useState<TodoPriority>('Medium')
+  const [routineTitle, setRoutineTitle] = useState('')
+  const [routineNotes, setRoutineNotes] = useState('')
+  const [routinePriority, setRoutinePriority] = useState<TodoPriority>('High')
+  const [routineStartDate, setRoutineStartDate] = useState(selectedDate)
+  const [routineEndDate, setRoutineEndDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [routineSaving, setRoutineSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState(selectedDate)
+  const [editPriority, setEditPriority] = useState<TodoPriority>('Medium')
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null)
+  const [editRoutineTitle, setEditRoutineTitle] = useState('')
+  const [editRoutineNotes, setEditRoutineNotes] = useState('')
+  const [editRoutinePriority, setEditRoutinePriority] = useState<TodoPriority>('High')
+  const [editRoutineStartDate, setEditRoutineStartDate] = useState(selectedDate)
+  const [editRoutineEndDate, setEditRoutineEndDate] = useState('')
+  const [editRoutineActive, setEditRoutineActive] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [routineBusyId, setRoutineBusyId] = useState<string | null>(null)
   const completedCount = todos.filter((todo) => todo.isCompleted).length
   const openCount = todos.length - completedCount
   const totalPages = totalCount === 0
     ? 0
     : Math.ceil(totalCount / pageSize)
+  const dailyRoutineTotalPages = dailyRoutineTotalCount === 0
+    ? 0
+    : Math.ceil(dailyRoutineTotalCount / dailyRoutinePageSize)
+
+  useEffect(() => {
+    setRoutineStartDate(selectedDate)
+  }, [selectedDate])
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!title.trim()) return
     setSaving(true)
     try {
-      await onCreate(title.trim(), selectedDate, notes.trim())
+      await onCreate(title.trim(), selectedDate, notes.trim(), priority)
       setTitle('')
       setNotes('')
+      setPriority('Medium')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const createRoutine = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!routineTitle.trim()) return
+    setRoutineSaving(true)
+    try {
+      await onCreateDailyRoutine(
+        routineTitle.trim(),
+        routineNotes.trim(),
+        routinePriority,
+        routineStartDate,
+        routineEndDate)
+      setRoutineTitle('')
+      setRoutineNotes('')
+      setRoutinePriority('High')
+      setRoutineEndDate('')
+    } finally {
+      setRoutineSaving(false)
     }
   }
 
@@ -3170,16 +3296,45 @@ function TodoPage({
     setEditTitle(todo.title)
     setEditNotes(todo.notes ?? '')
     setEditDate(todo.todoDate)
+    setEditPriority(todo.priority)
   }
 
   const saveEdit = async (todo: PersonalTodo) => {
     if (!editTitle.trim()) return
     setBusyId(todo.id)
     try {
-      await onUpdate(todo, editTitle.trim(), editDate, editNotes.trim())
+      await onUpdate(todo, editTitle.trim(), editDate, editNotes.trim(), editPriority)
       setEditingId(null)
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const startRoutineEdit = (routine: DailyRoutine) => {
+    setEditingRoutineId(routine.id)
+    setEditRoutineTitle(routine.title)
+    setEditRoutineNotes(routine.notes ?? '')
+    setEditRoutinePriority(routine.priority)
+    setEditRoutineStartDate(routine.startDate)
+    setEditRoutineEndDate(routine.endDate ?? '')
+    setEditRoutineActive(routine.isActive)
+  }
+
+  const saveRoutineEdit = async (routine: DailyRoutine) => {
+    if (!editRoutineTitle.trim()) return
+    setRoutineBusyId(routine.id)
+    try {
+      await onUpdateDailyRoutine(
+        routine,
+        editRoutineTitle.trim(),
+        editRoutineNotes.trim(),
+        editRoutinePriority,
+        editRoutineStartDate,
+        editRoutineEndDate,
+        editRoutineActive)
+      setEditingRoutineId(null)
+    } finally {
+      setRoutineBusyId(null)
     }
   }
 
@@ -3215,8 +3370,75 @@ function TodoPage({
     <form className="todo-create" onSubmit={(event) => void create(event)}>
       <label>Todo title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} placeholder="Call client, review PR, buy domain..." /></label>
       <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context or checklist note." /></label>
+      <label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
       <button className="primary" disabled={saving || !title.trim()}><Plus size={17} /> {saving ? 'Adding...' : 'Add todo'}</button>
     </form>
+
+    <section className="todo-list-panel routine-panel">
+      <header>
+        <div><h2>Daily Routines</h2><p>Reusable todos that Taskora adds to My Day every business date.</p></div>
+        <button className="secondary" onClick={onDailyRoutineReload} disabled={dailyRoutineLoading}><Search size={16} /> Refresh</button>
+      </header>
+      <form className="routine-create" onSubmit={(event) => void createRoutine(event)}>
+        <label>Routine title<input value={routineTitle} onChange={(event) => setRoutineTitle(event.target.value)} maxLength={160} placeholder="Review inbox, publish update, check blockers..." /></label>
+        <label>Notes<textarea value={routineNotes} onChange={(event) => setRoutineNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context for every generated todo." /></label>
+        <label>Priority<select value={routinePriority} onChange={(event) => setRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>Start date<input type="date" value={routineStartDate} onChange={(event) => setRoutineStartDate(event.target.value)} /></label>
+        <label>End date<input type="date" value={routineEndDate} onChange={(event) => setRoutineEndDate(event.target.value)} /></label>
+        <button className="primary" disabled={routineSaving || !routineTitle.trim()}><Plus size={17} /> {routineSaving ? 'Saving...' : 'Add routine'}</button>
+      </form>
+      {dailyRoutineError && <div className="error-state compact-error"><AlertTriangle /> <span>{dailyRoutineError}</span></div>}
+      {dailyRoutineLoading ? <div className="loading">Loading routines...</div> :
+        dailyRoutines.length
+          ? <div className="routine-list">
+            {dailyRoutines.map((routine) => {
+              const editing = editingRoutineId === routine.id
+              return <article className={`routine-item ${routine.isActive ? '' : 'paused'}`} key={routine.id}>
+                <div className="routine-content">
+                  {editing
+                    ? <>
+                        <input value={editRoutineTitle} onChange={(event) => setEditRoutineTitle(event.target.value)} maxLength={160} />
+                        <textarea value={editRoutineNotes} onChange={(event) => setEditRoutineNotes(event.target.value)} rows={2} maxLength={1000} />
+                        <div className="routine-edit-grid">
+                          <select value={editRoutinePriority} onChange={(event) => setEditRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select>
+                          <input type="date" value={editRoutineStartDate} onChange={(event) => setEditRoutineStartDate(event.target.value)} />
+                          <input type="date" value={editRoutineEndDate} onChange={(event) => setEditRoutineEndDate(event.target.value)} />
+                          <label className="inline-check"><input type="checkbox" checked={editRoutineActive} onChange={(event) => setEditRoutineActive(event.target.checked)} /> Active</label>
+                        </div>
+                      </>
+                    : <>
+                        <div className="routine-title-row">
+                          <strong>{routine.title}</strong>
+                          <PriorityBadge priority={routine.priority} />
+                          <span className={`routine-state ${routine.isActive ? 'active' : 'paused'}`}>{routine.isActive ? 'Active' : 'Paused'}</span>
+                        </div>
+                        {routine.notes && <p>{routine.notes}</p>}
+                        <small>Starts {formatDate(routine.startDate)}{routine.endDate ? `, ends ${formatDate(routine.endDate)}` : ', no end date'}{routine.lastGeneratedDate ? `, last added ${formatDate(routine.lastGeneratedDate)}` : ''}</small>
+                      </>}
+                </div>
+                <div className="todo-actions">
+                  {editing
+                    ? <>
+                        <button className="icon-button" onClick={() => void saveRoutineEdit(routine)} disabled={routineBusyId === routine.id || !editRoutineTitle.trim()} aria-label="Save routine"><Save /></button>
+                        <button className="icon-button" onClick={() => setEditingRoutineId(null)} aria-label="Cancel routine edit"><X /></button>
+                      </>
+                    : <>
+                        <button className="icon-button" onClick={() => startRoutineEdit(routine)} aria-label={`Edit ${routine.title}`}><Pencil /></button>
+                        <button className="icon-button danger-action" onClick={() => void onDeleteDailyRoutine(routine)} disabled={routineBusyId === routine.id} aria-label={`Delete ${routine.title}`}><Trash2 /></button>
+                      </>}
+                </div>
+              </article>
+            })}
+          </div>
+          : <div className="empty"><Clock3 /><h2>No daily routines yet</h2><p>Add routines for repeated personal work that should appear in My Day automatically.</p></div>}
+      {!dailyRoutineLoading && <Pagination
+        pageNumber={dailyRoutinePageNumber}
+        pageSize={dailyRoutinePageSize}
+        totalCount={dailyRoutineTotalCount}
+        totalPages={dailyRoutineTotalPages}
+        onPageChange={onDailyRoutinePageChange}
+      />}
+    </section>
 
     <section className="todo-list-panel">
       <header>
@@ -3245,9 +3467,14 @@ function TodoPage({
                         <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={160} />
                         <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} maxLength={1000} />
                         <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} />
+                        <select value={editPriority} onChange={(event) => setEditPriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select>
                       </>
                     : <>
-                        <strong>{todo.title}</strong>
+                        <div className="todo-title-row">
+                          <strong>{todo.title}</strong>
+                          <PriorityBadge priority={todo.priority} />
+                          {todo.isGeneratedFromDailyRoutine && <span className="routine-badge">Daily routine</span>}
+                        </div>
                         {todo.carriedOverFromDate && <span className="carryover-badge">Carry over from {formatDate(todo.originalTodoDate)}</span>}
                         {todo.notes && <p>{todo.notes}</p>}
                         <small>{todo.isCompleted && todo.completedAt ? `Completed ${new Date(todo.completedAt).toLocaleString()}` : `Updated ${new Date(todo.updatedAt).toLocaleString()}`}</small>
@@ -3277,6 +3504,12 @@ function TodoPage({
       />}
     </section>
   </section>
+}
+
+function PriorityBadge({ priority }: { priority: TodoPriority }) {
+  return <span className={`priority-badge ${priority.toLowerCase()}`}>
+    {priority}
+  </span>
 }
 
 function ReportsPage({

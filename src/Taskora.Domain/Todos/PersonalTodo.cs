@@ -10,6 +10,8 @@ public sealed class PersonalTodo
         string title,
         DateOnly todoDate,
         string? notes,
+        TodoPriority priority,
+        Guid? dailyRoutineId,
         DateTimeOffset createdAt)
     {
         if (id == Guid.Empty)
@@ -30,6 +32,8 @@ public sealed class PersonalTodo
         TodoDate = todoDate;
         OriginalTodoDate = todoDate;
         Notes = NormalizeNotes(notes);
+        Priority = priority;
+        DailyRoutineId = dailyRoutineId;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -50,6 +54,12 @@ public sealed class PersonalTodo
 
     public string? Notes { get; private set; }
 
+    public TodoPriority Priority { get; private set; }
+
+    public Guid? DailyRoutineId { get; private set; }
+
+    public bool IsGeneratedFromDailyRoutine => DailyRoutineId.HasValue;
+
     public bool IsCompleted { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
@@ -65,12 +75,50 @@ public sealed class PersonalTodo
         DateOnly todoDate,
         string? notes,
         DateTimeOffset createdAt) =>
-        new(id, userId, title, todoDate, notes, createdAt);
+        new(
+            id,
+            userId,
+            title,
+            todoDate,
+            notes,
+            TodoPriority.Medium,
+            null,
+            createdAt);
+
+    public static PersonalTodo Create(
+        Guid id,
+        Guid userId,
+        string title,
+        DateOnly todoDate,
+        string? notes,
+        TodoPriority priority,
+        DateTimeOffset createdAt) =>
+        new(id, userId, title, todoDate, notes, priority, null, createdAt);
+
+    public static PersonalTodo CreateFromDailyRoutine(
+        Guid id,
+        Guid userId,
+        Guid dailyRoutineId,
+        string title,
+        DateOnly todoDate,
+        string? notes,
+        TodoPriority priority,
+        DateTimeOffset createdAt) =>
+        new(
+            id,
+            userId,
+            title,
+            todoDate,
+            notes,
+            priority,
+            dailyRoutineId,
+            createdAt);
 
     public void Update(
         string title,
         DateOnly todoDate,
         string? notes,
+        TodoPriority priority,
         DateTimeOffset updatedAt)
     {
         Title = NormalizeTitle(title);
@@ -81,6 +129,7 @@ public sealed class PersonalTodo
         }
 
         Notes = NormalizeNotes(notes);
+        Priority = priority;
         UpdatedAt = updatedAt;
     }
 
@@ -138,7 +187,7 @@ public sealed class PersonalTodo
         return normalized;
     }
 
-    private static string? NormalizeNotes(string? notes)
+    internal static string? NormalizeNotes(string? notes)
     {
         if (string.IsNullOrWhiteSpace(notes))
         {

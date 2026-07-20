@@ -13,6 +13,7 @@ public sealed class ListPersonalTodosHandler(
     IClock clock,
     IBusinessDateProvider dates,
     INotificationEmailSender emailSender,
+    GenerateDailyRoutineTodosHandler dailyRoutines,
     ICurrentUser currentUser)
 {
     public async Task<Result<PagedResult<PersonalTodoDto>>> HandleAsync(
@@ -42,6 +43,9 @@ public sealed class ListPersonalTodosHandler(
         var targetDate = query.Date ?? today;
         if (targetDate == today)
         {
+            await dailyRoutines.HandleAsync(
+                new GenerateDailyRoutineTodosCommand(today),
+                cancellationToken);
             var carried = await todos.ListIncompleteBeforeAsync(
                 currentUser.UserId,
                 today,
@@ -133,6 +137,7 @@ public sealed class CreatePersonalTodoHandler(
                 command.Title,
                 command.TodoDate,
                 command.Notes,
+                command.Priority,
                 clock.UtcNow);
 
             await todos.AddAsync(todo, cancellationToken);
@@ -173,6 +178,7 @@ public sealed class UpdatePersonalTodoHandler(
                 command.Title,
                 command.TodoDate,
                 command.Notes,
+                command.Priority,
                 clock.UtcNow);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -257,16 +263,233 @@ internal static class PersonalTodoMapping
             todo.OriginalTodoDate,
             todo.CarriedOverFromDate,
             todo.Notes,
+            todo.Priority,
+            todo.DailyRoutineId,
+            todo.IsGeneratedFromDailyRoutine,
             todo.IsCompleted,
             todo.CreatedAt,
             todo.UpdatedAt,
             todo.CompletedAt);
 }
 
+public sealed class ListDailyRoutinesHandler(
+    IDailyRoutineRepository routines,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<PagedResult<DailyRoutineDto>>> HandleAsync(
+        ListDailyRoutinesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var authorization = RequireAuthenticatedUser(currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<PagedResult<DailyRoutineDto>>.Failure(
+                authorization.Error);
+        }
+
+        if (query.PageNumber < 1)
+        {
+            return Validation<PagedResult<DailyRoutineDto>>(
+                "Page number must be at least 1.");
+        }
+
+        if (query.PageSize is < 1 or > 100)
+        {
+            return Validation<PagedResult<DailyRoutineDto>>(
+                "Page size must be between 1 and 100.");
+        }
+
+        var result = await routines.SearchAsync(
+            currentUser.UserId,
+            query.PageNumber,
+            query.PageSize,
+            cancellationToken);
+
+        return Result<PagedResult<DailyRoutineDto>>.Success(
+            new PagedResult<DailyRoutineDto>(
+                result.Items.Select(ToDto).ToArray(),
+                result.TotalCount,
+                query.PageNumber,
+                query.PageSize));
+    }
+}
+
+public sealed class CreateDailyRoutineHandler(
+    IDailyRoutineRepository routines,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<DailyRoutineDto>> HandleAsync(
+        CreateDailyRoutineCommand command,
+        CancellationToken cancellationToken)
+    {
+        var authorization = RequireAuthenticatedUser(currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<DailyRoutineDto>.Failure(authorization.Error);
+        }
+
+        try
+        {
+            var routine = DailyRoutine.Create(
+                identifiers.NewId(),
+                currentUser.UserId,
+                command.Title,
+                command.Notes,
+                command.Priority,
+                command.StartDate,
+                command.EndDate,
+                clock.UtcNow);
+            await routines.AddAsync(routine, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<DailyRoutineDto>.Success(ToDto(routine));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Validation<DailyRoutineDto>(exception.Message);
+        }
+    }
+}
+
+public sealed class UpdateDailyRoutineHandler(
+    IDailyRoutineRepository routines,
+    IUnitOfWork unitOfWork,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<DailyRoutineDto>> HandleAsync(
+        UpdateDailyRoutineCommand command,
+        CancellationToken cancellationToken)
+    {
+        var routine = await GetOwnedRoutineAsync(
+            routines,
+            currentUser,
+            command.RoutineId,
+            cancellationToken);
+        if (!routine.IsSuccess)
+        {
+            return Result<DailyRoutineDto>.Failure(routine.Error);
+        }
+
+        try
+        {
+            routine.Value.Update(
+                command.Title,
+                command.Notes,
+                command.Priority,
+                command.StartDate,
+                command.EndDate,
+                command.IsActive,
+                clock.UtcNow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<DailyRoutineDto>.Success(ToDto(routine.Value));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Validation<DailyRoutineDto>(exception.Message);
+        }
+    }
+}
+
+public sealed class DeleteDailyRoutineHandler(
+    IDailyRoutineRepository routines,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteDailyRoutineCommand command,
+        CancellationToken cancellationToken)
+    {
+        var routine = await GetOwnedRoutineAsync(
+            routines,
+            currentUser,
+            command.RoutineId,
+            cancellationToken);
+        if (!routine.IsSuccess)
+        {
+            return Result<bool>.Failure(routine.Error);
+        }
+
+        await routines.RemoveAsync(routine.Value, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Result<bool>.Success(true);
+    }
+}
+
+public sealed class GenerateDailyRoutineTodosHandler(
+    IDailyRoutineRepository routines,
+    IPersonalTodoRepository todos,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    IClock clock,
+    IBusinessDateProvider dates)
+{
+    public async Task<Result<GenerateDailyRoutineTodosResult>> HandleAsync(
+        GenerateDailyRoutineTodosCommand command,
+        CancellationToken cancellationToken)
+    {
+        var businessDate = command.BusinessDate ?? dates.Today;
+        var dueRoutines = await routines.ListDueForGenerationAsync(
+            businessDate,
+            cancellationToken);
+        var generated = 0;
+        var skipped = 0;
+
+        foreach (var routine in dueRoutines)
+        {
+            if (await routines.GeneratedTodoExistsAsync(
+                    routine.Id,
+                    businessDate,
+                    cancellationToken))
+            {
+                skipped++;
+                continue;
+            }
+
+            await todos.AddAsync(
+                routine.GenerateTodo(
+                    identifiers.NewId(),
+                    businessDate,
+                    clock.UtcNow),
+                cancellationToken);
+            generated++;
+        }
+
+        if (generated > 0 || skipped > 0)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return Result<GenerateDailyRoutineTodosResult>.Success(
+            new GenerateDailyRoutineTodosResult(
+                generated,
+                skipped,
+                businessDate));
+    }
+}
+
 file static class PersonalTodoHandlerHelpers
 {
     public static PersonalTodoDto ToDto(PersonalTodo todo) =>
         PersonalTodoMapping.ToDto(todo);
+
+    public static DailyRoutineDto ToDto(DailyRoutine routine) =>
+        new(
+            routine.Id,
+            routine.Title,
+            routine.Notes,
+            routine.Priority,
+            routine.StartDate,
+            routine.EndDate,
+            routine.IsActive,
+            routine.LastGeneratedDate,
+            routine.CreatedAt,
+            routine.UpdatedAt);
 
     public static Result<bool> RequireAuthenticatedUser(
         ICurrentUser currentUser) =>
@@ -299,6 +522,30 @@ file static class PersonalTodoHandlerHelpers
         }
 
         return Result<PersonalTodo>.Success(todo);
+    }
+
+    public static async Task<Result<DailyRoutine>> GetOwnedRoutineAsync(
+        IDailyRoutineRepository routines,
+        ICurrentUser currentUser,
+        Guid routineId,
+        CancellationToken cancellationToken)
+    {
+        var authorization = RequireAuthenticatedUser(currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<DailyRoutine>.Failure(authorization.Error);
+        }
+
+        var routine = await routines.GetByIdAsync(routineId, cancellationToken);
+        if (routine is null || routine.UserId != currentUser.UserId)
+        {
+            return Result<DailyRoutine>.Failure(new ApplicationError(
+                "daily_routine.not_found",
+                "The daily routine was not found.",
+                ErrorType.NotFound));
+        }
+
+        return Result<DailyRoutine>.Success(routine);
     }
 
     public static async Task<Result<PersonalTodoDto>> MutateTodoAsync(

@@ -334,10 +334,28 @@ export interface PersonalTodo {
   originalTodoDate: string
   carriedOverFromDate: string | null
   notes: string | null
+  priority: TodoPriority
+  dailyRoutineId: string | null
+  isGeneratedFromDailyRoutine: boolean
   isCompleted: boolean
   createdAt: string
   updatedAt: string
   completedAt: string | null
+}
+
+export type TodoPriority = 'Low' | 'Medium' | 'High' | 'Critical'
+
+export interface DailyRoutine {
+  id: string
+  title: string
+  notes: string | null
+  priority: TodoPriority
+  startDate: string
+  endDate: string | null
+  isActive: boolean
+  lastGeneratedDate: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
@@ -737,20 +755,21 @@ export const api = {
         pageSize: String(pageSize),
       })}`,
     ),
-  createTodo: (title: string, todoDate: string, notes: string) =>
+  createTodo: (title: string, todoDate: string, notes: string, priority: TodoPriority) =>
     request<PersonalTodo>('/api/v1/todos', {
       method: 'POST',
-      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+      body: JSON.stringify({ title, todoDate, notes: notes || null, priority }),
     }),
   updateTodo: (
     id: string,
     title: string,
     todoDate: string,
     notes: string,
+    priority: TodoPriority,
   ) =>
     request<PersonalTodo>(`/api/v1/todos/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, todoDate, notes: notes || null }),
+      body: JSON.stringify({ title, todoDate, notes: notes || null, priority }),
     }),
   completeTodo: (id: string) =>
     request<PersonalTodo>(`/api/v1/todos/${id}/complete`, {
@@ -762,6 +781,54 @@ export const api = {
     }),
   deleteTodo: (id: string) =>
     request<boolean>(`/api/v1/todos/${id}`, {
+      method: 'DELETE',
+    }),
+  dailyRoutines: (pageNumber = 1, pageSize = 10) =>
+    request<PagedResponse<DailyRoutine>>(
+      `/api/v1/todos/routines?${new URLSearchParams({
+        pageNumber: String(pageNumber),
+        pageSize: String(pageSize),
+      })}`,
+    ),
+  createDailyRoutine: (
+    title: string,
+    notes: string,
+    priority: TodoPriority,
+    startDate: string,
+    endDate: string,
+  ) =>
+    request<DailyRoutine>('/api/v1/todos/routines', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        notes: notes || null,
+        priority,
+        startDate,
+        endDate: endDate || null,
+      }),
+    }),
+  updateDailyRoutine: (
+    id: string,
+    title: string,
+    notes: string,
+    priority: TodoPriority,
+    startDate: string,
+    endDate: string,
+    isActive: boolean,
+  ) =>
+    request<DailyRoutine>(`/api/v1/todos/routines/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title,
+        notes: notes || null,
+        priority,
+        startDate,
+        endDate: endDate || null,
+        isActive,
+      }),
+    }),
+  deleteDailyRoutine: (id: string) =>
+    request<boolean>(`/api/v1/todos/routines/${id}`, {
       method: 'DELETE',
     }),
   login: (email: string, password: string) =>

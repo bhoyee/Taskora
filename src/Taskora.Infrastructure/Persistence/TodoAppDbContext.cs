@@ -30,6 +30,8 @@ public sealed class TodoAppDbContext(
 
     public DbSet<PersonalTodo> PersonalTodos => Set<PersonalTodo>();
 
+    public DbSet<DailyRoutine> DailyRoutines => Set<DailyRoutine>();
+
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
 
     public DbSet<UserCredential> UserCredentials => Set<UserCredential>();
@@ -60,6 +62,7 @@ public sealed class TodoAppDbContext(
         SetConcurrencyTokens<Project>();
         SetConcurrencyTokens<TaskItem>();
         SetConcurrencyTokens<PersonalTodo>();
+        SetConcurrencyTokens<DailyRoutine>();
         SetConcurrencyTokens<Workspace>();
 
         var tasksWithEvents = ChangeTracker

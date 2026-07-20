@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Notifications;
+using TodoApp.Application.Todos;
 using TodoApp.Domain.Todos;
 
 namespace TodoApp.Application.Tests.Notifications;
@@ -32,6 +33,13 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         var unitOfWork = new RecordingUnitOfWork();
         var handler = new SendPersonalTodoCarryOverNotificationsHandler(
             repository,
+            new GenerateDailyRoutineTodosHandler(
+                new EmptyDailyRoutineRepository(),
+                repository,
+                unitOfWork,
+                new StubIdentifierGenerator(),
+                new StubClock(Now),
+                new StubBusinessDateProvider(new DateOnly(2026, 7, 18))),
             emailSender,
             unitOfWork,
             new StubClock(Now),
@@ -131,5 +139,46 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         public DateOnly Today { get; } = today;
 
         public string TimeZoneId => "Europe/London";
+    }
+
+    private sealed class EmptyDailyRoutineRepository : IDailyRoutineRepository
+    {
+        public Task AddAsync(
+            DailyRoutine routine,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<DailyRoutine?> GetByIdAsync(
+            Guid routineId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<DailyRoutine?>(null);
+
+        public Task<DailyRoutineSearchResult> SearchAsync(
+            Guid userId,
+            int pageNumber,
+            int pageSize,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new DailyRoutineSearchResult([], 0));
+
+        public Task<IReadOnlyList<DailyRoutine>> ListDueForGenerationAsync(
+            DateOnly businessDate,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DailyRoutine>>([]);
+
+        public Task<bool> GeneratedTodoExistsAsync(
+            Guid routineId,
+            DateOnly businessDate,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(false);
+
+        public Task RemoveAsync(
+            DailyRoutine routine,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubIdentifierGenerator : IIdentifierGenerator
+    {
+        public Guid NewId() => Guid.NewGuid();
     }
 }

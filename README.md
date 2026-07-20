@@ -53,8 +53,9 @@ real workspace application:
 - `Home`: workspace health cards, Task Progress donut chart, Weekly Flow chart,
   top workload chart, project health, risk register, decision log, release
   readiness, and deadline warnings.
-- `My Day`: personal daily todos with CRUD, search, pagination, completion,
-  mobile-friendly layout, and automatic carry-over for unfinished work.
+- `My Day`: personal daily todos with CRUD, priority badges, search,
+  pagination, completion, mobile-friendly layout, Daily Routines for repeated
+  work, and automatic carry-over for unfinished work.
 - `Tasks`: searchable and paginated task list with project/sprint context,
   assignee, category, tags, priority score, due date, created date,
   edit/delete actions, and creator/member permission handling.
@@ -121,8 +122,8 @@ flowchart LR
 - The application layer models real use cases such as creating tasks, assigning
   work, inviting members, generating reports, and sending reminders.
 - Hosted background services sit beside HTTP endpoints so scheduled work such
-  as reminders, personal todo carry-over, and database backups can run without
-  a user clicking a button.
+  as reminders, Daily Routine generation, personal todo carry-over, and
+  database backups can run without a user clicking a button.
 - Infrastructure can be swapped or tested behind interfaces.
 - The API stays focused on HTTP contracts, validation, authentication,
   authorization, and composition.
@@ -213,11 +214,18 @@ Bug, Feature, Documentation, or Support. Tags are lighter labels such as
 Task notes are used for updates, decisions, blockers, and handover context.
 Each note shows the writer and timestamp.
 
-### Personal Todo
+### My Day and Daily Routines
 
 The Todo page is for a user's own daily checklist. It is separate from project
 tasks. Incomplete todos can automatically carry over after midnight and show a
 carry-over badge with the original date.
+
+Daily Routines are reusable personal todos for repeated work such as reviewing
+the delivery board, checking blockers, triaging email, or publishing a daily
+update. They are stored in the backend, can be created, edited, paused, and
+deleted, and generate one My Day todo per business date. New routines default
+to High priority so they stand out with a red badge, but the user can change
+the priority when creating or editing the routine.
 
 ## Realtime and Notifications
 
@@ -248,14 +256,16 @@ Taskora runs scheduled work through ASP.NET Core hosted services in
 `Taskora.Api`:
 
 - `DueDateReminderScheduler`: runs on
-  `Notifications__Scheduler__IntervalMinutes` and sends task due-date, project
+  `Notifications__Scheduler__IntervalMinutes`, generates Daily Routine todos
+  for the current business date, and sends task due-date, project
   delivery-date, and personal todo carry-over emails.
 - `DatabaseBackupScheduler`: runs on
   `Operations__Backups__IntervalHours`, creates database backup files, and
   prunes old backups using `Operations__Backups__RetentionDays`.
-- My Day fallback carry-over: if a user opens My Day before the scheduler has
-  run, the endpoint safely carries unfinished personal todos into the current
-  business day and sends the same carry-over email summary.
+- My Day fallback generation/carry-over: if a user opens My Day before the
+  scheduler has run, the endpoint safely generates today's Daily Routine todos,
+  carries unfinished personal todos into the current business day, and sends
+  the same carry-over email summary.
 
 These jobs are visible from the super-admin Operations and Database Backups
 pages so their status is not hidden in server logs only.

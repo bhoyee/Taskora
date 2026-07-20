@@ -1,5 +1,6 @@
 using System.Text;
 using TodoApp.Application.Abstractions;
+using TodoApp.Application.Todos;
 
 namespace TodoApp.Application.Notifications;
 
@@ -12,6 +13,7 @@ public sealed record PersonalTodoCarryOverRunDto(
 
 public sealed class SendPersonalTodoCarryOverNotificationsHandler(
     IPersonalTodoRepository todos,
+    GenerateDailyRoutineTodosHandler dailyRoutines,
     INotificationEmailSender emailSender,
     IUnitOfWork unitOfWork,
     IClock clock,
@@ -22,6 +24,9 @@ public sealed class SendPersonalTodoCarryOverNotificationsHandler(
         CancellationToken cancellationToken)
     {
         var today = dates.Today;
+        await dailyRoutines.HandleAsync(
+            new GenerateDailyRoutineTodosCommand(today),
+            cancellationToken);
         var overdueTodos = await todos.ListIncompleteBeforeAsync(
             today,
             cancellationToken);

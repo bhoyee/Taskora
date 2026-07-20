@@ -90,6 +90,11 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<CompletePersonalTodoHandler>();
         services.AddScoped<ReopenPersonalTodoHandler>();
         services.AddScoped<DeletePersonalTodoHandler>();
+        services.AddScoped<ListDailyRoutinesHandler>();
+        services.AddScoped<CreateDailyRoutineHandler>();
+        services.AddScoped<UpdateDailyRoutineHandler>();
+        services.AddScoped<DeleteDailyRoutineHandler>();
+        services.AddScoped<GenerateDailyRoutineTodosHandler>();
 
         return services;
     }
