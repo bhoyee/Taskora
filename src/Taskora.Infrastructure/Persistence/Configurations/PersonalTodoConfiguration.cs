@@ -20,7 +20,6 @@ internal sealed class PersonalTodoConfiguration
         builder.Property(todo => todo.Priority)
             .HasConversion<string>()
             .HasMaxLength(20)
-            .HasDefaultValue(TodoPriority.Medium)
             .IsRequired();
         builder.Property(todo => todo.DailyRoutineId);
         builder.Property(todo => todo.TodoDate).IsRequired();
