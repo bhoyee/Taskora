@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TodoApp.Application.Abstractions;
@@ -25,6 +26,8 @@ public static class DependencyInjection
 
         services.AddDbContext<TodoAppDbContext>(options =>
         {
+            ConfigureMigrationWarnings(options);
+
             if (provider.Equals(
                     "SqlServer",
                     StringComparison.OrdinalIgnoreCase))
@@ -116,6 +119,16 @@ public static class DependencyInjection
             GuidIdentifierGenerator>();
 
         return services;
+    }
+
+    private static void ConfigureMigrationWarnings(
+        DbContextOptionsBuilder options)
+    {
+        // The portfolio app supports SQLite locally and Postgres in production
+        // with one migration history. Provider-specific type metadata can make
+        // EF think the model has pending changes during deployment migrations.
+        options.ConfigureWarnings(warnings =>
+            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
     private static SmtpEmailOptions ReadSmtpOptions(

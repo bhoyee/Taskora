@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace TodoApp.Infrastructure.Persistence;
 
@@ -18,6 +19,8 @@ public sealed class TodoAppDbContextFactory
                     "ConnectionStrings__TodoApp") ??
                 "Data Source=todoapp.db");
         var builder = new DbContextOptionsBuilder<TodoAppDbContext>();
+        builder.ConfigureWarnings(warnings =>
+            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
 
         if (provider.Equals(
                 "SqlServer",
