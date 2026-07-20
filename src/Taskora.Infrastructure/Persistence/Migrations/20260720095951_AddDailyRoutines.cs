@@ -11,10 +11,16 @@ namespace Taskora.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            var isPostgres = migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL";
+            var guidType = isPostgres ? "uuid" : "TEXT";
+            var dateOnlyType = isPostgres ? "date" : "TEXT";
+            var boolType = isPostgres ? "boolean" : "INTEGER";
+            var ticksType = isPostgres ? "bigint" : "INTEGER";
+
             migrationBuilder.AddColumn<Guid>(
                 name: "DailyRoutineId",
                 table: "PersonalTodos",
-                type: "TEXT",
+                type: guidType,
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
@@ -29,18 +35,18 @@ namespace Taskora.Infrastructure.Persistence.Migrations
                 name: "DailyRoutines",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: guidType, nullable: false),
+                    UserId = table.Column<Guid>(type: guidType, nullable: false),
                     Title = table.Column<string>(type: "TEXT", maxLength: 160, nullable: false),
                     Notes = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
                     Priority = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
-                    StartDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    EndDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    LastGeneratedDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false),
-                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false),
-                    ConcurrencyToken = table.Column<Guid>(type: "TEXT", nullable: false)
+                    StartDate = table.Column<DateOnly>(type: dateOnlyType, nullable: false),
+                    EndDate = table.Column<DateOnly>(type: dateOnlyType, nullable: true),
+                    IsActive = table.Column<bool>(type: boolType, nullable: false),
+                    LastGeneratedDate = table.Column<DateOnly>(type: dateOnlyType, nullable: true),
+                    CreatedAt = table.Column<long>(type: ticksType, nullable: false),
+                    UpdatedAt = table.Column<long>(type: ticksType, nullable: false),
+                    ConcurrencyToken = table.Column<Guid>(type: guidType, nullable: false)
                 },
                 constraints: table =>
                 {

@@ -3382,6 +3382,7 @@ function DailyRoutinesPage({
   const [routinePriority, setRoutinePriority] = useState<TodoPriority>('High')
   const [routineStartDate, setRoutineStartDate] = useState(todayInput)
   const [routineEndDate, setRoutineEndDate] = useState('')
+  const [routineHasEndDate, setRoutineHasEndDate] = useState(false)
   const [routineSaving, setRoutineSaving] = useState(false)
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null)
   const [editRoutineTitle, setEditRoutineTitle] = useState('')
@@ -3389,6 +3390,7 @@ function DailyRoutinesPage({
   const [editRoutinePriority, setEditRoutinePriority] = useState<TodoPriority>('High')
   const [editRoutineStartDate, setEditRoutineStartDate] = useState(todayInput)
   const [editRoutineEndDate, setEditRoutineEndDate] = useState('')
+  const [editRoutineHasEndDate, setEditRoutineHasEndDate] = useState(false)
   const [editRoutineActive, setEditRoutineActive] = useState(true)
   const [routineBusyId, setRoutineBusyId] = useState<string | null>(null)
   const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize)
@@ -3404,12 +3406,13 @@ function DailyRoutinesPage({
         routineNotes.trim(),
         routinePriority,
         routineStartDate,
-        routineEndDate)
+        routineHasEndDate ? routineEndDate : '')
       setRoutineTitle('')
       setRoutineNotes('')
       setRoutinePriority('High')
       setRoutineStartDate(todayInput)
       setRoutineEndDate('')
+      setRoutineHasEndDate(false)
     } finally {
       setRoutineSaving(false)
     }
@@ -3422,6 +3425,7 @@ function DailyRoutinesPage({
     setEditRoutinePriority(routine.priority)
     setEditRoutineStartDate(routine.startDate)
     setEditRoutineEndDate(routine.endDate ?? '')
+    setEditRoutineHasEndDate(Boolean(routine.endDate))
     setEditRoutineActive(routine.isActive)
   }
 
@@ -3435,7 +3439,7 @@ function DailyRoutinesPage({
         editRoutineNotes.trim(),
         editRoutinePriority,
         editRoutineStartDate,
-        editRoutineEndDate,
+        editRoutineHasEndDate ? editRoutineEndDate : '',
         editRoutineActive)
       setEditingRoutineId(null)
     } finally {
@@ -3465,8 +3469,11 @@ function DailyRoutinesPage({
         <label>Notes<textarea value={routineNotes} onChange={(event) => setRoutineNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context for every generated todo." /></label>
         <label>Priority<select value={routinePriority} onChange={(event) => setRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label>Start date<input type="date" value={routineStartDate} onChange={(event) => setRoutineStartDate(event.target.value)} /></label>
-        <label>End date<input type="date" value={routineEndDate} onChange={(event) => setRoutineEndDate(event.target.value)} /></label>
-        <button className="primary" disabled={routineSaving || !routineTitle.trim()}><Plus size={17} /> {routineSaving ? 'Saving...' : 'Add routine'}</button>
+        <div className="routine-date-option">
+          <label className="inline-check"><input type="checkbox" checked={routineHasEndDate} onChange={(event) => setRoutineHasEndDate(event.target.checked)} /> Set end date</label>
+          <input type="date" value={routineEndDate} onChange={(event) => setRoutineEndDate(event.target.value)} disabled={!routineHasEndDate} aria-label="Routine end date" />
+        </div>
+        <button className="primary routine-submit" disabled={routineSaving || !routineTitle.trim()}><Plus size={17} /> {routineSaving ? 'Saving...' : 'Add routine'}</button>
       </form>
     </section>
 
@@ -3490,7 +3497,10 @@ function DailyRoutinesPage({
                         <div className="routine-edit-grid">
                           <select value={editRoutinePriority} onChange={(event) => setEditRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select>
                           <input type="date" value={editRoutineStartDate} onChange={(event) => setEditRoutineStartDate(event.target.value)} />
-                          <input type="date" value={editRoutineEndDate} onChange={(event) => setEditRoutineEndDate(event.target.value)} />
+                          <div className="routine-date-option compact">
+                            <label className="inline-check"><input type="checkbox" checked={editRoutineHasEndDate} onChange={(event) => setEditRoutineHasEndDate(event.target.checked)} /> End date</label>
+                            <input type="date" value={editRoutineEndDate} onChange={(event) => setEditRoutineEndDate(event.target.value)} disabled={!editRoutineHasEndDate} aria-label="Routine edit end date" />
+                          </div>
                           <label className="inline-check"><input type="checkbox" checked={editRoutineActive} onChange={(event) => setEditRoutineActive(event.target.checked)} /> Active</label>
                         </div>
                       </>
