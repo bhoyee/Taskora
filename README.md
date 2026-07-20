@@ -54,8 +54,11 @@ real workspace application:
   top workload chart, project health, risk register, decision log, release
   readiness, and deadline warnings.
 - `My Day`: personal daily todos with CRUD, priority badges, search,
-  pagination, completion, mobile-friendly layout, Daily Routines for repeated
-  work, and automatic carry-over for unfinished work.
+  pagination, completion, mobile-friendly layout, and automatic carry-over for
+  unfinished work.
+- `Daily Routines`: separate page for repeated personal work that is
+  automatically added to My Day each business date, with create, edit, pause,
+  delete, priority, start-date, and optional end-date controls.
 - `Tasks`: searchable and paginated task list with project/sprint context,
   assignee, category, tags, priority score, due date, created date,
   edit/delete actions, and creator/member permission handling.

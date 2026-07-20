@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations' | 'backups'
+type View = 'home' | 'tasks' | 'myday' | 'routines' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations' | 'backups'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups']
+const views: View[] = ['home', 'tasks', 'myday', 'routines', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups']
 const todoPriorities: TodoPriority[] = ['Low', 'Medium', 'High', 'Critical']
 
 function viewFromHash(hash: string): View {
@@ -1049,6 +1049,7 @@ export default function App() {
         <nav aria-label="Primary navigation">
           <button className={view === 'home' ? 'active' : ''} onClick={() => openView('home')}><CircleGauge size={18} /> Home</button>
           <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
+          <button className={view === 'routines' ? 'active' : ''} onClick={() => openView('routines')}><Clock3 size={18} /> Daily Routines</button>
           <button className={view === 'tasks' ? 'active' : ''} onClick={() => openView('tasks')}><LayoutList size={18} /> Tasks</button>
           <button className={view === 'projects' ? 'active' : ''} onClick={() => openView('projects')}><FolderPlus size={18} /> Projects</button>
           <button className={view === 'sprints' ? 'active' : ''} onClick={() => openView('sprints')}><Clock3 size={18} /> Sprints</button>
@@ -1242,12 +1243,6 @@ export default function App() {
         {view === 'myday' && <TodoPage
           todos={todos}
           totalCount={todoTotal}
-          dailyRoutines={dailyRoutines}
-          dailyRoutineTotalCount={dailyRoutineTotal}
-          dailyRoutinePageNumber={dailyRoutinePageNumber}
-          dailyRoutinePageSize={dailyRoutinePageSize}
-          dailyRoutineLoading={dailyRoutineLoading}
-          dailyRoutineError={dailyRoutineError}
           selectedDate={todoDate}
           search={todoSearch}
           pageNumber={todoPageNumber}
@@ -1291,6 +1286,14 @@ export default function App() {
             setNotice(`Todo ${todo.title} deleted.`)
             await loadTodos(todoDate, todoSearch, todoPageNumber)
           }}
+        />}
+        {view === 'routines' && <DailyRoutinesPage
+          dailyRoutines={dailyRoutines}
+          totalCount={dailyRoutineTotal}
+          pageNumber={dailyRoutinePageNumber}
+          pageSize={dailyRoutinePageSize}
+          loading={dailyRoutineLoading}
+          error={dailyRoutineError}
           onDailyRoutinePageChange={setDailyRoutinePageNumber}
           onDailyRoutineReload={() => void loadDailyRoutines()}
           onCreateDailyRoutine={async (title, notes, priority, startDate, endDate) => {
@@ -3166,12 +3169,6 @@ function NotificationBell({
 function TodoPage({
   todos,
   totalCount,
-  dailyRoutines,
-  dailyRoutineTotalCount,
-  dailyRoutinePageNumber,
-  dailyRoutinePageSize,
-  dailyRoutineLoading,
-  dailyRoutineError,
   selectedDate,
   search,
   pageNumber,
@@ -3186,20 +3183,9 @@ function TodoPage({
   onUpdate,
   onToggle,
   onDelete,
-  onDailyRoutinePageChange,
-  onDailyRoutineReload,
-  onCreateDailyRoutine,
-  onUpdateDailyRoutine,
-  onDeleteDailyRoutine,
 }: {
   todos: PersonalTodo[]
   totalCount: number
-  dailyRoutines: DailyRoutine[]
-  dailyRoutineTotalCount: number
-  dailyRoutinePageNumber: number
-  dailyRoutinePageSize: number
-  dailyRoutineLoading: boolean
-  dailyRoutineError: string
   selectedDate: string
   search: string
   pageNumber: number
@@ -3214,48 +3200,22 @@ function TodoPage({
   onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string, priority: TodoPriority) => Promise<void>
   onToggle: (todo: PersonalTodo) => Promise<void>
   onDelete: (todo: PersonalTodo) => Promise<void>
-  onDailyRoutinePageChange: (page: number) => void
-  onDailyRoutineReload: () => void
-  onCreateDailyRoutine: (title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string) => Promise<void>
-  onUpdateDailyRoutine: (routine: DailyRoutine, title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string, isActive: boolean) => Promise<void>
-  onDeleteDailyRoutine: (routine: DailyRoutine) => Promise<void>
 }) {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [priority, setPriority] = useState<TodoPriority>('Medium')
-  const [routineTitle, setRoutineTitle] = useState('')
-  const [routineNotes, setRoutineNotes] = useState('')
-  const [routinePriority, setRoutinePriority] = useState<TodoPriority>('High')
-  const [routineStartDate, setRoutineStartDate] = useState(selectedDate)
-  const [routineEndDate, setRoutineEndDate] = useState('')
   const [saving, setSaving] = useState(false)
-  const [routineSaving, setRoutineSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState(selectedDate)
   const [editPriority, setEditPriority] = useState<TodoPriority>('Medium')
-  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null)
-  const [editRoutineTitle, setEditRoutineTitle] = useState('')
-  const [editRoutineNotes, setEditRoutineNotes] = useState('')
-  const [editRoutinePriority, setEditRoutinePriority] = useState<TodoPriority>('High')
-  const [editRoutineStartDate, setEditRoutineStartDate] = useState(selectedDate)
-  const [editRoutineEndDate, setEditRoutineEndDate] = useState('')
-  const [editRoutineActive, setEditRoutineActive] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [routineBusyId, setRoutineBusyId] = useState<string | null>(null)
   const completedCount = todos.filter((todo) => todo.isCompleted).length
   const openCount = todos.length - completedCount
   const totalPages = totalCount === 0
     ? 0
     : Math.ceil(totalCount / pageSize)
-  const dailyRoutineTotalPages = dailyRoutineTotalCount === 0
-    ? 0
-    : Math.ceil(dailyRoutineTotalCount / dailyRoutinePageSize)
-
-  useEffect(() => {
-    setRoutineStartDate(selectedDate)
-  }, [selectedDate])
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -3268,26 +3228,6 @@ function TodoPage({
       setPriority('Medium')
     } finally {
       setSaving(false)
-    }
-  }
-
-  const createRoutine = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!routineTitle.trim()) return
-    setRoutineSaving(true)
-    try {
-      await onCreateDailyRoutine(
-        routineTitle.trim(),
-        routineNotes.trim(),
-        routinePriority,
-        routineStartDate,
-        routineEndDate)
-      setRoutineTitle('')
-      setRoutineNotes('')
-      setRoutinePriority('High')
-      setRoutineEndDate('')
-    } finally {
-      setRoutineSaving(false)
     }
   }
 
@@ -3307,34 +3247,6 @@ function TodoPage({
       setEditingId(null)
     } finally {
       setBusyId(null)
-    }
-  }
-
-  const startRoutineEdit = (routine: DailyRoutine) => {
-    setEditingRoutineId(routine.id)
-    setEditRoutineTitle(routine.title)
-    setEditRoutineNotes(routine.notes ?? '')
-    setEditRoutinePriority(routine.priority)
-    setEditRoutineStartDate(routine.startDate)
-    setEditRoutineEndDate(routine.endDate ?? '')
-    setEditRoutineActive(routine.isActive)
-  }
-
-  const saveRoutineEdit = async (routine: DailyRoutine) => {
-    if (!editRoutineTitle.trim()) return
-    setRoutineBusyId(routine.id)
-    try {
-      await onUpdateDailyRoutine(
-        routine,
-        editRoutineTitle.trim(),
-        editRoutineNotes.trim(),
-        editRoutinePriority,
-        editRoutineStartDate,
-        editRoutineEndDate,
-        editRoutineActive)
-      setEditingRoutineId(null)
-    } finally {
-      setRoutineBusyId(null)
     }
   }
 
@@ -3373,72 +3285,6 @@ function TodoPage({
       <label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
       <button className="primary" disabled={saving || !title.trim()}><Plus size={17} /> {saving ? 'Adding...' : 'Add todo'}</button>
     </form>
-
-    <section className="todo-list-panel routine-panel">
-      <header>
-        <div><h2>Daily Routines</h2><p>Reusable todos that Taskora adds to My Day every business date.</p></div>
-        <button className="secondary" onClick={onDailyRoutineReload} disabled={dailyRoutineLoading}><Search size={16} /> Refresh</button>
-      </header>
-      <form className="routine-create" onSubmit={(event) => void createRoutine(event)}>
-        <label>Routine title<input value={routineTitle} onChange={(event) => setRoutineTitle(event.target.value)} maxLength={160} placeholder="Review inbox, publish update, check blockers..." /></label>
-        <label>Notes<textarea value={routineNotes} onChange={(event) => setRoutineNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context for every generated todo." /></label>
-        <label>Priority<select value={routinePriority} onChange={(event) => setRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label>Start date<input type="date" value={routineStartDate} onChange={(event) => setRoutineStartDate(event.target.value)} /></label>
-        <label>End date<input type="date" value={routineEndDate} onChange={(event) => setRoutineEndDate(event.target.value)} /></label>
-        <button className="primary" disabled={routineSaving || !routineTitle.trim()}><Plus size={17} /> {routineSaving ? 'Saving...' : 'Add routine'}</button>
-      </form>
-      {dailyRoutineError && <div className="error-state compact-error"><AlertTriangle /> <span>{dailyRoutineError}</span></div>}
-      {dailyRoutineLoading ? <div className="loading">Loading routines...</div> :
-        dailyRoutines.length
-          ? <div className="routine-list">
-            {dailyRoutines.map((routine) => {
-              const editing = editingRoutineId === routine.id
-              return <article className={`routine-item ${routine.isActive ? '' : 'paused'}`} key={routine.id}>
-                <div className="routine-content">
-                  {editing
-                    ? <>
-                        <input value={editRoutineTitle} onChange={(event) => setEditRoutineTitle(event.target.value)} maxLength={160} />
-                        <textarea value={editRoutineNotes} onChange={(event) => setEditRoutineNotes(event.target.value)} rows={2} maxLength={1000} />
-                        <div className="routine-edit-grid">
-                          <select value={editRoutinePriority} onChange={(event) => setEditRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select>
-                          <input type="date" value={editRoutineStartDate} onChange={(event) => setEditRoutineStartDate(event.target.value)} />
-                          <input type="date" value={editRoutineEndDate} onChange={(event) => setEditRoutineEndDate(event.target.value)} />
-                          <label className="inline-check"><input type="checkbox" checked={editRoutineActive} onChange={(event) => setEditRoutineActive(event.target.checked)} /> Active</label>
-                        </div>
-                      </>
-                    : <>
-                        <div className="routine-title-row">
-                          <strong>{routine.title}</strong>
-                          <PriorityBadge priority={routine.priority} />
-                          <span className={`routine-state ${routine.isActive ? 'active' : 'paused'}`}>{routine.isActive ? 'Active' : 'Paused'}</span>
-                        </div>
-                        {routine.notes && <p>{routine.notes}</p>}
-                        <small>Starts {formatDate(routine.startDate)}{routine.endDate ? `, ends ${formatDate(routine.endDate)}` : ', no end date'}{routine.lastGeneratedDate ? `, last added ${formatDate(routine.lastGeneratedDate)}` : ''}</small>
-                      </>}
-                </div>
-                <div className="todo-actions">
-                  {editing
-                    ? <>
-                        <button className="icon-button" onClick={() => void saveRoutineEdit(routine)} disabled={routineBusyId === routine.id || !editRoutineTitle.trim()} aria-label="Save routine"><Save /></button>
-                        <button className="icon-button" onClick={() => setEditingRoutineId(null)} aria-label="Cancel routine edit"><X /></button>
-                      </>
-                    : <>
-                        <button className="icon-button" onClick={() => startRoutineEdit(routine)} aria-label={`Edit ${routine.title}`}><Pencil /></button>
-                        <button className="icon-button danger-action" onClick={() => void onDeleteDailyRoutine(routine)} disabled={routineBusyId === routine.id} aria-label={`Delete ${routine.title}`}><Trash2 /></button>
-                      </>}
-                </div>
-              </article>
-            })}
-          </div>
-          : <div className="empty"><Clock3 /><h2>No daily routines yet</h2><p>Add routines for repeated personal work that should appear in My Day automatically.</p></div>}
-      {!dailyRoutineLoading && <Pagination
-        pageNumber={dailyRoutinePageNumber}
-        pageSize={dailyRoutinePageSize}
-        totalCount={dailyRoutineTotalCount}
-        totalPages={dailyRoutineTotalPages}
-        onPageChange={onDailyRoutinePageChange}
-      />}
-    </section>
 
     <section className="todo-list-panel">
       <header>
@@ -3501,6 +3347,184 @@ function TodoPage({
         totalCount={totalCount}
         totalPages={totalPages}
         onPageChange={onPageChange}
+      />}
+    </section>
+  </section>
+}
+
+function DailyRoutinesPage({
+  dailyRoutines,
+  totalCount,
+  pageNumber,
+  pageSize,
+  loading,
+  error,
+  onDailyRoutinePageChange,
+  onDailyRoutineReload,
+  onCreateDailyRoutine,
+  onUpdateDailyRoutine,
+  onDeleteDailyRoutine,
+}: {
+  dailyRoutines: DailyRoutine[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+  loading: boolean
+  error: string
+  onDailyRoutinePageChange: (page: number) => void
+  onDailyRoutineReload: () => void
+  onCreateDailyRoutine: (title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string) => Promise<void>
+  onUpdateDailyRoutine: (routine: DailyRoutine, title: string, notes: string, priority: TodoPriority, startDate: string, endDate: string, isActive: boolean) => Promise<void>
+  onDeleteDailyRoutine: (routine: DailyRoutine) => Promise<void>
+}) {
+  const [routineTitle, setRoutineTitle] = useState('')
+  const [routineNotes, setRoutineNotes] = useState('')
+  const [routinePriority, setRoutinePriority] = useState<TodoPriority>('High')
+  const [routineStartDate, setRoutineStartDate] = useState(todayInput)
+  const [routineEndDate, setRoutineEndDate] = useState('')
+  const [routineSaving, setRoutineSaving] = useState(false)
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null)
+  const [editRoutineTitle, setEditRoutineTitle] = useState('')
+  const [editRoutineNotes, setEditRoutineNotes] = useState('')
+  const [editRoutinePriority, setEditRoutinePriority] = useState<TodoPriority>('High')
+  const [editRoutineStartDate, setEditRoutineStartDate] = useState(todayInput)
+  const [editRoutineEndDate, setEditRoutineEndDate] = useState('')
+  const [editRoutineActive, setEditRoutineActive] = useState(true)
+  const [routineBusyId, setRoutineBusyId] = useState<string | null>(null)
+  const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize)
+  const activeCount = dailyRoutines.filter((routine) => routine.isActive).length
+
+  const createRoutine = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!routineTitle.trim()) return
+    setRoutineSaving(true)
+    try {
+      await onCreateDailyRoutine(
+        routineTitle.trim(),
+        routineNotes.trim(),
+        routinePriority,
+        routineStartDate,
+        routineEndDate)
+      setRoutineTitle('')
+      setRoutineNotes('')
+      setRoutinePriority('High')
+      setRoutineStartDate(todayInput)
+      setRoutineEndDate('')
+    } finally {
+      setRoutineSaving(false)
+    }
+  }
+
+  const startRoutineEdit = (routine: DailyRoutine) => {
+    setEditingRoutineId(routine.id)
+    setEditRoutineTitle(routine.title)
+    setEditRoutineNotes(routine.notes ?? '')
+    setEditRoutinePriority(routine.priority)
+    setEditRoutineStartDate(routine.startDate)
+    setEditRoutineEndDate(routine.endDate ?? '')
+    setEditRoutineActive(routine.isActive)
+  }
+
+  const saveRoutineEdit = async (routine: DailyRoutine) => {
+    if (!editRoutineTitle.trim()) return
+    setRoutineBusyId(routine.id)
+    try {
+      await onUpdateDailyRoutine(
+        routine,
+        editRoutineTitle.trim(),
+        editRoutineNotes.trim(),
+        editRoutinePriority,
+        editRoutineStartDate,
+        editRoutineEndDate,
+        editRoutineActive)
+      setEditingRoutineId(null)
+    } finally {
+      setRoutineBusyId(null)
+    }
+  }
+
+  return <section className="todo-page routines-page">
+    <div className="todo-hero routine-hero">
+      <div>
+        <p className="eyebrow">Daily Routines</p>
+        <h2>Automate repeated My Day work.</h2>
+        <p>Create reusable routines once and Taskora will add them to My Day for each business date. Use pause when the routine is no longer needed temporarily.</p>
+      </div>
+      <div className="routine-hero-stats">
+        <Metric label="Active" value={activeCount} icon={<Clock3 />} />
+        <Metric label="Total routines" value={totalCount} icon={<ListChecks />} />
+      </div>
+    </div>
+
+    <section className="todo-list-panel routine-panel">
+      <header>
+        <div><h2>Create routine</h2><p>High priority is selected by default so repeated work stands out.</p></div>
+      </header>
+      <form className="routine-create" onSubmit={(event) => void createRoutine(event)}>
+        <label>Routine title<input value={routineTitle} onChange={(event) => setRoutineTitle(event.target.value)} maxLength={160} placeholder="Review inbox, publish update, check blockers..." /></label>
+        <label>Notes<textarea value={routineNotes} onChange={(event) => setRoutineNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Optional context for every generated todo." /></label>
+        <label>Priority<select value={routinePriority} onChange={(event) => setRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>Start date<input type="date" value={routineStartDate} onChange={(event) => setRoutineStartDate(event.target.value)} /></label>
+        <label>End date<input type="date" value={routineEndDate} onChange={(event) => setRoutineEndDate(event.target.value)} /></label>
+        <button className="primary" disabled={routineSaving || !routineTitle.trim()}><Plus size={17} /> {routineSaving ? 'Saving...' : 'Add routine'}</button>
+      </form>
+    </section>
+
+    <section className="todo-list-panel routine-panel">
+      <header>
+        <div><h2>Manage routines</h2><p>{activeCount} active, {Math.max(0, totalCount - activeCount)} paused or inactive</p></div>
+        <button className="secondary" onClick={onDailyRoutineReload} disabled={loading}><Search size={16} /> Refresh</button>
+      </header>
+      {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
+      {loading ? <div className="loading">Loading routines...</div> :
+        dailyRoutines.length
+          ? <div className="routine-list">
+            {dailyRoutines.map((routine) => {
+              const editing = editingRoutineId === routine.id
+              return <article className={`routine-item ${routine.isActive ? '' : 'paused'}`} key={routine.id}>
+                <div className="routine-content">
+                  {editing
+                    ? <>
+                        <input value={editRoutineTitle} onChange={(event) => setEditRoutineTitle(event.target.value)} maxLength={160} />
+                        <textarea value={editRoutineNotes} onChange={(event) => setEditRoutineNotes(event.target.value)} rows={2} maxLength={1000} />
+                        <div className="routine-edit-grid">
+                          <select value={editRoutinePriority} onChange={(event) => setEditRoutinePriority(event.target.value as TodoPriority)}>{todoPriorities.map((item) => <option key={item}>{item}</option>)}</select>
+                          <input type="date" value={editRoutineStartDate} onChange={(event) => setEditRoutineStartDate(event.target.value)} />
+                          <input type="date" value={editRoutineEndDate} onChange={(event) => setEditRoutineEndDate(event.target.value)} />
+                          <label className="inline-check"><input type="checkbox" checked={editRoutineActive} onChange={(event) => setEditRoutineActive(event.target.checked)} /> Active</label>
+                        </div>
+                      </>
+                    : <>
+                        <div className="routine-title-row">
+                          <strong>{routine.title}</strong>
+                          <PriorityBadge priority={routine.priority} />
+                          <span className={`routine-state ${routine.isActive ? 'active' : 'paused'}`}>{routine.isActive ? 'Active' : 'Paused'}</span>
+                        </div>
+                        {routine.notes && <p>{routine.notes}</p>}
+                        <small>Starts {formatDate(routine.startDate)}{routine.endDate ? `, ends ${formatDate(routine.endDate)}` : ', no end date'}{routine.lastGeneratedDate ? `, last added ${formatDate(routine.lastGeneratedDate)}` : ''}</small>
+                      </>}
+                </div>
+                <div className="todo-actions">
+                  {editing
+                    ? <>
+                        <button className="icon-button" onClick={() => void saveRoutineEdit(routine)} disabled={routineBusyId === routine.id || !editRoutineTitle.trim()} aria-label="Save routine"><Save /></button>
+                        <button className="icon-button" onClick={() => setEditingRoutineId(null)} aria-label="Cancel routine edit"><X /></button>
+                      </>
+                    : <>
+                        <button className="icon-button" onClick={() => startRoutineEdit(routine)} aria-label={`Edit ${routine.title}`}><Pencil /></button>
+                        <button className="icon-button danger-action" onClick={() => void onDeleteDailyRoutine(routine)} disabled={routineBusyId === routine.id} aria-label={`Delete ${routine.title}`}><Trash2 /></button>
+                      </>}
+                </div>
+              </article>
+            })}
+          </div>
+          : <div className="empty"><Clock3 /><h2>No daily routines yet</h2><p>Add routines for repeated personal work that should appear in My Day automatically.</p></div>}
+      {!loading && <Pagination
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        onPageChange={onDailyRoutinePageChange}
       />}
     </section>
   </section>
