@@ -4352,7 +4352,7 @@ function DatabaseBackupsPage({ summary }: { summary: OperationsSummary }) {
       <div>
         <p className="eyebrow">Super admin</p>
         <h2>Database backups</h2>
-        <p>Automatic snapshots with 7-day retention by default.</p>
+        <p>Automatic snapshots with 7-day retention by default. On Render free tier, files are local to the running container unless persistent storage is attached.</p>
       </div>
       <button className="primary" disabled={backupBusy} onClick={() => void createBackup()}>
         <Save size={16} /> {backupBusy ? 'Working...' : 'Create backup now'}

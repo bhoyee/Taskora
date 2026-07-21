@@ -53,6 +53,15 @@ public sealed class DatabaseBackupService(
         return ToBackupFile(info);
     }
 
+    public bool HasBackupForDate(DateOnly backupDate)
+    {
+        Directory.CreateDirectory(BackupDirectory);
+        return Directory
+            .EnumerateFiles(BackupDirectory, "taskora-db-backup-*.json")
+            .Select(path => new FileInfo(path))
+            .Any(file => DateOnly.FromDateTime(file.CreationTimeUtc) == backupDate);
+    }
+
     public Task<IReadOnlyCollection<DatabaseBackupFile>> ListBackupsAsync(
         CancellationToken cancellationToken)
     {

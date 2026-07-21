@@ -5,9 +5,6 @@ namespace TodoApp.Application.Tests.Notifications;
 
 public sealed class DueDateNotificationHandlerTests
 {
-    private static readonly DateTimeOffset Now =
-        new(2026, 7, 10, 9, 0, 0, TimeSpan.Zero);
-
     [Fact]
     public async Task Handle_SendsTaskAndProjectReminderEmails()
     {
@@ -33,7 +30,7 @@ public sealed class DueDateNotificationHandlerTests
         var handler = new SendDueDateNotificationsHandler(
             reader,
             sender,
-            new StubClock(Now));
+            new StubBusinessDateProvider(new DateOnly(2026, 7, 10)));
 
         var result = await handler.HandleAsync(
             new SendDueDateNotificationsCommand(),
@@ -83,8 +80,11 @@ public sealed class DueDateNotificationHandlerTests
         }
     }
 
-    private sealed class StubClock(DateTimeOffset utcNow) : IClock
+    private sealed class StubBusinessDateProvider(DateOnly today)
+        : IBusinessDateProvider
     {
-        public DateTimeOffset UtcNow { get; } = utcNow;
+        public DateOnly Today { get; } = today;
+
+        public string TimeZoneId => "Europe/London";
     }
 }

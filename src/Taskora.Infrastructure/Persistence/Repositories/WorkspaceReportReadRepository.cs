@@ -6,8 +6,8 @@ namespace TodoApp.Infrastructure.Persistence.Repositories;
 
 public sealed class WorkspaceReportReadRepository(
     TodoAppDbContext context,
-    IClock clock,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IBusinessDateProvider dates)
     : IWorkspaceReportReadRepository
 {
     public async Task<WorkspaceReportSnapshot> GetAsync(
@@ -17,7 +17,7 @@ public sealed class WorkspaceReportReadRepository(
         Guid? projectId,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = dates.Today;
         var projectsQuery = context.Projects
             .AsNoTracking()
             .Where(project => project.WorkspaceId == workspaceId);
@@ -145,11 +145,13 @@ public sealed class WorkspaceReportReadRepository(
             })
             .ToArray();
 
-        var notifications = BuildNotifications(
+        var notifications = (await BuildNotificationsAsync(
             projects,
             allTaskValues,
             today,
-            currentUser.IsAuthenticated ? currentUser.UserId : null);
+            currentUser.IsAuthenticated ? currentUser.UserId : null,
+            cancellationToken))
+            .ToArray();
         return new WorkspaceReportSnapshot(
             workspaceId,
             from,
@@ -222,11 +224,12 @@ public sealed class WorkspaceReportReadRepository(
         ];
     }
 
-    private static DashboardWarning[] BuildNotifications(
+    private async Task<IReadOnlyCollection<DashboardWarning>> BuildNotificationsAsync(
         IEnumerable<ProjectReportValue> projects,
         IEnumerable<TaskReportValue> tasks,
         DateOnly today,
-        Guid? currentUserId)
+        Guid? currentUserId,
+        CancellationToken cancellationToken)
     {
         var tomorrow = today.AddDays(1);
         var twoDaysFromNow = today.AddDays(2);
@@ -280,11 +283,69 @@ public sealed class WorkspaceReportReadRepository(
                 TaskId: task.Id,
                 DueDate: task.DueDate));
 
+        var carryOverWarnings = await BuildPersonalTodoCarryOverWarningsAsync(
+            today,
+            currentUserId,
+            cancellationToken);
+
         return taskWarnings
             .Concat(projectWarnings)
             .Concat(assignmentWarnings)
+            .Concat(carryOverWarnings)
             .OrderBy(warning => warning.DueDate)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyCollection<DashboardWarning>> BuildPersonalTodoCarryOverWarningsAsync(
+        DateOnly today,
+        Guid? currentUserId,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUserId.HasValue)
+        {
+            return [];
+        }
+
+        var carriedTodos = await context.PersonalTodos
+            .AsNoTracking()
+            .Where(todo =>
+                todo.UserId == currentUserId.Value &&
+                !todo.IsCompleted &&
+                todo.TodoDate == today &&
+                todo.CarriedOverFromDate != null)
+            .Select(todo => new
+            {
+                todo.Title,
+                todo.CarriedOverFromDate
+            })
+            .OrderBy(todo => todo.CarriedOverFromDate)
+            .ThenBy(todo => todo.Title)
+            .ToArrayAsync(cancellationToken);
+
+        if (carriedTodos.Length == 0)
+        {
+            return [];
+        }
+
+        var sampleTitles = string.Join(
+            ", ",
+            carriedTodos.Take(3).Select(todo => todo.Title));
+        var moreCount = carriedTodos.Length > 3
+            ? $", plus {carriedTodos.Length - 3} more"
+            : string.Empty;
+        var oldestDate = carriedTodos
+            .Select(todo => todo.CarriedOverFromDate)
+            .FirstOrDefault();
+
+        return
+        [
+            new DashboardWarning(
+                "PersonalTodoCarryOver",
+                "warning",
+                $"{carriedTodos.Length} My Day todo{(carriedTodos.Length == 1 ? string.Empty : "s")} carried over",
+                $"{sampleTitles}{moreCount} moved into today from {oldestDate:yyyy-MM-dd}.",
+                DueDate: today)
+        ];
     }
 
     private static bool IsTaskInRange(

@@ -12,13 +12,13 @@ public sealed record DueDateNotificationRunDto(
 public sealed class SendDueDateNotificationsHandler(
     IDueDateNotificationReadRepository notifications,
     INotificationEmailSender emailSender,
-    IClock clock)
+    IBusinessDateProvider dates)
 {
     public async Task<DueDateNotificationRunDto> HandleAsync(
         SendDueDateNotificationsCommand command,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = dates.Today;
         var taskReminders = await notifications.GetTaskDueNotificationsAsync(
             today,
             cancellationToken);

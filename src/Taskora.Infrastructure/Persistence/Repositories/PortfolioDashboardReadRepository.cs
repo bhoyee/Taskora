@@ -6,8 +6,8 @@ namespace TodoApp.Infrastructure.Persistence.Repositories;
 
 public sealed class PortfolioDashboardReadRepository(
     TodoAppDbContext context,
-    IClock clock,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IBusinessDateProvider dates)
     : IPortfolioDashboardReadRepository
 {
     public async Task<PortfolioDashboardSnapshot> GetAsync(
@@ -58,7 +58,7 @@ public sealed class PortfolioDashboardReadRepository(
             task => EF.Property<PriorityScore>(task, "_priority").Band ==
                     PriorityBand.Critical,
             cancellationToken);
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = dates.Today;
         var dueTaskValues = await scopedTasks
             .Where(task => task.DueDate != null)
             .Select(task => new
@@ -185,6 +185,9 @@ public sealed class PortfolioDashboardReadRepository(
                 ProjectId: task.ProjectId,
                 TaskId: task.Id,
                 DueDate: task.DueDate?.Value));
+        var carryOverWarnings = await BuildPersonalTodoCarryOverWarningsAsync(
+            today,
+            cancellationToken);
 
         return new PortfolioDashboardSnapshot(
             projectCount,
@@ -199,6 +202,58 @@ public sealed class PortfolioDashboardReadRepository(
             taskWarnings
                 .Concat(projectWarnings)
                 .Concat(assignmentWarnings)
+                .Concat(carryOverWarnings)
                 .ToArray());
+    }
+
+    private async Task<IReadOnlyCollection<DashboardWarning>> BuildPersonalTodoCarryOverWarningsAsync(
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return [];
+        }
+
+        var carriedTodos = await context.PersonalTodos
+            .AsNoTracking()
+            .Where(todo =>
+                todo.UserId == currentUser.UserId &&
+                !todo.IsCompleted &&
+                todo.TodoDate == today &&
+                todo.CarriedOverFromDate != null)
+            .Select(todo => new
+            {
+                todo.Title,
+                todo.CarriedOverFromDate
+            })
+            .OrderBy(todo => todo.CarriedOverFromDate)
+            .ThenBy(todo => todo.Title)
+            .ToArrayAsync(cancellationToken);
+
+        if (carriedTodos.Length == 0)
+        {
+            return [];
+        }
+
+        var sampleTitles = string.Join(
+            ", ",
+            carriedTodos.Take(3).Select(todo => todo.Title));
+        var moreCount = carriedTodos.Length > 3
+            ? $", plus {carriedTodos.Length - 3} more"
+            : string.Empty;
+        var oldestDate = carriedTodos
+            .Select(todo => todo.CarriedOverFromDate)
+            .FirstOrDefault();
+
+        return
+        [
+            new DashboardWarning(
+                "PersonalTodoCarryOver",
+                "warning",
+                $"{carriedTodos.Length} My Day todo{(carriedTodos.Length == 1 ? string.Empty : "s")} carried over",
+                $"{sampleTitles}{moreCount} moved into today from {oldestDate:yyyy-MM-dd}.",
+                DueDate: today)
+        ];
     }
 }

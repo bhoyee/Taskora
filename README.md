@@ -273,6 +273,11 @@ Taskora runs scheduled work through ASP.NET Core hosted services in
 These jobs are visible from the super-admin Operations and Database Backups
 pages so their status is not hidden in server logs only.
 
+On Render free tier, background services only run while the web service is
+awake. Backup files stored under `App_Data/backups` are local container files;
+they can disappear after redeploys, restarts, or container replacement unless a
+persistent disk or external storage provider is attached.
+
 ## Operations
 
 Health and operations features are designed for deployment support:

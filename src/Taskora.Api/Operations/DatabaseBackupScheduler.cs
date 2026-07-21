@@ -1,9 +1,12 @@
+using TodoApp.Application.Abstractions;
+
 namespace TodoApp.Api.Operations;
 
 public sealed class DatabaseBackupScheduler(
     DatabaseBackupService backups,
     DatabaseBackupSchedulerStatus status,
     IConfiguration configuration,
+    IBusinessDateProvider dates,
     ILogger<DatabaseBackupScheduler> logger)
     : BackgroundService
 {
@@ -42,6 +45,18 @@ public sealed class DatabaseBackupScheduler(
             status.Started(startedAt);
             try
             {
+                var backupDate = dates.Today;
+                if (backups.HasBackupForDate(backupDate))
+                {
+                    nextRun = DateTimeOffset.UtcNow.Add(interval);
+                    status.Scheduled(intervalHours, nextRun);
+                    logger.LogInformation(
+                        "Database backup skipped because a backup already exists for {BackupDate}. Next run: {NextRunAt}.",
+                        backupDate,
+                        nextRun);
+                    continue;
+                }
+
                 var backup = await backups.CreateBackupAsync(stoppingToken);
                 nextRun = DateTimeOffset.UtcNow.Add(interval);
                 status.Completed(DateTimeOffset.UtcNow, nextRun, backup);
