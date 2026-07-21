@@ -1,5 +1,6 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Notifications;
 using TodoApp.Domain.Collaboration;
 
 namespace TodoApp.Application.Tasks.Assignment;
@@ -53,19 +54,19 @@ public sealed class AssignTaskHandler(
         if (user is not null)
         {
             await emailSender.SendAsync(
-                new NotificationEmailMessage(
+                TaskoraEmailTemplate.Build(
                     [user.Email],
                     $"New task assigned: {task.Title}",
-                    $"""
-                    Hello {user.DisplayName},
-
-                    You have been assigned a task in {projectName}.
-
-                    Task: {task.Title}
-                    Due date: {(task.DueDate?.Value.ToString("yyyy-MM-dd") ?? "Not set")}
-
-                    Please sign in to Taskora to review the details.
-                    """),
+                    "Task assignment",
+                    "You have been assigned a task",
+                    $"Hello {user.DisplayName},",
+                    $"You have been assigned a task in {projectName}.",
+                    [
+                        new EmailDetail("Project", projectName),
+                        new EmailDetail("Task", task.Title),
+                        new EmailDetail("Due date", task.DueDate?.Value.ToString("yyyy-MM-dd") ?? "Not set")
+                    ],
+                    "Please sign in to Taskora to review the details."),
                 cancellationToken);
         }
 

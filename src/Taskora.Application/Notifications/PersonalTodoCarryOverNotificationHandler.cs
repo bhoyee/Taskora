@@ -1,4 +1,3 @@
-using System.Text;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Todos;
 
@@ -104,38 +103,29 @@ public static class PersonalTodoCarryOverEmailFactory
         IReadOnlyCollection<PersonalTodoCarryOverEmailItem> items,
         DateOnly today)
     {
-        var body = new StringBuilder();
-        body.AppendLine($"Hello {owner.DisplayName},");
-        body.AppendLine();
-        body.AppendLine(
-            "Taskora carried over incomplete My Day todos into today so they stay visible instead of being left behind.");
-        body.AppendLine();
-        body.AppendLine($"New date: {today:yyyy-MM-dd}");
-        body.AppendLine($"Carryover count: {items.Count}");
-        body.AppendLine();
-        body.AppendLine("Carried-over todos:");
-
-        foreach (var item in items
+        var carriedItems = string.Join(
+            "; ",
+            items
             .OrderBy(item => item.FromDate)
             .ThenBy(item => item.Title)
-            .Take(10))
-        {
-            body.AppendLine(
-                $"- {item.Title} (from {item.FromDate:yyyy-MM-dd})");
-        }
+            .Take(10)
+            .Select(item => $"{item.Title} from {item.FromDate:yyyy-MM-dd}"));
+        var remaining = items.Count > 10
+            ? $" Plus {items.Count - 10} more."
+            : string.Empty;
 
-        if (items.Count > 10)
-        {
-            body.AppendLine($"- Plus {items.Count - 10} more.");
-        }
-
-        body.AppendLine();
-        body.AppendLine(
-            "Please review My Day, complete what is done, or reschedule anything that no longer belongs today.");
-
-        return new NotificationEmailMessage(
+        return TaskoraEmailTemplate.Build(
             [owner.Email],
             $"My Day carryover: {items.Count} todo{(items.Count == 1 ? string.Empty : "s")} moved to today",
-            body.ToString());
+            "My Day carryover",
+            "Incomplete todos were moved into today",
+            $"Hello {owner.DisplayName},",
+            "Taskora carried over unfinished My Day todos so they stay visible instead of being left behind.",
+            [
+                new EmailDetail("New date", today.ToString("yyyy-MM-dd")),
+                new EmailDetail("Carryover count", items.Count.ToString()),
+                new EmailDetail("Carried-over todos", carriedItems + remaining)
+            ],
+            "Open My Day in Taskora to review, complete, or reschedule these todos.");
     }
 }

@@ -2,6 +2,7 @@ using System.Net.Mail;
 using System.Security.Cryptography;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
+using TodoApp.Application.Notifications;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Common;
 
@@ -308,16 +309,19 @@ public sealed class RequestPasswordResetHandler(
     private static NotificationEmailMessage BuildResetEmail(
         string email,
         string token) =>
-        new(
+        TaskoraEmailTemplate.Build(
             [email],
             "Taskora password reset code",
-            $"""
-            A password reset was requested for your Taskora account.
-
-            Your reset code is: {token}
-
-            This code expires in 15 minutes. If you did not request this, you can ignore this email.
-            """);
+            "Account security",
+            "Your password reset code",
+            "Hello,",
+            "A password reset was requested for your Taskora account.",
+            [
+                new EmailDetail("Reset code", token),
+                new EmailDetail("Expires in", "15 minutes")
+            ],
+            "Enter this code on the password reset screen to continue.",
+            secondaryNote: "If you did not request this, you can safely ignore this email.");
 }
 
 public sealed class ResetPasswordWithTokenHandler(

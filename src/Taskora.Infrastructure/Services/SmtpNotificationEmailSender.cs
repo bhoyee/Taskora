@@ -22,9 +22,20 @@ public sealed class SmtpNotificationEmailSender(
         {
             From = new MailAddress(settings.FromAddress, settings.FromName),
             Subject = message.Subject,
-            Body = message.Body,
-            IsBodyHtml = false
+            Body = string.IsNullOrWhiteSpace(message.HtmlBody)
+                ? message.Body
+                : message.HtmlBody,
+            IsBodyHtml = !string.IsNullOrWhiteSpace(message.HtmlBody)
         };
+
+        if (!string.IsNullOrWhiteSpace(message.HtmlBody))
+        {
+            mail.AlternateViews.Add(
+                AlternateView.CreateAlternateViewFromString(
+                    message.Body,
+                    null,
+                    "text/plain"));
+        }
 
         foreach (var recipient in message.Recipients.Distinct(
                      StringComparer.OrdinalIgnoreCase))

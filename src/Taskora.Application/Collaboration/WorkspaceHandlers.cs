@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Accounts;
 using TodoApp.Application.Common;
+using TodoApp.Application.Notifications;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Common;
 using TodoApp.Domain.Projects;
@@ -472,22 +473,21 @@ public sealed class InviteWorkspaceMemberHandler(
         string workspaceName)
     {
         var inviteLink = links.BuildInvitationLink(invitation.Token);
-        return new NotificationEmailMessage(
+        return TaskoraEmailTemplate.Build(
             [invitation.Email],
             $"Workspace invitation: Join {workspaceName}",
-            $"""
-            Hello {invitation.FullName},
-
-            You have been invited to join the {workspaceName} workspace in Taskora.
-
-            Role: {invitation.Role}
-            Invitation expires: {invitation.ExpiresAt:yyyy-MM-dd}
-
-            Accept or decline the invitation here:
-            {inviteLink}
-
-            If you were not expecting this invitation, you can ignore this message.
-            """);
+            "Workspace invitation",
+            $"Join {workspaceName} on Taskora",
+            $"Hello {invitation.FullName},",
+            $"You have been invited to join the {workspaceName} workspace in Taskora.",
+            [
+                new EmailDetail("Workspace", workspaceName),
+                new EmailDetail("Role", invitation.Role.ToString()),
+                new EmailDetail("Invitation expires", invitation.ExpiresAt.ToString("yyyy-MM-dd"))
+            ],
+            "Accept or decline invitation",
+            inviteLink,
+            "If you were not expecting this invitation, you can ignore this message.");
     }
 }
 

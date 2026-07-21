@@ -61,38 +61,36 @@ public sealed class SendDueDateNotificationsHandler(
             _ => $"due in {reminder.DaysUntilDue} days"
         };
 
-        return new NotificationEmailMessage(
+        return TaskoraEmailTemplate.Build(
             reminder.Recipients,
             $"Task reminder: {reminder.TaskTitle} is {timing}",
-            $"""
-            Hello,
-
-            This is a professional reminder from Taskora.
-
-            Task: {reminder.TaskTitle}
-            Deadline: {reminder.DueDate:yyyy-MM-dd}
-            Status: This task is {timing}.
-
-            Please review ownership, update progress, and resolve any blockers before the deadline.
-            """);
+            "Task reminder",
+            $"Task is {timing}",
+            "Hello,",
+            "This is a professional reminder from Taskora.",
+            [
+                new EmailDetail("Task", reminder.TaskTitle),
+                new EmailDetail("Deadline", reminder.DueDate.ToString("yyyy-MM-dd")),
+                new EmailDetail("Status", $"This task is {timing}.")
+            ],
+            "Please review ownership, update progress, and resolve any blockers before the deadline.");
     }
 
     private static NotificationEmailMessage BuildProjectMessage(
         ProjectTargetNotification reminder)
     {
-        return new NotificationEmailMessage(
+        return TaskoraEmailTemplate.Build(
             reminder.Recipients,
             $"Project reminder: {reminder.ProjectName} delivery date is in 24 hours",
-            $"""
-            Hello,
-
-            This is a professional project delivery-date reminder from Taskora.
-
-            Project: {reminder.ProjectName}
-            Delivery date: {reminder.TargetDate:yyyy-MM-dd}
-            Status: The project delivery date is in 24 hours.
-
-            Please confirm delivery readiness, outstanding tasks, and stakeholder communication.
-            """);
+            "Project reminder",
+            "Project delivery date is in 24 hours",
+            "Hello,",
+            "This is a professional project delivery-date reminder from Taskora.",
+            [
+                new EmailDetail("Project", reminder.ProjectName),
+                new EmailDetail("Delivery date", reminder.TargetDate.ToString("yyyy-MM-dd")),
+                new EmailDetail("Status", "The project delivery date is in 24 hours.")
+            ],
+            "Please confirm delivery readiness, outstanding tasks, and stakeholder communication.");
     }
 }

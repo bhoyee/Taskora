@@ -10,7 +10,8 @@ public interface INotificationEmailSender
 public sealed record NotificationEmailMessage(
     IReadOnlyCollection<string> Recipients,
     string Subject,
-    string Body);
+    string Body,
+    string? HtmlBody = null);
 
 public interface IApplicationLinkBuilder
 {
