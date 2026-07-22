@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, MouseEvent, ReactNode } from 'react'
 import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor,
   useDraggable, useDroppable, useSensor, useSensors,
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
@@ -4783,7 +4783,8 @@ function Board({
   const [activeTask, setActiveTask] = useState<TaskItem | null>(null)
   const [moving, setMoving] = useState(false)
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor),
   )
   const validTargets = activeTask
@@ -4988,12 +4989,23 @@ function BoardCard({
     onPointerDown={() => {
       if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
     }}
-    {...attributes}
-    {...listeners}
   >
     <div className="board-task-heading">
       <div className="board-task-toolbar">
-        <GripVertical aria-hidden="true" />
+        <button
+          type="button"
+          className="drag-handle"
+          disabled={overlay || !hasMoveTargets}
+          aria-label={hasMoveTargets ? `Drag ${task.title}` : `${task.title} cannot be moved`}
+          title={hasMoveTargets ? 'Drag task' : 'Task cannot be moved'}
+          onPointerDown={() => {
+            if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
+          }}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical aria-hidden="true" />
+        </button>
         <button
           className={`pin-button ${pinned ? 'active' : ''}`}
           onClick={(event) => {
