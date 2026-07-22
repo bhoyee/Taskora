@@ -1044,8 +1044,12 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {navOpen && <button className="nav-backdrop" onClick={() => setNavOpen(false)} aria-label="Close navigation" />}
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+        <div className="brand">
+          <span className="brand-mark">T</span><strong>Taskora</strong>
+          <button className="icon-button sidebar-close" onClick={() => setNavOpen(false)} aria-label="Close navigation"><X /></button>
+        </div>
         <nav aria-label="Primary navigation">
           <button className={view === 'home' ? 'active' : ''} onClick={() => openView('home')}><CircleGauge size={18} /> Home</button>
           <button className={view === 'myday' ? 'active' : ''} onClick={() => openView('myday')}><ListChecks size={18} /> My Day</button>
@@ -1089,7 +1093,10 @@ export default function App() {
           <NotificationBell
             notifications={notificationItems}
             open={notificationsOpen}
-            onToggle={() => setNotificationsOpen((current) => !current)}
+            onToggle={() => {
+              setAccountMenuOpen(false)
+              setNotificationsOpen((current) => !current)
+            }}
             onMarkRead={markNotificationRead}
             onMarkAllRead={markAllNotificationsRead}
             onViewAll={() => {
@@ -1100,7 +1107,10 @@ export default function App() {
           <div className="account-menu">
             <button
               className="topbar-avatar"
-              onClick={() => setAccountMenuOpen((open) => !open)}
+              onClick={() => {
+                setNotificationsOpen(false)
+                setAccountMenuOpen((open) => !open)
+              }}
               aria-expanded={accountMenuOpen}
               aria-haspopup="menu"
               aria-label={`Open account menu for ${profile.displayName}`}

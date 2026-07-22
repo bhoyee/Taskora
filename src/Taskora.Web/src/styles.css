@@ -7,6 +7,8 @@ button:disabled { cursor: not-allowed; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; }
 .sidebar { background: #18202b; color: #f7f9fb; padding: 24px 16px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 28px; }
+.sidebar-close { display: none; margin-left: auto; color: #d8dee6; }
+.nav-backdrop { display: none; }
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: #45c4a1; color: #10231e; font-weight: 800; border-radius: 6px; }
 .sidebar nav { display: grid; gap: 4px; }
 .sidebar nav button { color: #aeb8c5; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
@@ -78,7 +80,7 @@ main { min-width: 0; min-height: 100vh; padding: 30px 38px 24px; display: flex; 
 .notification-button { position: relative; background: white; }
 .notification-button.has-alerts { color: #94620b; box-shadow: 0 0 0 3px #c7891118; }
 .notification-button span { position: absolute; right: -5px; top: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #c0322b; color: white; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
-.notification-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 8; width: min(380px, 86vw); border: 1px solid #d7dce2; border-radius: 8px; background: white; box-shadow: 0 18px 44px #18202b24; overflow: hidden; }
+.notification-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: min(380px, 86vw); border: 1px solid #d7dce2; border-radius: 8px; background: white; box-shadow: 0 18px 44px #18202b24; overflow: hidden; }
 .notification-panel header { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #e4e8ec; background: #f8fafb; }
 .notification-panel h2 { margin: 0; font-size: 16px; }
 .notification-panel p { margin: 3px 0 0; color: #667281; font-size: 13px; }
@@ -661,4 +663,22 @@ label input:read-only, label select:disabled { background: #f3f6f8; color: #6672
 @media (max-width: 560px) { .sprint-list, .sprint-detail-grid { grid-template-columns: 1fr; }.sprint-card footer { align-items: stretch; flex-direction: column; }.sprint-card footer .primary, .sprint-card footer .secondary { width: 100%; }.sprint-task-table > header, .project-sprint-summary > header { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 900px) { .topbar-page-action { order: 2; margin-left: auto; }.notification-center { order: 3; }.topbar-avatar { order: 4; } }
 @media (max-width: 900px) { .account-menu { order: 4; }.account-dropdown { right: 0; } }
+@media (max-width: 900px) {
+  .topbar { position: sticky; top: 0; z-index: 20; }
+  .sidebar { left: min(-86vw, -260px); width: min(82vw, 300px); z-index: 40; box-shadow: 18px 0 44px #10182030; }
+  .sidebar.open { left: 0; }
+  .sidebar .brand { padding-bottom: 20px; }
+  .sidebar-close { display: grid; color: #e8edf3; }
+  .sidebar-close:hover { background: #293442; color: white; }
+  .nav-backdrop { display: block; position: fixed; inset: 0; z-index: 35; border: 0; background: #1018208c; backdrop-filter: blur(2px); }
+  .notification-center, .account-menu { position: static; }
+  .notification-panel, .account-dropdown { position: fixed; top: 70px; right: 12px; left: 12px; z-index: 45; width: auto; max-height: calc(100vh - 92px); border-radius: 8px; box-shadow: 0 24px 70px #10182045; }
+  .notification-panel { display: flex; flex-direction: column; }
+  .notification-list { max-height: min(58vh, 480px); }
+  .account-dropdown::before { display: none; }
+}
+@media (max-width: 560px) {
+  .notification-panel, .account-dropdown { top: 64px; right: 10px; left: 10px; max-height: calc(100vh - 82px); }
+  .account-dropdown { width: auto; }
+}
 @media (prefers-reduced-motion: reduce) { .landing-section article, .analytics-card, .governance-card, .governance-list li, .readiness-list li, .decision-list svg, .donut-segment, .bar-track i, .progress-track i { transition: none; }.landing-section article:hover, .analytics-card:hover, .governance-card:hover, .governance-card:hover .governance-list li, .governance-card:hover .readiness-list li, .governance-card:hover .decision-list svg { transform: none; } }
