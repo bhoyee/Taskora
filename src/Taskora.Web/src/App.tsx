@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, MouseEvent, ReactNode } from 'react'
 import {
   DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor,
@@ -1097,6 +1097,7 @@ export default function App() {
               setAccountMenuOpen(false)
               setNotificationsOpen((current) => !current)
             }}
+            onClose={() => setNotificationsOpen(false)}
             onMarkRead={markNotificationRead}
             onMarkAllRead={markAllNotificationsRead}
             onViewAll={() => {
@@ -3113,6 +3114,7 @@ function NotificationBell({
   notifications,
   open,
   onToggle,
+  onClose,
   onMarkRead,
   onMarkAllRead,
   onViewAll,
@@ -3120,13 +3122,36 @@ function NotificationBell({
   notifications: NotificationItem[]
   open: boolean
   onToggle: () => void
+  onClose: () => void
   onMarkRead: (id: string) => void
   onMarkAllRead: () => void
   onViewAll: () => void
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const unreadCount = notifications.filter((notification) => !notification.read).length
   const criticalCount = notifications.filter((notification) => !notification.read && notification.severity === 'critical').length
-  return <div className="notification-center">
+
+  useEffect(() => {
+    if (!open) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return
+      onClose()
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open, onClose])
+
+  return <div className="notification-center" ref={containerRef}>
     <button
       className={`icon-button notification-button ${unreadCount ? 'has-alerts' : ''}`}
       onClick={onToggle}
@@ -3144,13 +3169,18 @@ function NotificationBell({
             ? `${unreadCount} unread${criticalCount ? `, ${criticalCount} critical` : ''}`
             : 'All caught up'}</p>
         </div>
-        <button
-          className="link-button"
-          disabled={!unreadCount}
-          onClick={onMarkAllRead}
-        >
-          Mark all as read
-        </button>
+        <div className="notification-actions">
+          <button
+            className="link-button"
+            disabled={!unreadCount}
+            onClick={onMarkAllRead}
+          >
+            Mark all as read
+          </button>
+          <button className="icon-button notification-close" onClick={onClose} aria-label="Close notifications">
+            <X />
+          </button>
+        </div>
       </header>
       {notifications.length
         ? <div className="notification-list">
