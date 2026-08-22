@@ -7,7 +7,7 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
-  Clock3, Columns3, FolderPlus, GripVertical, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
@@ -5055,31 +5055,21 @@ function BoardCard({
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
+  const stopDragActivation = (event: { stopPropagation: () => void }) => event.stopPropagation()
 
   return <article
     ref={setNodeRef}
     style={style}
     className={`board-task ${task.status.toLowerCase()} ${pinned ? 'pinned' : ''} ${isDragging ? 'dragging' : ''} ${overlay ? 'overlay' : ''} ${!hasMoveTargets && !overlay ? 'locked' : ''}`}
+    title={hasMoveTargets ? 'Drag to move' : 'Task cannot be moved'}
     onPointerDown={() => {
       if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
     }}
+    {...attributes}
+    {...listeners}
   >
     <div className="board-task-heading">
       <div className="board-task-toolbar">
-        <button
-          type="button"
-          className="drag-handle"
-          disabled={overlay || !hasMoveTargets}
-          aria-label={hasMoveTargets ? `Drag ${task.title}` : `${task.title} cannot be moved`}
-          title={hasMoveTargets ? 'Drag task' : 'Task cannot be moved'}
-          onPointerDown={() => {
-            if (!overlay && lockedMessage) onLockedMoveAttempt?.(lockedMessage)
-          }}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical aria-hidden="true" />
-        </button>
         <button
           className={`pin-button ${pinned ? 'active' : ''}`}
           onClick={(event) => {
@@ -5087,7 +5077,8 @@ function BoardCard({
             onTogglePin(task.id)
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
           aria-label={pinned ? `Unpin ${task.title}` : `Pin ${task.title}`}
           title={pinned ? 'Unpin task' : 'Pin task'}
         ><Pin /></button>
@@ -5098,7 +5089,8 @@ function BoardCard({
             onNote(task)
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
           aria-label={`Open notes for ${task.title}`}
           title="Task notes"
         ><MessageSquare /></button>
@@ -5109,7 +5101,8 @@ function BoardCard({
             onEdit(task)
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
           aria-label={`Edit ${task.title}`}
           title="Edit task"
         ><Pencil /></button>
@@ -5120,7 +5113,8 @@ function BoardCard({
             onDelete(task)
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
           aria-label={`Delete ${task.title}`}
           title="Delete task"
         ><Trash2 /></button>}
