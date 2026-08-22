@@ -589,29 +589,6 @@ feature/* -> dev -> main
 Feature branches should be tested through pull requests before merging into
 `dev`. `main` should represent deployable code.
 
-### Legacy GitHub Actions Static Web Apps Deployment
-
-The repository previously used Azure Static Web Apps for the React frontend.
-The preferred frontend host is now Vercel, but the Azure workflow can be kept
-as optional reference if you return to Azure later.
-
-Required GitHub repository secrets:
-
-```text
-AZURE_STATIC_WEB_APPS_API_TOKEN=<deployment token from Azure Static Web Apps>
-VITE_API_BASE_URL=https://your-taskora-api.onrender.com
-```
-
-The workflow uses:
-
-```text
-app_location: src/Taskora.Web
-output_location: dist
-```
-
-If the Static Web App shows the Azure placeholder page, check the GitHub Actions
-run first. A successful run should upload the built `dist` folder to Azure.
-
 ## Azure Deployment Notes
 
 For a low-cost portfolio deployment:
