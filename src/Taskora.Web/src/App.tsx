@@ -4812,6 +4812,9 @@ function Board({
   const columns: TaskStatus[] = ['Backlog', 'Ready', 'InProgress', 'Blocked', 'Completed']
   const [activeTask, setActiveTask] = useState<TaskItem | null>(null)
   const [moving, setMoving] = useState(false)
+  const activeTaskRef = useRef<TaskItem | null>(null)
+  const lastOverRef = useRef<TaskStatus | null>(null)
+  activeTaskRef.current = activeTask
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -4824,11 +4827,7 @@ function Board({
   const boardCollisionDetection: CollisionDetection = (args) =>
     args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)
 
-  const finishDrag = async ({ active, over }: DragEndEvent) => {
-    const task = active.data.current?.task as TaskItem | undefined
-    const target = over?.id as TaskStatus | undefined
-    setActiveTask(null)
-    if (!task || !target) return
+  const attemptMove = async (task: TaskItem, target: TaskStatus) => {
     if (!canMoveTask(task, target, currentUserId, workspaceRole)) {
       onLockedMoveAttempt(`You don't have permission to move "${task.title}" to ${statusLabels[target]}.`)
       return
@@ -4842,13 +4841,50 @@ function Board({
     }
   }
 
+  const finishDrag = ({ active, over }: DragEndEvent) => {
+    const task = active.data.current?.task as TaskItem | undefined
+    const target = over?.id as TaskStatus | undefined
+    setActiveTask(null)
+    if (!task || !target) return
+    void attemptMove(task, target)
+  }
+
+  // dnd-kit occasionally fails to fire onDragEnd/onDragCancel after a real
+  // pointerup (a known upstream timing issue), leaving the drag stuck. This
+  // watches for the raw browser release event and finishes the drag itself
+  // using the last hover target if dnd-kit's own callback never arrives.
+  useEffect(() => {
+    if (!activeTask) return
+    const task = activeTask
+    const recover = () => {
+      window.setTimeout(() => {
+        if (activeTaskRef.current?.id !== task.id) return
+        const target = lastOverRef.current
+        setActiveTask(null)
+        if (target) void attemptMove(task, target)
+      }, 150)
+    }
+    window.addEventListener('mouseup', recover)
+    window.addEventListener('touchend', recover)
+    window.addEventListener('pointerup', recover)
+    return () => {
+      window.removeEventListener('mouseup', recover)
+      window.removeEventListener('touchend', recover)
+      window.removeEventListener('pointerup', recover)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask])
+
   return <DndContext
     sensors={sensors}
     collisionDetection={boardCollisionDetection}
-    onDragStart={({ active }: DragStartEvent) =>
-      setActiveTask(active.data.current?.task as TaskItem)}
+    onDragStart={({ active }: DragStartEvent) => {
+      lastOverRef.current = null
+      setActiveTask(active.data.current?.task as TaskItem)
+    }}
     onDragCancel={() => setActiveTask(null)}
-    onDragEnd={(event) => void finishDrag(event)}
+    onDragEnd={finishDrag}
+    onDragMove={({ over }) => { lastOverRef.current = (over?.id as TaskStatus) ?? null }}
   >
     <div className={`board ${moving ? 'moving' : ''}`}>
       {columns.map((status) => <BoardColumn
