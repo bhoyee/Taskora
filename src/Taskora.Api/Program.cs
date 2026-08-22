@@ -15,6 +15,13 @@ using TodoApp.Infrastructure.Persistence.Seeding;
 
 LoadEnvironmentFile();
 
+// Some container hosts (e.g. Render) cap inotify instances low enough that
+// ASP.NET Core's default appsettings.json file-watcher (reloadOnChange: true)
+// throws IOException during WebApplication.CreateBuilder and crash-loops the
+// whole process. This must be set before CreateBuilder runs, since it reads
+// this setting from the environment while building host configuration.
+Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Keep a short in-memory log window for the super-admin Operations UI, while
