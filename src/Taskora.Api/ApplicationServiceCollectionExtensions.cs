@@ -74,6 +74,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<UnblockTaskHandler>();
         services.AddScoped<ResumeTaskHandler>();
         services.AddScoped<ReopenTaskHandler>();
+        services.AddScoped<SetTaskStatusHandler>();
         services.AddScoped<DeleteTaskHandler>();
         services.AddScoped<UpdatePlanningFactorsHandler>();
         services.AddScoped<AddTaskDependencyHandler>();

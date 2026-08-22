@@ -663,6 +663,11 @@ export const api = {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     }),
+  setStatus: (id: string, status: TaskStatus, blockedReason?: string) =>
+    request(`/api/v1/tasks/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status, blockedReason }),
+    }),
   assign: (id: string, userId: string) =>
     request(`/api/v1/tasks/${id}/assignment`, {
       method: 'PUT',

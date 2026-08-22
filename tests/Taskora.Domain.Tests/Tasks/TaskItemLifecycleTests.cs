@@ -146,6 +146,55 @@ public sealed class TaskItemLifecycleTests
         Assert.Null(task.CompletedAt);
     }
 
+    [Fact]
+    public void MoveToStatus_WhenJumpingBlockedToCompleted_BypassesGuardedWorkflow()
+    {
+        var occurredAt = new DateTimeOffset(2026, 7, 1, 10, 30, 0, TimeSpan.Zero);
+        var task = CreateInProgressTask();
+        task.Block("Waiting for security review");
+
+        task.MoveToStatus(TaskItemStatus.Completed, occurredAt);
+
+        Assert.Equal(TaskItemStatus.Completed, task.Status);
+        Assert.Equal(occurredAt, task.CompletedAt);
+        Assert.Null(task.BlockedReason);
+    }
+
+    [Fact]
+    public void MoveToStatus_WhenTargetIsSameAsCurrentStatus_IsNoOp()
+    {
+        var task = CreateReadyTask();
+        task.ClearDomainEvents();
+
+        task.MoveToStatus(TaskItemStatus.Ready, DateTimeOffset.UtcNow);
+
+        Assert.Equal(TaskItemStatus.Ready, task.Status);
+        Assert.Empty(task.DomainEvents);
+    }
+
+    [Fact]
+    public void MoveToStatus_WhenMovingIntoBlocked_RecordsOptionalReason()
+    {
+        var task = CreateTask();
+
+        task.MoveToStatus(TaskItemStatus.Blocked, DateTimeOffset.UtcNow, "Backend outage");
+
+        Assert.Equal(TaskItemStatus.Blocked, task.Status);
+        Assert.Equal("Backend outage", task.BlockedReason);
+    }
+
+    [Fact]
+    public void MoveToStatus_WhenLeavingCompletedForAnUnrelatedStatus_ClearsCompletionTime()
+    {
+        var task = CreateInProgressTask();
+        task.Complete(DateTimeOffset.UtcNow);
+
+        task.MoveToStatus(TaskItemStatus.Backlog, DateTimeOffset.UtcNow);
+
+        Assert.Equal(TaskItemStatus.Backlog, task.Status);
+        Assert.Null(task.CompletedAt);
+    }
+
     private static TaskItem CreateTask() =>
         TaskItem.Create(TaskId, ProjectId, "Prepare release notes");
 

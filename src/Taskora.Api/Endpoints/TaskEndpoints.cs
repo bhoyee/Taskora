@@ -54,6 +54,8 @@ internal static class TaskEndpoints
             .WithName("CompleteTask");
         group.MapPost("/{taskId:guid}/reopen", ReopenTaskAsync)
             .WithName("ReopenTask");
+        group.MapPost("/{taskId:guid}/status", SetStatusAsync)
+            .WithName("SetTaskStatus");
         group.MapDelete("/{taskId:guid}", DeleteTaskAsync)
             .WithName("DeleteTask");
         group.MapPost("/{taskId:guid}/block", BlockTaskAsync)
@@ -303,6 +305,27 @@ internal static class TaskEndpoints
             "task.reopened",
             handler.HandleAsync(
                 new ReopenTaskCommand(taskId),
+                cancellationToken),
+            tasks,
+            projects,
+            events,
+            currentUser,
+            cancellationToken);
+
+    private static async Task<IResult> SetStatusAsync(
+        Guid taskId,
+        SetTaskStatusRequest request,
+        SetTaskStatusHandler handler,
+        ITaskRepository tasks,
+        IProjectRepository projects,
+        WorkspaceEventBroadcaster events,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        await HandleStatusAsync(
+            taskId,
+            "task.status-changed",
+            handler.HandleAsync(
+                new SetTaskStatusCommand(taskId, request.Status, request.BlockedReason),
                 cancellationToken),
             tasks,
             projects,
@@ -678,3 +701,5 @@ public sealed record UpdateTaskCategoryRequest(Guid? CategoryId);
 public sealed record AddTaskTagRequest(string? Name = null, string? Tag = null);
 
 public sealed record AddTaskNoteRequest(string Body);
+
+public sealed record SetTaskStatusRequest(TaskItemStatus Status, string? BlockedReason = null);

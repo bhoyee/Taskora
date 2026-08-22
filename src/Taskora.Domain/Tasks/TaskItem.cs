@@ -351,6 +351,39 @@ public sealed class TaskItem
         ChangeStatus(TaskItemStatus.Ready);
     }
 
+    public void MoveToStatus(
+        TaskItemStatus target,
+        DateTimeOffset occurredAt,
+        string? blockedReason = null)
+    {
+        if (target == Status)
+        {
+            return;
+        }
+
+        if (target == TaskItemStatus.Completed)
+        {
+            CompletedAt = occurredAt;
+        }
+        else if (Status == TaskItemStatus.Completed)
+        {
+            CompletedAt = null;
+        }
+
+        if (target == TaskItemStatus.Blocked)
+        {
+            BlockedReason = string.IsNullOrWhiteSpace(blockedReason)
+                ? null
+                : blockedReason.Trim();
+        }
+        else if (Status == TaskItemStatus.Blocked)
+        {
+            BlockedReason = null;
+        }
+
+        ChangeStatus(target);
+    }
+
     public void ClearDomainEvents()
     {
         _domainEvents.Clear();
