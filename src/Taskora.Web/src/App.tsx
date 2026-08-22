@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, MouseEvent, ReactNode } from 'react'
 import {
   DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor,
-  pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors,
+  closestCenter, pointerWithin, useDraggable, useDroppable, useSensor, useSensors,
 } from '@dnd-kit/core'
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
@@ -4821,10 +4821,8 @@ function Board({
     ? new Set(allowedTaskTargets(activeTask, currentUserId, workspaceRole))
     : new Set<string>()
 
-  const boardCollisionDetection: CollisionDetection = (args) => {
-    const pointerCollisions = pointerWithin(args)
-    return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args)
-  }
+  const boardCollisionDetection: CollisionDetection = (args) =>
+    args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)
 
   const finishDrag = async ({ active, over }: DragEndEvent) => {
     const task = active.data.current?.task as TaskItem | undefined
