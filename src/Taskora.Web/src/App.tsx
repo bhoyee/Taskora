@@ -189,10 +189,10 @@ function canMoveTask(
   const isCreator = !!task.createdByUserId && task.createdByUserId === currentUserId
   const isCoordinator = workspaceRole === 'Owner' || workspaceRole === 'Manager'
 
-  if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee
-  if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee
+  if (task.status === 'Ready' && target === 'InProgress') return !task.assignedUserId || isAssignee || isCoordinator
+  if (task.status === 'InProgress' && (target === 'Blocked' || target === 'Completed')) return isAssignee || isCoordinator
   if (task.status === 'Blocked' && target === 'Ready') return isAssignee || isCreator || isCoordinator
-  if (task.status === 'Blocked' && target === 'InProgress') return isAssignee
+  if (task.status === 'Blocked' && target === 'InProgress') return isAssignee || isCoordinator
   if (task.status === 'Backlog' && target === 'Ready') return isCreator || isCoordinator || !task.createdByUserId
   if (task.status === 'Completed' && target === 'Ready') return isCreator || isAssignee
 
