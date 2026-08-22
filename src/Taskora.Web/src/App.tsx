@@ -4828,7 +4828,11 @@ function Board({
     const task = active.data.current?.task as TaskItem | undefined
     const target = over?.id as TaskStatus | undefined
     setActiveTask(null)
-    if (!task || !target || !canMoveTask(task, target, currentUserId, workspaceRole)) return
+    if (!task || !target) return
+    if (!canMoveTask(task, target, currentUserId, workspaceRole)) {
+      onLockedMoveAttempt(`You don't have permission to move "${task.title}" to ${statusLabels[target]}.`)
+      return
+    }
 
     setMoving(true)
     try {
