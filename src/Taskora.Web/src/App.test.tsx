@@ -177,6 +177,7 @@ const taskPage: TaskPage = {
   totalCount: 1,
   items: [{
     id: 'task-1',
+    projectId: '10000000-0000-0000-0000-000000000001',
     createdByUserId: 'user-1',
     assignedUserId: null,
     createdAt: '2026-07-06T09:00:00Z',
