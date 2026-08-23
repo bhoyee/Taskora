@@ -628,6 +628,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .danger-dialog-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 999px; background: #fce8e6; color: #b6372f; }
 .danger-dialog-icon svg { width: 22px; height: 22px; }
 .danger-dialog footer { padding: 0 22px 22px; }
+.danger-confirm-field { display: block; margin: 0 22px 18px; font-size: 13px; font-weight: 700; color: #34404d; }
+.danger-confirm-field strong { color: #982f28; }
+.danger-confirm-field input { margin-top: 6px; }
 .invite-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 160px auto; gap: 10px; align-items: end; }
 .invite-form label { position: relative; }
 .invite-form label svg { position: absolute; right: 9px; bottom: 11px; width: 15px; pointer-events: none; }

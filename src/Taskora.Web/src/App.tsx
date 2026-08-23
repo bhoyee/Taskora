@@ -2199,6 +2199,8 @@ function ProjectDeleteDialog({
   onClose: () => void
   onConfirm: () => void
 }) {
+  const [confirmText, setConfirmText] = useState('')
+  const confirmed = confirmText === project.name
   return <div className="dialog-backdrop" role="presentation">
     <dialog open className="danger-dialog" aria-labelledby="project-delete-title">
       <header>
@@ -2218,9 +2220,19 @@ function ProjectDeleteDialog({
           <strong>This action cannot be rolled back.</strong>
         </div>
       </section>
+      <label className="danger-confirm-field">
+        Type <strong>{project.name}</strong> to confirm
+        <input
+          value={confirmText}
+          onChange={(event) => setConfirmText(event.target.value)}
+          disabled={busy}
+          autoComplete="off"
+          autoFocus
+        />
+      </label>
       <footer>
         <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
-        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+        <button className="primary danger-primary" disabled={busy || !confirmed} onClick={onConfirm}>
           <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete project'}
         </button>
       </footer>
@@ -2239,6 +2251,8 @@ function WorkspaceDeleteDialog({
   onClose: () => void
   onConfirm: () => void
 }) {
+  const [confirmText, setConfirmText] = useState('')
+  const confirmed = confirmText === workspace.name
   return <div className="dialog-backdrop" role="presentation">
     <dialog open className="danger-dialog" aria-labelledby="workspace-delete-title">
       <header>
@@ -2258,9 +2272,19 @@ function WorkspaceDeleteDialog({
           <strong>You must have another workspace available. This action cannot be rolled back.</strong>
         </div>
       </section>
+      <label className="danger-confirm-field">
+        Type <strong>{workspace.name}</strong> to confirm
+        <input
+          value={confirmText}
+          onChange={(event) => setConfirmText(event.target.value)}
+          disabled={busy}
+          autoComplete="off"
+          autoFocus
+        />
+      </label>
       <footer>
         <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
-        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+        <button className="primary danger-primary" disabled={busy || !confirmed} onClick={onConfirm}>
           <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete workspace'}
         </button>
       </footer>
