@@ -24,19 +24,23 @@ public sealed class SmtpNotificationEmailSender(
         {
             From = new MailAddress(settings.FromAddress, settings.FromName),
             Subject = message.Subject,
-            Body = string.IsNullOrWhiteSpace(message.HtmlBody)
-                ? message.Body
-                : message.HtmlBody,
-            IsBodyHtml = !string.IsNullOrWhiteSpace(message.HtmlBody)
+            Body = message.Body,
+            IsBodyHtml = false
         };
 
+        // The plain-text Body above always ships as the message's base
+        // representation. When an HTML version exists, add it as an
+        // AlternateView (not as Body) so the message is built as a proper
+        // multipart/alternative MIME message: plain-text-only clients keep
+        // showing readable text, and HTML-capable clients render the markup
+        // instead of dumping the raw tags as body text.
         if (!string.IsNullOrWhiteSpace(message.HtmlBody))
         {
             mail.AlternateViews.Add(
                 AlternateView.CreateAlternateViewFromString(
-                    message.Body,
+                    message.HtmlBody,
                     null,
-                    "text/plain"));
+                    "text/html"));
         }
 
         foreach (var recipient in message.Recipients.Distinct(
