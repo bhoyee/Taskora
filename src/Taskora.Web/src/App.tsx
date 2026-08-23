@@ -286,6 +286,9 @@ export default function App() {
   const [projectDeleteCandidate, setProjectDeleteCandidate] =
     useState<ProjectDetails | null>(null)
   const [projectDeleteBusy, setProjectDeleteBusy] = useState(false)
+  const [taskDeleteCandidate, setTaskDeleteCandidate] =
+    useState<TaskItem | null>(null)
+  const [taskDeleteBusy, setTaskDeleteBusy] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     localStorage.getItem('todoapp_project_id') ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(() =>
@@ -1010,16 +1013,23 @@ export default function App() {
       throw reason
     }
   }
-  const deleteTask = async (task: TaskItem) => {
-    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
-
+  const deleteTask = (task: TaskItem) => {
+    setTaskDeleteCandidate(task)
+  }
+  const confirmTaskDelete = async () => {
+    if (!taskDeleteCandidate) return
+    const taskToDelete = taskDeleteCandidate
     try {
+      setTaskDeleteBusy(true)
       setError('')
-      await api.deleteTask(task.id)
-      setNotice(`Task ${task.title} deleted.`)
+      await api.deleteTask(taskToDelete.id)
+      setTaskDeleteCandidate(null)
+      setNotice(`Task ${taskToDelete.title} deleted.`)
       await load()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The task could not be deleted.')
+    } finally {
+      setTaskDeleteBusy(false)
     }
   }
 
@@ -1408,6 +1418,14 @@ export default function App() {
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
       {selectedTask && project && <TaskEditor projectId={project.id} task={selectedTask} currentUserId={currentUserId || account?.userId || ''} workspaceRole={workspace?.role ?? null} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setSelectedTask(null)} onSaved={() => { setSelectedTask(null); void load() }} />}
       {quickNoteTask && <QuickNoteDialog task={quickNoteTask} members={members} currentUserId={currentUserId || account?.userId || ''} onClose={() => setQuickNoteTask(null)} onSaved={(taskId) => void refreshTaskNotes(taskId)} />}
+      {taskDeleteCandidate && <TaskDeleteDialog
+        task={taskDeleteCandidate}
+        busy={taskDeleteBusy}
+        onClose={() => {
+          if (!taskDeleteBusy) setTaskDeleteCandidate(null)
+        }}
+        onConfirm={() => void confirmTaskDelete()}
+      />}
       {projectDeleteCandidate && <ProjectDeleteDialog
         project={projectDeleteCandidate}
         busy={projectDeleteBusy}
@@ -2116,6 +2134,46 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function TaskDeleteDialog({
+  task,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  task: TaskItem
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="danger-dialog" aria-labelledby="task-delete-title">
+      <header>
+        <div>
+          <p className="eyebrow">Permanent delete</p>
+          <h2 id="task-delete-title">Delete {task.title}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="danger-dialog-body">
+        <div className="danger-dialog-icon"><AlertTriangle /></div>
+        <div>
+          <p>
+            This will permanently delete the task, its notes, tags, and
+            activity history.
+          </p>
+          <strong>This action cannot be rolled back.</strong>
+        </div>
+      </section>
+      <footer>
+        <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+          <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete task'}
+        </button>
+      </footer>
+    </dialog>
+  </div>
 }
 
 function ProjectDeleteDialog({
