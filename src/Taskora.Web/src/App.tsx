@@ -3058,11 +3058,20 @@ interface CalendarEntry {
   source: CalendarSource
 }
 
-const calendarSourceLabels: Record<CalendarSource, string> = {
-  projects: 'Project delivery dates',
-  tasks: 'Task due dates',
-  sprints: 'Sprint dates',
-  myday: 'My Day to-dos',
+interface CalendarSourceMeta {
+  label: string
+  singular: string
+  plural: string
+  dot: string
+  fg: string
+  bg: string
+}
+
+const calendarSourceMeta: Record<CalendarSource, CalendarSourceMeta> = {
+  projects: { label: 'Project delivery dates', singular: 'project', plural: 'projects', dot: '#147d68', fg: '#17624f', bg: '#e3f4ef' },
+  tasks: { label: 'Task due dates', singular: 'task', plural: 'tasks', dot: '#2f6fb0', fg: '#295f8f', bg: '#e6f0fb' },
+  sprints: { label: 'Sprint dates', singular: 'sprint', plural: 'sprints', dot: '#8b5cf6', fg: '#6d28d9', bg: '#f1e9fe' },
+  myday: { label: 'My Day to-dos', singular: 'to-do', plural: 'to-dos', dot: '#c78911', fg: '#94620b', bg: '#fff1d7' },
 }
 
 function toIsoDate(date: Date) {
@@ -3097,7 +3106,7 @@ function CalendarPage({
   const month = cursor.getMonth()
 
   useEffect(() => {
-    if (!sources.tasks || tasksLoaded || tasksLoading || !workspaceId) return
+    if (!sources.tasks || tasksLoaded || !workspaceId) return
     let cancelled = false
     setTasksLoading(true)
     api.tasks(workspaceId, '', 1, 100)
@@ -3111,7 +3120,10 @@ function CalendarPage({
       })
       .finally(() => { if (!cancelled) setTasksLoading(false) })
     return () => { cancelled = true }
-  }, [sources.tasks, tasksLoaded, tasksLoading, workspaceId])
+    // tasksLoading is intentionally excluded: including it here re-runs this
+    // effect right after setTasksLoading(true), cancelling the in-flight
+    // fetch before its response can ever clear the loading flag.
+  }, [sources.tasks, tasksLoaded, workspaceId])
 
   useEffect(() => {
     if (!sources.myday) return
@@ -3242,12 +3254,25 @@ function CalendarPage({
     </div>
 
     <div className="calendar-sources">
-      {(Object.keys(calendarSourceLabels) as CalendarSource[]).map((key) => <label key={key}>
-        <input type="checkbox" checked={sources[key]} onChange={() => toggleSource(key)} />
-        {calendarSourceLabels[key]}
-        {key === 'tasks' && tasksLoading && sources.tasks ? ' (loading...)' : ''}
-        {key === 'myday' && myDayLoading && sources.myday ? ' (loading...)' : ''}
-      </label>)}
+      {(Object.keys(calendarSourceMeta) as CalendarSource[]).map((key) => {
+        const meta = calendarSourceMeta[key]
+        const active = sources[key]
+        return <label
+          key={key}
+          style={active ? { borderColor: meta.dot, background: meta.bg, color: meta.fg } : undefined}
+        >
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={() => toggleSource(key)}
+            style={{ accentColor: meta.dot }}
+          />
+          <span className="calendar-source-dot" style={{ background: meta.dot }} />
+          {meta.label}
+          {key === 'tasks' && tasksLoading && active ? ' (loading...)' : ''}
+          {key === 'myday' && myDayLoading && active ? ' (loading...)' : ''}
+        </label>
+      })}
     </div>
 
     {error && <div className="error-state"><AlertTriangle /><span>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
@@ -3266,7 +3291,13 @@ function CalendarPage({
             ? 'critical'
             : dayEntries.some((entry) => entry.tone === 'warning')
               ? 'warning'
-              : dayEntries.length ? 'healthy' : null
+              : null
+          const bySource = new Map<CalendarSource, CalendarEntry[]>()
+          for (const entry of dayEntries) {
+            const list = bySource.get(entry.source) ?? []
+            list.push(entry)
+            bySource.set(entry.source, list)
+          }
           return <button
             type="button"
             key={iso}
@@ -3278,8 +3309,22 @@ function CalendarPage({
             ].filter(Boolean).join(' ')}
             onClick={() => setSelectedDate(iso === selectedDate ? null : iso)}
           >
+            {worstTone && <span className={`calendar-day-tone-dot ${worstTone}`} title={worstTone === 'critical' ? 'Overdue or due today' : 'Due soon'} />}
             <span className="calendar-day-number">{date.getDate()}</span>
-            {dayEntries.length > 0 && <span className={`calendar-day-badge ${worstTone}`}>{dayEntries.length}</span>}
+            {bySource.size > 0 && <div className="calendar-day-pills">
+              {Array.from(bySource.entries()).map(([source, items]) => {
+                const meta = calendarSourceMeta[source]
+                const label = items.length === 1 ? meta.singular : meta.plural
+                return <span
+                  key={source}
+                  className="calendar-day-pill"
+                  style={{ background: meta.bg, color: meta.fg }}
+                  title={items.map((item) => `${item.type}: ${item.title}`).join('\n')}
+                >
+                  {items.length} {label}
+                </span>
+              })}
+            </div>}
           </button>
         })}
       </div>
@@ -3293,7 +3338,7 @@ function CalendarPage({
       {selectedEntries.length
         ? <ul>{selectedEntries.map((entry) => <li key={entry.id} className={entry.tone}>
             <strong>{entry.title}</strong>
-            <small>{entry.type}</small>
+            <small><span className="calendar-source-dot" style={{ background: calendarSourceMeta[entry.source].dot }} /> {entry.type}</small>
           </li>)}</ul>
         : <p className="empty compact"><CalendarDays /><span>No scheduled items on this day.</span></p>}
     </div>}
