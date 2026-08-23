@@ -1363,7 +1363,12 @@ export default function App() {
             await loadDailyRoutines(dailyRoutinePageNumber)
           }}
         />}
-        {view === 'calendar' && <CalendarPage workspaceId={workspace?.id ?? selectedWorkspaceId} projects={projects} />}
+        {view === 'calendar' && <CalendarPage
+          workspaceId={workspace?.id ?? selectedWorkspaceId}
+          projects={projects}
+          members={members}
+          isMember={workspace?.role === 'Member'}
+        />}
         {view === 'activity' && <ActivityPage
           activity={[...activity, ...activityMore]}
           tasks={tasks}
@@ -3081,12 +3086,24 @@ function toIsoDate(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+type CalendarComposerMode = 'choose' | 'todo' | 'task' | 'task-full'
+
+interface CalendarComposerState {
+  date: string
+  mode: CalendarComposerMode
+  projectId?: string
+}
+
 function CalendarPage({
   workspaceId,
   projects,
+  members,
+  isMember,
 }: {
   workspaceId: string
   projects: ProjectDetails[]
+  members: WorkspaceMember[]
+  isMember: boolean
 }) {
   const today = useMemo(() => new Date(), [])
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
@@ -3101,6 +3118,10 @@ function CalendarPage({
   const [myDayRangeKey, setMyDayRangeKey] = useState('')
   const [error, setError] = useState('')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [composer, setComposer] = useState<CalendarComposerState | null>(null)
+  const [composerSaving, setComposerSaving] = useState(false)
+  const [composerError, setComposerError] = useState('')
+  const [composerNewCategories, setComposerNewCategories] = useState<ProjectCategory[]>([])
 
   const year = cursor.getFullYear()
   const month = cursor.getMonth()
@@ -3239,6 +3260,12 @@ function CalendarPage({
     setSources((current) => ({ ...current, [key]: !current[key] }))
   }
 
+  const closeComposer = () => {
+    setComposer(null)
+    setComposerError('')
+    setComposerNewCategories([])
+  }
+
   return <section className="calendar-page">
     <div className="calendar-hero panel-page">
       <div>
@@ -3298,9 +3325,10 @@ function CalendarPage({
             list.push(entry)
             bySource.set(entry.source, list)
           }
-          return <button
-            type="button"
+          return <div
             key={iso}
+            role="button"
+            tabIndex={0}
             className={[
               'calendar-day',
               isCurrentMonth ? '' : 'outside',
@@ -3308,9 +3336,27 @@ function CalendarPage({
               selectedDate === iso ? 'selected' : '',
             ].filter(Boolean).join(' ')}
             onClick={() => setSelectedDate(iso === selectedDate ? null : iso)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setSelectedDate(iso === selectedDate ? null : iso)
+              }
+            }}
           >
             {worstTone && <span className={`calendar-day-tone-dot ${worstTone}`} title={worstTone === 'critical' ? 'Overdue or due today' : 'Due soon'} />}
             <span className="calendar-day-number">{date.getDate()}</span>
+            <button
+              type="button"
+              className="calendar-day-add"
+              aria-label={`Add to ${iso}`}
+              title="Add to this day"
+              onClick={(event) => {
+                event.stopPropagation()
+                setComposer({ date: iso, mode: 'choose' })
+              }}
+            >
+              <Plus size={13} />
+            </button>
             {bySource.size > 0 && <div className="calendar-day-pills">
               {Array.from(bySource.entries()).map(([source, items]) => {
                 const meta = calendarSourceMeta[source]
@@ -3325,7 +3371,7 @@ function CalendarPage({
                 </span>
               })}
             </div>}
-          </button>
+          </div>
         })}
       </div>
     </div>
@@ -3342,6 +3388,134 @@ function CalendarPage({
           </li>)}</ul>
         : <p className="empty compact"><CalendarDays /><span>No scheduled items on this day.</span></p>}
     </div>}
+
+    {composer && (() => {
+      const composerProject = projects.find((proj) => proj.id === composer.projectId) ?? null
+      const dateLabel = new Date(`${composer.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+
+      if (composer.mode === 'task-full' && composerProject) {
+        return <TaskDialog
+          projectId={composerProject.id}
+          isMember={isMember}
+          members={members}
+          categories={[...composerProject.categories, ...composerNewCategories]}
+          sprints={composerProject.sprints}
+          initialDueDate={composer.date}
+          onCategoryCreated={(category) => setComposerNewCategories((items) => [...items, category])}
+          onClose={closeComposer}
+          onCreated={() => {
+            closeComposer()
+            setTasksLoaded(false)
+            setSources((current) => ({ ...current, tasks: true }))
+          }}
+        />
+      }
+
+      return <div className="dialog-backdrop" role="presentation">
+        <dialog open aria-labelledby="calendar-composer-title">
+          <header>
+            <div>
+              <p className="eyebrow">{dateLabel}</p>
+              <h2 id="calendar-composer-title">
+                {composer.mode === 'choose' ? 'Add to this day' : composer.mode === 'todo' ? 'Add a to-do' : 'Add a task'}
+              </h2>
+            </div>
+            <button className="icon-button" onClick={closeComposer} aria-label="Close"><X /></button>
+          </header>
+
+          {composer.mode === 'choose' && <div className="calendar-composer-choices">
+            <button type="button" className="secondary" onClick={() => setComposer({ date: composer.date, mode: 'todo' })}>
+              <ListChecks size={16} /> Add to-do
+            </button>
+            <button type="button" className="secondary" onClick={() => setComposer({ date: composer.date, mode: 'task' })}>
+              <LayoutList size={16} /> Add task
+            </button>
+          </div>}
+
+          {composer.mode === 'todo' && <form onSubmit={async (event) => {
+            event.preventDefault()
+            setComposerSaving(true)
+            setComposerError('')
+            try {
+              const data = new FormData(event.currentTarget)
+              const created = await api.createTodo(
+                String(data.get('title')),
+                composer.date,
+                String(data.get('notes') ?? ''),
+                (data.get('priority') as TodoPriority) || 'Medium',
+              )
+              setMyDayTodos((items) => [...items, created])
+              setSources((current) => ({ ...current, myday: true }))
+              closeComposer()
+            } catch (reason) {
+              setComposerError(reason instanceof Error ? reason.message : 'To-do could not be created.')
+            } finally {
+              setComposerSaving(false)
+            }
+          }}>
+            {composerError && <div className="error-state compact-error"><AlertTriangle /><span>{composerError}</span></div>}
+            <label>Title<input name="title" required maxLength={240} autoFocus /></label>
+            <label className="note-field">Notes<textarea name="notes" maxLength={2000} rows={3} /></label>
+            <label>Priority<select name="priority" defaultValue="Medium"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select><ChevronDown /></label>
+            <footer className="editor-footer">
+              <div><button type="button" className="secondary" disabled={composerSaving} onClick={() => setComposer({ date: composer.date, mode: 'choose' })}>Back</button></div>
+              <div><button type="button" className="secondary" disabled={composerSaving} onClick={closeComposer}>Cancel</button><button className="primary" disabled={composerSaving}>{composerSaving ? 'Adding...' : 'Add to-do'}</button></div>
+            </footer>
+          </form>}
+
+          {composer.mode === 'task' && <form onSubmit={async (event) => {
+            event.preventDefault()
+            setComposerError('')
+            const data = new FormData(event.currentTarget)
+            const projectId = String(data.get('projectId') ?? '')
+            if (!projectId) {
+              setComposerError('Choose a project.')
+              return
+            }
+            setComposerSaving(true)
+            try {
+              const created = await api.createTask(
+                projectId,
+                String(data.get('title')),
+                String(data.get('dueDate') || composer.date),
+                Number(data.get('effort')),
+                3, 3, 3,
+              )
+              setWorkspaceTasks((items) => [...items, created])
+              setSources((current) => ({ ...current, tasks: true }))
+              closeComposer()
+            } catch (reason) {
+              setComposerError(reason instanceof Error ? reason.message : 'Task could not be created.')
+            } finally {
+              setComposerSaving(false)
+            }
+          }}>
+            {composerError && <div className="error-state compact-error"><AlertTriangle /><span>{composerError}</span></div>}
+            <label>Project<select
+              name="projectId"
+              required
+              defaultValue=""
+              onChange={(event) => setComposer((current) => current ? { ...current, projectId: event.target.value } : current)}
+            >
+              <option value="" disabled>Choose a project</option>
+              {projects.filter((proj) => !proj.isArchived).map((proj) => <option key={proj.id} value={proj.id}>{proj.name}</option>)}
+            </select><ChevronDown /></label>
+            <label>Task title<input name="title" required maxLength={240} /></label>
+            <div className="form-grid">
+              <label>Due date<input name="dueDate" type="date" defaultValue={composer.date} /></label>
+              <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
+            </div>
+            <footer className="editor-footer">
+              <div>
+                <button type="button" className="secondary" disabled={composerSaving} onClick={() => setComposer({ date: composer.date, mode: 'choose' })}>Back</button>
+                {composer.projectId && <button type="button" className="secondary" disabled={composerSaving} onClick={() => setComposer((current) => current ? { ...current, mode: 'task-full' } : current)}>Open full form</button>}
+              </div>
+              <div><button type="button" className="secondary" disabled={composerSaving} onClick={closeComposer}>Cancel</button><button className="primary" disabled={composerSaving}>{composerSaving ? 'Adding...' : 'Add task'}</button></div>
+            </footer>
+          </form>}
+        </dialog>
+      </div>
+    })()}
   </section>
 }
 
@@ -5704,7 +5878,7 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
   </dialog></div>
 }
 
-function TaskDialog({ projectId, isMember, members, categories, sprints, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
+function TaskDialog({ projectId, isMember, members, categories, sprints, initialDueDate, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; initialDueDate?: string; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -5763,7 +5937,7 @@ function TaskDialog({ projectId, isMember, members, categories, sprints, onCateg
       {error && <div className="error-state compact-error"><AlertTriangle /> <span>{error}</span></div>}
       <label>Task title<input name="title" required maxLength={240} autoFocus /></label>
       <div className="form-grid">
-        <label>Due date<input name="dueDate" type="date" /></label>
+        <label>Due date<input name="dueDate" type="date" defaultValue={initialDueDate ?? ''} /></label>
         <label>Effort<select name="effort" defaultValue="3">{effortOptions.map((value) => <option key={value}>{value}</option>)}</select><ChevronDown /></label>
       </div>
       <label className="assignee-field">Assignee<select name="assignedUserId" defaultValue=""><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName} - {member.role}</option>)}</select><ChevronDown /></label>

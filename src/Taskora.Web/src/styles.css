@@ -471,6 +471,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .calendar-weeks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .calendar-day { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 92px; border: 0; border-right: 1px solid #eef1f4; border-bottom: 1px solid #eef1f4; background: white; padding: 8px; cursor: pointer; font: inherit; text-align: left; }
 .calendar-day:hover { background: #f7f9fa; }
+.calendar-day:focus-visible { outline: 2px solid #147d68; outline-offset: -2px; }
 .calendar-day.outside { background: #fbfcfd; color: #b7bfc7; }
 .calendar-day.outside .calendar-day-number { color: #b7bfc7; }
 .calendar-day.today .calendar-day-number { background: #147d68; color: white; }
@@ -480,6 +481,11 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .calendar-day-tone-dot.critical { background: #c0322b; }
 .calendar-day-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .calendar-day-pill { border-radius: 999px; padding: 2px 7px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+.calendar-day-add { position: absolute; bottom: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #d7dce2; background: white; color: #46515e; display: grid; place-items: center; padding: 0; opacity: .55; cursor: pointer; transition: opacity .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
+.calendar-day-add svg { width: 12px; height: 12px; }
+.calendar-day-add:hover, .calendar-day-add:focus-visible { opacity: 1; background: #147d68; border-color: #147d68; color: white; }
+.calendar-composer-choices { display: grid; gap: 10px; padding: 22px; }
+.calendar-composer-choices button { justify-content: flex-start; padding: 14px 16px; font-size: 14px; }
 .calendar-day-detail { border: 1px solid #dfe5ea; border-radius: 8px; background: #f8fafb; padding: 14px 16px; display: grid; gap: 10px; }
 .calendar-day-detail header { display: flex; justify-content: space-between; align-items: center; }
 .calendar-day-detail ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
