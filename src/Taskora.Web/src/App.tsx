@@ -4302,37 +4302,46 @@ function ActivityPage({
     </section>
   }
 
-  return <section className="panel-page activity-page" aria-label="Activity timeline">
+  return <section className="panel-page activity-page">
     {controls}
     {notificationSummary}
-    <div
-      className="activity-timeline-scroll"
-      onScroll={(event) => {
-        if (!hasMore || loadingMore) return
-        const target = event.currentTarget
-        if (target.scrollTop + target.clientHeight >= target.scrollHeight - 120) {
-          onLoadMore()
-        }
-      }}
-    >
-      <div className="activity-timeline">
-        {activity.map((item) => <article className="activity-item" key={item.sequence}>
-        <span className="activity-icon">{activityIcon(item.action)}</span>
+    <section className="activity-notifications" aria-label="Activity timeline">
+      <header>
         <div>
-          <strong>{item.taskTitle}</strong>
-          <p>{activityMessage(item, members, currentUserId)}</p>
-          <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
+          <p className="eyebrow">Timeline</p>
+          <h2>Activity timeline</h2>
         </div>
-      </article>)}
+        <span>{`${totalCount} total`}</span>
+      </header>
+      <div
+        className="activity-timeline-scroll"
+        onScroll={(event) => {
+          if (!hasMore || loadingMore) return
+          const target = event.currentTarget
+          if (target.scrollTop + target.clientHeight >= target.scrollHeight - 120) {
+            onLoadMore()
+          }
+        }}
+      >
+        <div className="activity-timeline">
+          {activity.map((item) => <article className="activity-item" key={item.sequence}>
+          <span className="activity-icon">{activityIcon(item.action)}</span>
+          <div>
+            <strong>{item.taskTitle}</strong>
+            <p>{activityMessage(item, members, currentUserId)}</p>
+            <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
+          </div>
+        </article>)}
+        </div>
+        <div className="activity-timeline-footer">
+          {loadingMore
+            ? <span>Loading more...</span>
+            : hasMore
+              ? <button type="button" className="secondary" onClick={onLoadMore}>Load more</button>
+              : <span>{`Showing all ${totalCount} activity item${totalCount === 1 ? '' : 's'}.`}</span>}
+        </div>
       </div>
-      <div className="activity-timeline-footer">
-        {loadingMore
-          ? <span>Loading more...</span>
-          : hasMore
-            ? <button type="button" className="secondary" onClick={onLoadMore}>Load more</button>
-            : <span>{`Showing all ${totalCount} activity item${totalCount === 1 ? '' : 's'}.`}</span>}
-      </div>
-    </div>
+    </section>
   </section>
 }
 
