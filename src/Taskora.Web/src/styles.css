@@ -555,8 +555,10 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .activity-notifications header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .activity-notifications h2 { margin: 0; font-size: 16px; }
 .activity-notifications header span { color: #5f6b78; font-size: 12px; font-weight: 800; }
+.activity-timeline-scroll { max-height: 620px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #e2e7eb; border-radius: 8px; background: white; padding: 14px; }
 .activity-timeline { display: grid; gap: 8px; position: relative; }
 .activity-timeline::before { content: ""; position: absolute; left: 17px; top: 8px; bottom: 8px; width: 2px; background: #e1e7ec; }
+.activity-timeline-footer { display: flex; justify-content: center; padding: 12px 0 2px; color: #5f6b78; font-size: 12px; font-weight: 700; }
 .activity-snapshot { display: grid; gap: 10px; }
 .activity-snapshot h2 { margin: 6px 0 2px; font-size: 16px; }
 .activity-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 12px; border: 1px solid #e1e6eb; border-radius: 6px; background: white; position: relative; }

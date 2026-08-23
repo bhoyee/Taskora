@@ -313,7 +313,9 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [activity, setActivity] = useState<WorkspaceActivity[]>([])
   const [activityTotal, setActivityTotal] = useState(0)
-  const [activityPageNumber, setActivityPageNumber] = useState(1)
+  const [activityMore, setActivityMore] = useState<WorkspaceActivity[]>([])
+  const [activityMorePage, setActivityMorePage] = useState(1)
+  const [activityLoadingMore, setActivityLoadingMore] = useState(false)
   const activityPageSize = 10
   const [activityType, setActivityType] = useState<(typeof activityTypes)[number]>('All')
   const [profile, setProfile] = useState<UserProfile>(() =>
@@ -408,7 +410,7 @@ export default function App() {
           : Promise.resolve({ items: [], totalCount: 0 }),
         api.members(selected.id),
         selected.role === 'Owner' ? api.invitations(selected.id) : Promise.resolve([]),
-        api.workspaceActivity(selected.id, activityType, activityPageNumber, activityPageSize),
+        api.workspaceActivity(selected.id, activityType, 1, activityPageSize),
       ])
       const currentProfile = await api.me().catch(() => null)
       if (currentProfile) {
@@ -487,7 +489,11 @@ export default function App() {
     }
   }
 
-  useEffect(() => { void load() }, [view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  useEffect(() => { void load() }, [view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityType])
+  useEffect(() => {
+    setActivityMore([])
+    setActivityMorePage(1)
+  }, [selectedWorkspaceId, activityType])
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
@@ -500,7 +506,7 @@ export default function App() {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
-  }, [loading, loggedOut, view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  }, [loading, loggedOut, view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityType])
   useEffect(() => {
     if (!selectedWorkspaceId || loading || loggedOut) return undefined
 
@@ -527,7 +533,7 @@ export default function App() {
       window.clearTimeout(refreshTimer)
       controller.abort()
     }
-  }, [selectedWorkspaceId, loading, loggedOut, view, pageNumber, search, selectedProjectId, selectedSprintId, activityPageNumber, activityType])
+  }, [selectedWorkspaceId, loading, loggedOut, view, pageNumber, search, selectedProjectId, selectedSprintId, activityType])
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -584,6 +590,22 @@ export default function App() {
         workspace?.id ?? selectedWorkspaceId),
       JSON.stringify([...ids]))
     setReadNotificationIds(ids)
+  }
+  const loadMoreActivity = async () => {
+    if (activityLoadingMore) return
+    if (activity.length + activityMore.length >= activityTotal) return
+    setActivityLoadingMore(true)
+    try {
+      const nextPage = activityMorePage + 1
+      const page = await api.workspaceActivity(
+        selectedWorkspaceId, activityType, nextPage, activityPageSize)
+      setActivityMore((current) => [...current, ...page.items])
+      setActivityMorePage(nextPage)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'More activity could not be loaded.')
+    } finally {
+      setActivityLoadingMore(false)
+    }
   }
   const markNotificationRead = (id: string) => {
     if (readNotificationIds.has(id)) return
@@ -859,6 +881,8 @@ export default function App() {
       setInvitations([])
       setActivity([])
       setActivityTotal(0)
+      setActivityMore([])
+      setActivityMorePage(1)
       setSelectedWorkspaceId(next?.id ?? '')
       setSelectedProjectId('')
       setSelectedSprintId('')
@@ -1341,19 +1365,16 @@ export default function App() {
         />}
         {view === 'calendar' && <CalendarPage projects={projects} tasks={tasks} selectedProject={project} />}
         {view === 'activity' && <ActivityPage
-          activity={activity}
+          activity={[...activity, ...activityMore]}
           tasks={tasks}
           notifications={notificationItems}
           loading={loading}
           selectedType={activityType}
-          onTypeChange={(nextType) => {
-            setActivityType(nextType)
-            setActivityPageNumber(1)
-          }}
-          pageNumber={activityPageNumber}
-          pageSize={activityPageSize}
+          onTypeChange={setActivityType}
           totalCount={activityTotal}
-          onPageChange={setActivityPageNumber}
+          hasMore={activity.length + activityMore.length < activityTotal}
+          loadingMore={activityLoadingMore}
+          onLoadMore={() => void loadMoreActivity()}
           members={members}
           currentUserId={currentUserId || account?.userId || ''}
           onMarkNotificationRead={markNotificationRead}
@@ -4230,10 +4251,10 @@ function ActivityPage({
   loading,
   selectedType,
   onTypeChange,
-  pageNumber,
-  pageSize,
   totalCount,
-  onPageChange,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   members,
   currentUserId,
   onMarkNotificationRead,
@@ -4244,16 +4265,15 @@ function ActivityPage({
   loading: boolean
   selectedType: (typeof activityTypes)[number]
   onTypeChange: (type: (typeof activityTypes)[number]) => void
-  pageNumber: number
-  pageSize: number
   totalCount: number
-  onPageChange: (page: number) => void
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   members: WorkspaceMember[]
   currentUserId: string
   onMarkNotificationRead: (id: string) => void
 }) {
   if (loading) return <section className="work-area"><div className="loading">Loading activity...</div></section>
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const controls = <ActivityControls
     selectedType={selectedType}
     onTypeChange={onTypeChange}
@@ -4285,24 +4305,34 @@ function ActivityPage({
   return <section className="panel-page activity-page" aria-label="Activity timeline">
     {controls}
     {notificationSummary}
-    <div className="activity-timeline">
-      {activity.map((item) => <article className="activity-item" key={item.sequence}>
-      <span className="activity-icon">{activityIcon(item.action)}</span>
-      <div>
-        <strong>{item.taskTitle}</strong>
-        <p>{activityMessage(item, members, currentUserId)}</p>
-        <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
+    <div
+      className="activity-timeline-scroll"
+      onScroll={(event) => {
+        if (!hasMore || loadingMore) return
+        const target = event.currentTarget
+        if (target.scrollTop + target.clientHeight >= target.scrollHeight - 120) {
+          onLoadMore()
+        }
+      }}
+    >
+      <div className="activity-timeline">
+        {activity.map((item) => <article className="activity-item" key={item.sequence}>
+        <span className="activity-icon">{activityIcon(item.action)}</span>
+        <div>
+          <strong>{item.taskTitle}</strong>
+          <p>{activityMessage(item, members, currentUserId)}</p>
+          <small>{item.projectName} - {new Date(item.occurredAt).toLocaleString()}</small>
+        </div>
+      </article>)}
       </div>
-    </article>)}
+      <div className="activity-timeline-footer">
+        {loadingMore
+          ? <span>Loading more...</span>
+          : hasMore
+            ? <button type="button" className="secondary" onClick={onLoadMore}>Load more</button>
+            : <span>{`Showing all ${totalCount} activity item${totalCount === 1 ? '' : 's'}.`}</span>}
+      </div>
     </div>
-    <Pagination
-      pageNumber={pageNumber}
-      pageSize={pageSize}
-      totalCount={totalCount}
-      totalPages={totalPages}
-      itemLabel="activity"
-      onPageChange={onPageChange}
-    />
   </section>
 }
 
