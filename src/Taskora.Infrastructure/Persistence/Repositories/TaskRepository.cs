@@ -19,12 +19,27 @@ public sealed class TaskRepository(TodoAppDbContext context)
         TaskItem task,
         CancellationToken cancellationToken)
     {
-        await context.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            DELETE FROM TaskDependencies
-            WHERE TaskId = {task.Id} OR DependencyId = {task.Id}
-            """,
-            cancellationToken);
+        if (context.Database.ProviderName?.Contains(
+                "Npgsql",
+                StringComparison.OrdinalIgnoreCase) == true)
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM "TaskDependencies"
+                WHERE "TaskId" = {task.Id} OR "DependencyId" = {task.Id}
+                """,
+                cancellationToken);
+        }
+        else
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                DELETE FROM TaskDependencies
+                WHERE TaskId = {task.Id} OR DependencyId = {task.Id}
+                """,
+                cancellationToken);
+        }
+
         context.Tasks.Remove(task);
     }
 
