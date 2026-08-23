@@ -99,6 +99,22 @@ public sealed class PersonalTodoRepository(TodoAppDbContext context)
             .ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PersonalTodo>> ListForUserBetweenAsync(
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        return await context.PersonalTodos
+            .AsNoTracking()
+            .Where(todo =>
+                todo.UserId == userId &&
+                todo.TodoDate >= from &&
+                todo.TodoDate <= to)
+            .OrderBy(todo => todo.TodoDate)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public Task RemoveAsync(
         PersonalTodo todo,
         CancellationToken cancellationToken)

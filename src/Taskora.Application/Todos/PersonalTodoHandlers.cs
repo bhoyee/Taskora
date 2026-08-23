@@ -112,6 +112,38 @@ public sealed class ListPersonalTodosHandler(
     }
 }
 
+public sealed class ListPersonalTodosForRangeHandler(
+    IPersonalTodoRepository todos,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<IReadOnlyList<PersonalTodoDto>>> HandleAsync(
+        ListPersonalTodosForRangeQuery query,
+        CancellationToken cancellationToken)
+    {
+        var authorization = RequireAuthenticatedUser(currentUser);
+        if (!authorization.IsSuccess)
+        {
+            return Result<IReadOnlyList<PersonalTodoDto>>.Failure(
+                authorization.Error);
+        }
+
+        if (query.To < query.From)
+        {
+            return Validation<IReadOnlyList<PersonalTodoDto>>(
+                "End date must be on or after the start date.");
+        }
+
+        var items = await todos.ListForUserBetweenAsync(
+            currentUser.UserId,
+            query.From,
+            query.To,
+            cancellationToken);
+
+        return Result<IReadOnlyList<PersonalTodoDto>>.Success(
+            items.Select(ToDto).ToArray());
+    }
+}
+
 public sealed class CreatePersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,

@@ -14,6 +14,7 @@ export interface PriorityExplanation {
 
 export interface TaskItem {
   id: string
+  projectId: string
   createdByUserId: string | null
   assignedUserId: string | null
   createdAt: string
@@ -763,6 +764,10 @@ export const api = {
         pageNumber: String(pageNumber),
         pageSize: String(pageSize),
       })}`,
+    ),
+  todosRange: (from: string, to: string) =>
+    request<PersonalTodo[]>(
+      `/api/v1/todos/range?${new URLSearchParams({ from, to })}`,
     ),
   createTodo: (title: string, todoDate: string, notes: string, priority: TodoPriority) =>
     request<PersonalTodo>('/api/v1/todos', {

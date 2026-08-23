@@ -45,6 +45,12 @@ public interface IPersonalTodoRepository
         IReadOnlyCollection<Guid> userIds,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<PersonalTodo>> ListForUserBetweenAsync(
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken);
+
     Task RemoveAsync(
         PersonalTodo todo,
         CancellationToken cancellationToken);

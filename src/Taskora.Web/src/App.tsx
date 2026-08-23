@@ -6,7 +6,7 @@ import {
 } from '@dnd-kit/core'
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, CircleGauge,
+  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleGauge,
   Clock3, Columns3, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
@@ -1363,7 +1363,7 @@ export default function App() {
             await loadDailyRoutines(dailyRoutinePageNumber)
           }}
         />}
-        {view === 'calendar' && <CalendarPage projects={projects} tasks={tasks} selectedProject={project} />}
+        {view === 'calendar' && <CalendarPage workspaceId={workspace?.id ?? selectedWorkspaceId} projects={projects} />}
         {view === 'activity' && <ActivityPage
           activity={[...activity, ...activityMore]}
           tasks={tasks}
@@ -3046,67 +3046,257 @@ function nextWeekInput() {
   return new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 }
 
+type CalendarSource = 'projects' | 'tasks' | 'sprints' | 'myday'
+type CalendarTone = 'healthy' | 'warning' | 'critical'
+
+interface CalendarEntry {
+  id: string
+  date: string
+  title: string
+  type: string
+  tone: CalendarTone
+  source: CalendarSource
+}
+
+const calendarSourceLabels: Record<CalendarSource, string> = {
+  projects: 'Project delivery dates',
+  tasks: 'Task due dates',
+  sprints: 'Sprint dates',
+  myday: 'My Day to-dos',
+}
+
+function toIsoDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function CalendarPage({
+  workspaceId,
   projects,
-  tasks,
-  selectedProject,
 }: {
+  workspaceId: string
   projects: ProjectDetails[]
-  tasks: TaskItem[]
-  selectedProject: ProjectDetails | null
 }) {
-  const events = [
-    ...projects
-      .filter((project) => project.targetDate)
-      .map((project) => ({
-        id: `project-${project.id}`,
-        date: project.targetDate!,
-        title: project.name,
-        type: 'Project delivery',
-        tone: deliveryStatus(project.targetDate)?.tone ?? 'healthy',
-      })),
-    ...tasks
-      .filter((task) => task.dueDate)
-      .map((task) => ({
-        id: `task-${task.id}`,
-        date: task.dueDate!,
-        title: task.title,
-        type: statusLabels[task.status],
-        tone: task.deadlineHealth === 'Overdue'
-          ? 'critical'
-          : task.deadlineHealth === 'AtRisk'
-            ? 'warning'
-            : 'healthy',
-      })),
-  ].sort((left, right) => left.date.localeCompare(right.date))
-  const nextEvents = events.slice(0, 10)
+  const today = useMemo(() => new Date(), [])
+  const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  const [sources, setSources] = useState<Record<CalendarSource, boolean>>({
+    projects: true, tasks: false, sprints: false, myday: false,
+  })
+  const [workspaceTasks, setWorkspaceTasks] = useState<TaskItem[]>([])
+  const [tasksLoaded, setTasksLoaded] = useState(false)
+  const [tasksLoading, setTasksLoading] = useState(false)
+  const [myDayTodos, setMyDayTodos] = useState<PersonalTodo[]>([])
+  const [myDayLoading, setMyDayLoading] = useState(false)
+  const [myDayRangeKey, setMyDayRangeKey] = useState('')
+  const [error, setError] = useState('')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  const year = cursor.getFullYear()
+  const month = cursor.getMonth()
+
+  useEffect(() => {
+    if (!sources.tasks || tasksLoaded || tasksLoading || !workspaceId) return
+    let cancelled = false
+    setTasksLoading(true)
+    api.tasks(workspaceId, '', 1, 100)
+      .then((page) => {
+        if (cancelled) return
+        setWorkspaceTasks(page.items)
+        setTasksLoaded(true)
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load task due dates.')
+      })
+      .finally(() => { if (!cancelled) setTasksLoading(false) })
+    return () => { cancelled = true }
+  }, [sources.tasks, tasksLoaded, tasksLoading, workspaceId])
+
+  useEffect(() => {
+    if (!sources.myday) return
+    const from = toIsoDate(new Date(year, month, 1))
+    const to = toIsoDate(new Date(year, month + 1, 0))
+    const key = `${from}_${to}`
+    if (key === myDayRangeKey) return
+    let cancelled = false
+    setMyDayLoading(true)
+    api.todosRange(from, to)
+      .then((items) => {
+        if (cancelled) return
+        setMyDayTodos(items)
+        setMyDayRangeKey(key)
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load My Day to-dos.')
+      })
+      .finally(() => { if (!cancelled) setMyDayLoading(false) })
+    return () => { cancelled = true }
+  }, [sources.myday, year, month, myDayRangeKey])
+
+  const entries = useMemo(() => {
+    const list: CalendarEntry[] = []
+    if (sources.projects) {
+      for (const proj of projects) {
+        if (!proj.targetDate) continue
+        list.push({
+          id: `project-${proj.id}`,
+          date: proj.targetDate,
+          title: proj.name,
+          type: 'Project delivery',
+          tone: (deliveryStatus(proj.targetDate)?.tone as CalendarTone) ?? 'healthy',
+          source: 'projects',
+        })
+      }
+    }
+    if (sources.tasks) {
+      for (const task of workspaceTasks) {
+        if (!task.dueDate) continue
+        list.push({
+          id: `task-${task.id}`,
+          date: task.dueDate,
+          title: task.title,
+          type: statusLabels[task.status],
+          tone: task.deadlineHealth === 'Overdue' ? 'critical' : task.deadlineHealth === 'AtRisk' ? 'warning' : 'healthy',
+          source: 'tasks',
+        })
+      }
+    }
+    if (sources.sprints) {
+      for (const proj of projects) {
+        for (const sprint of proj.sprints) {
+          list.push({
+            id: `sprint-start-${sprint.id}`,
+            date: sprint.startDate,
+            title: `${sprint.name} starts`,
+            type: `Sprint - ${proj.name}`,
+            tone: 'healthy',
+            source: 'sprints',
+          })
+          list.push({
+            id: `sprint-end-${sprint.id}`,
+            date: sprint.endDate,
+            title: `${sprint.name} ends`,
+            type: `Sprint - ${proj.name}`,
+            tone: sprint.status === 'Active' ? 'warning' : 'healthy',
+            source: 'sprints',
+          })
+        }
+      }
+    }
+    if (sources.myday) {
+      for (const todo of myDayTodos) {
+        if (todo.isCompleted) continue
+        list.push({
+          id: `todo-${todo.id}`,
+          date: todo.todoDate,
+          title: todo.title,
+          type: 'My Day',
+          tone: 'healthy',
+          source: 'myday',
+        })
+      }
+    }
+    return list
+  }, [sources, projects, workspaceTasks, myDayTodos])
+
+  const entriesByDate = useMemo(() => {
+    const map = new Map<string, CalendarEntry[]>()
+    for (const entry of entries) {
+      const list = map.get(entry.date) ?? []
+      list.push(entry)
+      map.set(entry.date, list)
+    }
+    return map
+  }, [entries])
+
+  const days = useMemo(() => {
+    const firstOfMonth = new Date(year, month, 1)
+    const gridStart = new Date(year, month, 1 - firstOfMonth.getDay())
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart)
+      date.setDate(gridStart.getDate() + index)
+      return date
+    })
+  }, [year, month])
+
+  const todayIso = toIsoDate(today)
+  const selectedEntries = selectedDate ? (entriesByDate.get(selectedDate) ?? []) : []
+
+  const toggleSource = (key: CalendarSource) => {
+    setSources((current) => ({ ...current, [key]: !current[key] }))
+  }
 
   return <section className="calendar-page">
     <div className="calendar-hero panel-page">
       <div>
         <p className="eyebrow">Delivery calendar</p>
-        <h2>Project deadlines and task due dates</h2>
-        <p>Projects have delivery dates because delivery cannot stay open forever. Task deadlines appear here for the selected project.</p>
+        <h2>{cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
+        <p>Project delivery dates show by default. Turn on task due dates, sprint dates, or My Day to see more.</p>
       </div>
-      <div className="calendar-focus">
-        <strong>{selectedProject?.name ?? 'No selected project'}</strong>
-        <span>{selectedProject?.targetDate ? `Delivery ${formatDate(selectedProject.targetDate)}` : 'Select or create a project to schedule delivery.'}</span>
+      <div className="calendar-nav">
+        <button type="button" className="icon-button" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label="Previous month"><ChevronLeft /></button>
+        <button type="button" className="secondary" onClick={() => setCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>Today</button>
+        <button type="button" className="icon-button" onClick={() => setCursor(new Date(year, month + 1, 1))} aria-label="Next month"><ChevronRight /></button>
       </div>
     </div>
-    <div className="calendar-grid">
-      {nextEvents.length
-        ? nextEvents.map((event) => <article className={`calendar-event ${event.tone}`} key={event.id}>
-            <time dateTime={event.date}>
-              <strong>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { day: '2-digit' })}</strong>
-              <span>{new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span>
-            </time>
-            <div>
-              <strong>{event.title}</strong>
-              <small>{event.type}</small>
-            </div>
-          </article>)
-        : <div className="empty compact"><CalendarDays /><h2>No scheduled dates</h2><p>Add project delivery dates and task due dates to populate the calendar.</p></div>}
+
+    <div className="calendar-sources">
+      {(Object.keys(calendarSourceLabels) as CalendarSource[]).map((key) => <label key={key}>
+        <input type="checkbox" checked={sources[key]} onChange={() => toggleSource(key)} />
+        {calendarSourceLabels[key]}
+        {key === 'tasks' && tasksLoading && sources.tasks ? ' (loading...)' : ''}
+        {key === 'myday' && myDayLoading && sources.myday ? ' (loading...)' : ''}
+      </label>)}
     </div>
+
+    {error && <div className="error-state"><AlertTriangle /><span>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
+
+    <div className="calendar-month-grid">
+      <div className="calendar-weekday-row">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day}>{day}</span>)}
+      </div>
+      <div className="calendar-weeks">
+        {days.map((date) => {
+          const iso = toIsoDate(date)
+          const dayEntries = entriesByDate.get(iso) ?? []
+          const isCurrentMonth = date.getMonth() === month
+          const isToday = iso === todayIso
+          const worstTone: CalendarTone | null = dayEntries.some((entry) => entry.tone === 'critical')
+            ? 'critical'
+            : dayEntries.some((entry) => entry.tone === 'warning')
+              ? 'warning'
+              : dayEntries.length ? 'healthy' : null
+          return <button
+            type="button"
+            key={iso}
+            className={[
+              'calendar-day',
+              isCurrentMonth ? '' : 'outside',
+              isToday ? 'today' : '',
+              selectedDate === iso ? 'selected' : '',
+            ].filter(Boolean).join(' ')}
+            onClick={() => setSelectedDate(iso === selectedDate ? null : iso)}
+          >
+            <span className="calendar-day-number">{date.getDate()}</span>
+            {dayEntries.length > 0 && <span className={`calendar-day-badge ${worstTone}`}>{dayEntries.length}</span>}
+          </button>
+        })}
+      </div>
+    </div>
+
+    {selectedDate && <div className="calendar-day-detail">
+      <header>
+        <strong>{new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+        <button type="button" className="icon-button" onClick={() => setSelectedDate(null)} aria-label="Close"><X /></button>
+      </header>
+      {selectedEntries.length
+        ? <ul>{selectedEntries.map((entry) => <li key={entry.id} className={entry.tone}>
+            <strong>{entry.title}</strong>
+            <small>{entry.type}</small>
+          </li>)}</ul>
+        : <p className="empty compact"><CalendarDays /><span>No scheduled items on this day.</span></p>}
+    </div>}
   </section>
 }
 

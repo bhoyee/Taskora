@@ -87,6 +87,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<AddTaskNoteHandler>();
 
         services.AddScoped<ListPersonalTodosHandler>();
+        services.AddScoped<ListPersonalTodosForRangeHandler>();
         services.AddScoped<CreatePersonalTodoHandler>();
         services.AddScoped<UpdatePersonalTodoHandler>();
         services.AddScoped<CompletePersonalTodoHandler>();

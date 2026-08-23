@@ -35,6 +35,10 @@ public sealed record ListPersonalTodosQuery(
     int PageNumber,
     int PageSize);
 
+public sealed record ListPersonalTodosForRangeQuery(
+    DateOnly From,
+    DateOnly To);
+
 public sealed record CreatePersonalTodoCommand(
     string Title,
     DateOnly TodoDate,

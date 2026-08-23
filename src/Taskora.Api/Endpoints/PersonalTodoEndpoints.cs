@@ -14,6 +14,8 @@ internal static class PersonalTodoEndpoints
 
         group.MapGet("/", ListTodosAsync)
             .WithName("ListPersonalTodos");
+        group.MapGet("/range", ListTodosForRangeAsync)
+            .WithName("ListPersonalTodosForRange");
         group.MapGet("/routines", ListDailyRoutinesAsync)
             .WithName("ListDailyRoutines");
         group.MapPost("/routines", CreateDailyRoutineAsync)
@@ -54,6 +56,16 @@ internal static class PersonalTodoEndpoints
                     search,
                     pageNumber is null or 0 ? 1 : pageNumber.Value,
                     pageSize is null or 0 ? 10 : pageSize.Value),
+                cancellationToken));
+
+    private static async Task<IResult> ListTodosForRangeAsync(
+        DateOnly from,
+        DateOnly to,
+        ListPersonalTodosForRangeHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(
+            await handler.HandleAsync(
+                new ListPersonalTodosForRangeQuery(from, to),
                 cancellationToken));
 
     private static async Task<IResult> CreateTodoAsync(
