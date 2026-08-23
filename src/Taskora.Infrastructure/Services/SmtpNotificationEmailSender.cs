@@ -11,6 +11,8 @@ public sealed class SmtpNotificationEmailSender(
     ILogger<SmtpNotificationEmailSender> logger)
     : INotificationEmailSender
 {
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(30);
+
     public async Task SendAsync(
         NotificationEmailMessage message,
         CancellationToken cancellationToken)
@@ -69,9 +71,18 @@ public sealed class SmtpNotificationEmailSender(
                 : new NetworkCredential(settings.Username, settings.Password)
         };
 
+        // Callers that fire this from a live HTTP request pass that request's
+        // cancellation token in. If the client disconnects mid-request (a
+        // closed tab, a flaky connection, a request timeout) that token fires
+        // and would otherwise abort an in-flight SMTP send that had nothing
+        // to do with the request lifecycle. Use an independent, bounded
+        // timeout instead so a dropped client connection can't silently
+        // kill a notification email.
+        using var sendTimeout = new CancellationTokenSource(SendTimeout);
+
         try
         {
-            await client.SendMailAsync(mail, cancellationToken);
+            await client.SendMailAsync(mail, sendTimeout.Token);
             logger.LogInformation(
                 "Notification email {Subject} sent to {RecipientCount} recipient(s).",
                 message.Subject,
