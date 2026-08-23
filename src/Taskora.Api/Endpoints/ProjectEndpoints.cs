@@ -75,6 +75,11 @@ internal static class ProjectEndpoints
             .Produces<SprintDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapDelete("/{projectId:guid}/sprints/{sprintId:guid}", DeleteSprintAsync)
+            .WithName("DeleteSprint")
+            .Produces<bool>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         return endpoints;
     }
@@ -219,6 +224,15 @@ internal static class ProjectEndpoints
         CancellationToken cancellationToken) =>
         ApiResult.From(await handler.HandleAsync(
             new ChangeSprintStatusCommand(projectId, sprintId),
+            cancellationToken));
+
+    private static async Task<IResult> DeleteSprintAsync(
+        Guid projectId,
+        Guid sprintId,
+        DeleteSprintHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(await handler.HandleAsync(
+            new DeleteSprintCommand(projectId, sprintId),
             cancellationToken));
 
     private static bool IsSuperAdmin(

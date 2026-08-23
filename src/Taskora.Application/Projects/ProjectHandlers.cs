@@ -630,6 +630,56 @@ public sealed class CancelSprintHandler(
     }
 }
 
+public sealed class DeleteSprintHandler(
+    IProjectRepository projects,
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        DeleteSprintCommand command,
+        CancellationToken cancellationToken)
+    {
+        var project = await projects.GetByIdAsync(
+            command.ProjectId,
+            cancellationToken);
+
+        if (project is null)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "project.not_found",
+                    "The project was not found.",
+                    ErrorType.NotFound));
+        }
+
+        var permission = await ProjectAccess.RequireManagerAsync(
+            workspaces,
+            currentUser,
+            project,
+            cancellationToken);
+        if (!permission.IsSuccess)
+        {
+            return Result<bool>.Failure(permission.Error);
+        }
+
+        try
+        {
+            project.RemoveSprint(command.SprintId);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Result<bool>.Success(true);
+        }
+        catch (DomainRuleException exception)
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "sprint.not_found",
+                    exception.Message,
+                    ErrorType.NotFound));
+        }
+    }
+}
+
 internal static class SprintAccess
 {
     public static async Task<Result<Sprint>> RequireSprintManagerAsync(

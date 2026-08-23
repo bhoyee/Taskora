@@ -104,6 +104,34 @@ public sealed class SprintTests
     }
 
     [Fact]
+    public void Project_RemoveSprint_WhenSprintExists_RemovesItFromTheProject()
+    {
+        var project = Project.Create(ProjectId, "Portfolio launch");
+        project.AddSprint(
+            SprintId,
+            "Portfolio hardening",
+            null,
+            new DateOnly(2026, 7, 13),
+            new DateOnly(2026, 7, 24));
+
+        project.RemoveSprint(SprintId);
+
+        Assert.False(project.HasSprint(SprintId));
+        Assert.Empty(project.Sprints);
+    }
+
+    [Fact]
+    public void Project_RemoveSprint_WhenSprintDoesNotExist_ThrowsDomainRuleException()
+    {
+        var project = Project.Create(ProjectId, "Portfolio launch");
+
+        var exception = Assert.Throws<DomainRuleException>(
+            () => project.RemoveSprint(SprintId));
+
+        Assert.Equal("The sprint was not found.", exception.Message);
+    }
+
+    [Fact]
     public void TaskItem_AssignSprint_WhenIdentifierIsValid_RecordsSprint()
     {
         var task = TaskItem.Create(

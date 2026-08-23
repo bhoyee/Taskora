@@ -1013,6 +1013,17 @@ export default function App() {
       throw reason
     }
   }
+  const deleteSprint = async (projectId: string, sprintId: string) => {
+    try {
+      setError('')
+      await api.deleteSprint(projectId, sprintId)
+      setNotice('Sprint deleted. Any assigned tasks were moved back to no sprint.')
+      await load({ silent: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be deleted.')
+      throw reason
+    }
+  }
   const deleteTask = (task: TaskItem) => {
     setTaskDeleteCandidate(task)
   }
@@ -1249,6 +1260,7 @@ export default function App() {
           onCreateSprint={createSprint}
           onUpdateSprint={updateSprint}
           onChangeSprintStatus={changeSprintStatus}
+          onDeleteSprint={deleteSprint}
         />}
         {view === 'myday' && <TodoPage
           todos={todos}
@@ -2555,6 +2567,7 @@ function SprintsPage({
   onCreateSprint,
   onUpdateSprint,
   onChangeSprintStatus,
+  onDeleteSprint,
 }: {
   workspaceId: string
   projects: ProjectDetails[]
@@ -2597,6 +2610,7 @@ function SprintsPage({
     sprintId: string,
     action: 'start' | 'complete' | 'cancel',
   ) => Promise<void>
+  onDeleteSprint: (projectId: string, sprintId: string) => Promise<void>
 }) {
   const [sprintComposerToken, setSprintComposerToken] = useState(0)
   const selectedProject = projects.find((item) => item.id === selectedProjectId) ?? projects[0] ?? null
@@ -2647,6 +2661,7 @@ function SprintsPage({
             onCreate={onCreateSprint}
             onUpdate={onUpdateSprint}
             onChangeStatus={onChangeSprintStatus}
+            onDelete={onDeleteSprint}
           />
           <div className="sprint-page-actions">
             <button className="primary" onClick={() => onOpenTasks(selectedProject.id)}><LayoutList size={16} /> Open project tasks</button>
@@ -2664,6 +2679,7 @@ function SprintPanel({
   onCreate,
   onUpdate,
   onChangeStatus,
+  onDelete,
 }: {
   workspaceId: string
   project: ProjectDetails
@@ -2689,11 +2705,14 @@ function SprintPanel({
     sprintId: string,
     action: 'start' | 'complete' | 'cancel',
   ) => Promise<void>
+  onDelete: (projectId: string, sprintId: string) => Promise<void>
 }) {
   const canManage = workspaceRole === 'Owner' || workspaceRole === 'Manager'
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Sprint | null>(null)
   const [selectedSprint, setSelectedSprint] = useState<{ sprint: Sprint; number: number } | null>(null)
+  const [deleteCandidate, setDeleteCandidate] = useState<Sprint | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const orderedSprints = [...project.sprints].sort((left, right) =>
@@ -2751,6 +2770,20 @@ function SprintPanel({
     }
   }
 
+  const confirmDelete = async () => {
+    if (!deleteCandidate) return
+    setDeleteBusy(true)
+    setError('')
+    try {
+      await onDelete(project.id, deleteCandidate.id)
+      setDeleteCandidate(null)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Sprint could not be deleted.')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   return <section className="sprint-panel panel-page" aria-label="Sprint planning">
     <header>
       <div>
@@ -2796,6 +2829,7 @@ function SprintPanel({
               {sprint.status === 'Planned' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'start')}><Clock3 size={15} /> Start</button>}
               {sprint.status === 'Active' && <button className="primary" disabled={busy} onClick={() => void changeStatus(sprint, 'complete')}><CheckCircle2 size={15} /> Complete</button>}
               {(sprint.status === 'Planned' || sprint.status === 'Active') && <button className="secondary danger-action" disabled={busy} onClick={() => void changeStatus(sprint, 'cancel')}><X size={15} /> Cancel</button>}
+              <button className="secondary danger-action" disabled={busy} onClick={() => setDeleteCandidate(sprint)}><Trash2 size={15} /> Delete</button>
             </footer>}
           </article>)}
         </div>
@@ -2807,7 +2841,56 @@ function SprintPanel({
       sprintNumber={selectedSprint.number}
       onClose={() => setSelectedSprint(null)}
     />}
+    {deleteCandidate && <SprintDeleteDialog
+      sprint={deleteCandidate}
+      busy={deleteBusy}
+      onClose={() => {
+        if (!deleteBusy) setDeleteCandidate(null)
+      }}
+      onConfirm={() => void confirmDelete()}
+    />}
   </section>
+}
+
+function SprintDeleteDialog({
+  sprint,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  sprint: Sprint
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="danger-dialog" aria-labelledby="sprint-delete-title">
+      <header>
+        <div>
+          <p className="eyebrow">Permanent delete</p>
+          <h2 id="sprint-delete-title">Delete {sprint.name}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="danger-dialog-body">
+        <div className="danger-dialog-icon"><AlertTriangle /></div>
+        <div>
+          <p>
+            This will permanently delete the sprint. Any tasks assigned to
+            it will be unassigned and moved back to no sprint - they will
+            not be deleted.
+          </p>
+          <strong>This action cannot be rolled back.</strong>
+        </div>
+      </section>
+      <footer>
+        <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+          <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete sprint'}
+        </button>
+      </footer>
+    </dialog>
+  </div>
 }
 
 function SprintDetailsDialog({

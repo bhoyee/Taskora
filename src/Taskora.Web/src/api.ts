@@ -725,6 +725,10 @@ export const api = {
     request<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}/cancel`, {
       method: 'POST',
     }),
+  deleteSprint: (projectId: string, sprintId: string) =>
+    request<boolean>(`/api/v1/projects/${projectId}/sprints/${sprintId}`, {
+      method: 'DELETE',
+    }),
   updateCategory: (id: string, categoryId: string | null) =>
     request<string | null>(`/api/v1/tasks/${id}/category`, {
       method: 'PUT',

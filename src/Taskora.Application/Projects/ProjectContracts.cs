@@ -67,3 +67,7 @@ public sealed record UpdateSprintCommand(
 public sealed record ChangeSprintStatusCommand(
     Guid ProjectId,
     Guid SprintId);
+
+public sealed record DeleteSprintCommand(
+    Guid ProjectId,
+    Guid SprintId);

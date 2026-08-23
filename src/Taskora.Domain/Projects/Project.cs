@@ -130,6 +130,12 @@ public sealed class Project
         _sprints.SingleOrDefault(sprint => sprint.Id == sprintId) ??
         throw new DomainRuleException("The sprint was not found.");
 
+    public void RemoveSprint(Guid sprintId)
+    {
+        var sprint = GetSprint(sprintId);
+        _sprints.Remove(sprint);
+    }
+
     public bool HasSprint(Guid sprintId) =>
         _sprints.Any(sprint => sprint.Id == sprintId);
 

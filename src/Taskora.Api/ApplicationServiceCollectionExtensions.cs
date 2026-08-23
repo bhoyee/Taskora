@@ -58,6 +58,7 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<StartSprintHandler>();
         services.AddScoped<CompleteSprintHandler>();
         services.AddScoped<CancelSprintHandler>();
+        services.AddScoped<DeleteSprintHandler>();
 
         services.AddScoped<CreateTaskHandler>();
         services.AddScoped<GetTaskActivityHandler>();
