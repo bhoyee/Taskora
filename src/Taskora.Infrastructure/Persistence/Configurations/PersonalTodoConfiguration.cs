@@ -58,7 +58,16 @@ internal sealed class PersonalTodoConfiguration
         builder.HasIndex(todo => new { todo.UserId, todo.TodoDate });
         builder.HasIndex(todo => new { todo.UserId, todo.IsCompleted });
         builder.HasIndex(todo => new { todo.DailyRoutineId, todo.TodoDate });
+
+        builder.HasMany<PersonalTodoComment>("_comments")
+            .WithOne()
+            .HasForeignKey(comment => comment.TodoId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation("_comments")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(todo => todo.IsCarriedOver);
         builder.Ignore(todo => todo.IsGeneratedFromDailyRoutine);
+        builder.Ignore(todo => todo.Comments);
     }
 }

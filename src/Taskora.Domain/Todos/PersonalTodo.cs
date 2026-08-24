@@ -4,6 +4,8 @@ namespace TodoApp.Domain.Todos;
 
 public sealed class PersonalTodo
 {
+    private readonly List<PersonalTodoComment> _comments = [];
+
     private PersonalTodo(
         Guid id,
         Guid userId,
@@ -67,6 +69,9 @@ public sealed class PersonalTodo
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? CompletedAt { get; private set; }
+
+    public IReadOnlyCollection<PersonalTodoComment> Comments =>
+        _comments.AsReadOnly();
 
     public static PersonalTodo Create(
         Guid id,
@@ -167,6 +172,16 @@ public sealed class PersonalTodo
         IsCompleted = false;
         CompletedAt = null;
         UpdatedAt = reopenedAt;
+    }
+
+    public PersonalTodoComment AddComment(
+        Guid commentId,
+        string body,
+        DateTimeOffset createdAt)
+    {
+        var comment = new PersonalTodoComment(commentId, Id, body, createdAt);
+        _comments.Add(comment);
+        return comment;
     }
 
     private static string NormalizeTitle(string title)

@@ -287,6 +287,10 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .todo-item.completed .todo-content strong { color: #71808f; text-decoration: line-through; }
 .todo-content p { margin: 0; color: #667281; line-height: 1.45; }
 .todo-content small { color: #7b8794; font-size: 11px; font-weight: 800; }
+.todo-comments-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.todo-comments { display: grid; gap: 8px; margin-top: 2px; padding: 10px; border: 1px solid #e2e7eb; border-radius: 6px; background: #fbfcfd; }
+.todo-comment-form { display: grid; gap: 6px; justify-items: end; }
+.todo-comment-form textarea { width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; padding: 8px; resize: vertical; }
 .carryover-badge { width: fit-content; border-radius: 999px; background: #fff1d7; color: #94620b; padding: 3px 8px; font-size: 11px; font-weight: 800; }
 .todo-actions { display: flex; gap: 4px; }
 .priority-badge, .routine-badge, .routine-state { width: fit-content; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 900; }

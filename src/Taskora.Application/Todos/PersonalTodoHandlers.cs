@@ -285,6 +285,49 @@ public sealed class DeletePersonalTodoHandler(
     }
 }
 
+public sealed class AddPersonalTodoCommentHandler(
+    IPersonalTodoRepository todos,
+    IUnitOfWork unitOfWork,
+    IIdentifierGenerator identifiers,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<PersonalTodoDto>> HandleAsync(
+        AddPersonalTodoCommentCommand command,
+        CancellationToken cancellationToken)
+    {
+        var todo = await GetOwnedTodoAsync(
+            todos,
+            currentUser,
+            command.TodoId,
+            cancellationToken);
+        if (!todo.IsSuccess)
+        {
+            return Result<PersonalTodoDto>.Failure(todo.Error);
+        }
+
+        if (string.IsNullOrWhiteSpace(command.Body))
+        {
+            return Validation<PersonalTodoDto>("Comment text is required.");
+        }
+
+        try
+        {
+            todo.Value.AddComment(
+                identifiers.NewId(),
+                command.Body,
+                clock.UtcNow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result<PersonalTodoDto>.Success(ToDto(todo.Value));
+        }
+        catch (DomainValidationException exception)
+        {
+            return Validation<PersonalTodoDto>(exception.Message);
+        }
+    }
+}
+
 internal static class PersonalTodoMapping
 {
     public static PersonalTodoDto ToDto(PersonalTodo todo) =>
@@ -301,7 +344,15 @@ internal static class PersonalTodoMapping
             todo.IsCompleted,
             todo.CreatedAt,
             todo.UpdatedAt,
-            todo.CompletedAt);
+            todo.CompletedAt,
+            todo.Comments
+                .OrderBy(comment => comment.CreatedAt)
+                .Select(comment => new PersonalTodoCommentDto(
+                    comment.Id,
+                    comment.TodoId,
+                    comment.Body,
+                    comment.CreatedAt))
+                .ToArray());
 }
 
 public sealed class ListDailyRoutinesHandler(

@@ -362,6 +362,13 @@ export interface WorkspaceRealtimeEvent {
   occurredAt: string
 }
 
+export interface PersonalTodoComment {
+  id: string
+  todoId: string
+  body: string
+  createdAt: string
+}
+
 export interface PersonalTodo {
   id: string
   title: string
@@ -376,6 +383,7 @@ export interface PersonalTodo {
   createdAt: string
   updatedAt: string
   completedAt: string | null
+  comments: PersonalTodoComment[]
 }
 
 export type TodoPriority = 'Low' | 'Medium' | 'High' | 'Critical'
@@ -830,6 +838,11 @@ export const api = {
   deleteTodo: (id: string) =>
     request<boolean>(`/api/v1/todos/${id}`, {
       method: 'DELETE',
+    }),
+  addTodoComment: (id: string, body: string) =>
+    request<PersonalTodo>(`/api/v1/todos/${id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
     }),
   dailyRoutines: (pageNumber = 1, pageSize = 10) =>
     request<PagedResponse<DailyRoutine>>(

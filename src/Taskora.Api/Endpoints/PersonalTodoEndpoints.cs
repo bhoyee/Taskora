@@ -38,6 +38,11 @@ internal static class PersonalTodoEndpoints
             .WithName("ReopenPersonalTodo");
         group.MapDelete("/{todoId:guid}", DeleteTodoAsync)
             .WithName("DeletePersonalTodo");
+        group.MapPost("/{todoId:guid}/comments", AddTodoCommentAsync)
+            .WithName("AddPersonalTodoComment")
+            .Produces<PersonalTodoDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         return endpoints;
     }
@@ -126,6 +131,16 @@ internal static class PersonalTodoEndpoints
         ApiResult.From(
             await handler.HandleAsync(
                 new DeletePersonalTodoCommand(todoId),
+                cancellationToken));
+
+    private static async Task<IResult> AddTodoCommentAsync(
+        Guid todoId,
+        AddPersonalTodoCommentRequest request,
+        AddPersonalTodoCommentHandler handler,
+        CancellationToken cancellationToken) =>
+        ApiResult.From(
+            await handler.HandleAsync(
+                new AddPersonalTodoCommentCommand(todoId, request.Body),
                 cancellationToken));
 
     private static async Task<IResult> ListDailyRoutinesAsync(

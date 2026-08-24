@@ -30,6 +30,9 @@ public sealed class TodoAppDbContext(
 
     public DbSet<PersonalTodo> PersonalTodos => Set<PersonalTodo>();
 
+    public DbSet<PersonalTodoComment> PersonalTodoComments =>
+        Set<PersonalTodoComment>();
+
     public DbSet<DailyRoutine> DailyRoutines => Set<DailyRoutine>();
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();

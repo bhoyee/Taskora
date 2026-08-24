@@ -15,7 +15,14 @@ public sealed record PersonalTodoDto(
     bool IsCompleted,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    IReadOnlyList<PersonalTodoCommentDto> Comments);
+
+public sealed record PersonalTodoCommentDto(
+    Guid Id,
+    Guid TodoId,
+    string Body,
+    DateTimeOffset CreatedAt);
 
 public sealed record DailyRoutineDto(
     Guid Id,
@@ -57,6 +64,8 @@ public sealed record CompletePersonalTodoCommand(Guid TodoId);
 public sealed record ReopenPersonalTodoCommand(Guid TodoId);
 
 public sealed record DeletePersonalTodoCommand(Guid TodoId);
+
+public sealed record AddPersonalTodoCommentCommand(Guid TodoId, string Body);
 
 public sealed record ListDailyRoutinesQuery(
     int PageNumber,

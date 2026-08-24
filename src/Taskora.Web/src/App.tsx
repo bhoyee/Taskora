@@ -6,7 +6,7 @@ import {
 } from '@dnd-kit/core'
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleGauge,
+  Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleGauge,
   Clock3, Columns3, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
@@ -289,6 +289,9 @@ export default function App() {
   const [taskDeleteCandidate, setTaskDeleteCandidate] =
     useState<TaskItem | null>(null)
   const [taskDeleteBusy, setTaskDeleteBusy] = useState(false)
+  const [todoDeleteCandidate, setTodoDeleteCandidate] =
+    useState<PersonalTodo | null>(null)
+  const [todoDeleteBusy, setTodoDeleteBusy] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState(() =>
     localStorage.getItem('todoapp_project_id') ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(() =>
@@ -1067,6 +1070,25 @@ export default function App() {
       setTaskDeleteBusy(false)
     }
   }
+  const requestTodoDelete = (todo: PersonalTodo) => {
+    setTodoDeleteCandidate(todo)
+  }
+  const confirmTodoDelete = async () => {
+    if (!todoDeleteCandidate) return
+    const todoToDelete = todoDeleteCandidate
+    try {
+      setTodoDeleteBusy(true)
+      setTodoError('')
+      await api.deleteTodo(todoToDelete.id)
+      setTodoDeleteCandidate(null)
+      setNotice(`Todo ${todoToDelete.title} deleted.`)
+      await loadTodos(todoDate, todoSearch, todoPageNumber)
+    } catch (reason) {
+      setTodoError(reason instanceof Error ? reason.message : 'The todo could not be deleted.')
+    } finally {
+      setTodoDeleteBusy(false)
+    }
+  }
 
   if (inviteToken) {
     return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
@@ -1327,11 +1349,11 @@ export default function App() {
               : await api.completeTodo(todo.id)
             setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
           }}
-          onDelete={async (todo) => {
+          onDelete={requestTodoDelete}
+          onAddComment={async (todo, body) => {
             setTodoError('')
-            await api.deleteTodo(todo.id)
-            setNotice(`Todo ${todo.title} deleted.`)
-            await loadTodos(todoDate, todoSearch, todoPageNumber)
+            const updated = await api.addTodoComment(todo.id, body)
+            setTodos((items) => items.map((item) => item.id === todo.id ? updated : item))
           }}
         />}
         {view === 'routines' && <DailyRoutinesPage
@@ -1465,6 +1487,14 @@ export default function App() {
           if (!taskDeleteBusy) setTaskDeleteCandidate(null)
         }}
         onConfirm={() => void confirmTaskDelete()}
+      />}
+      {todoDeleteCandidate && <TodoDeleteDialog
+        todo={todoDeleteCandidate}
+        busy={todoDeleteBusy}
+        onClose={() => {
+          if (!todoDeleteBusy) setTodoDeleteCandidate(null)
+        }}
+        onConfirm={() => void confirmTodoDelete()}
       />}
       {projectDeleteCandidate && <ProjectDeleteDialog
         project={projectDeleteCandidate}
@@ -2210,6 +2240,43 @@ function TaskDeleteDialog({
         <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
         <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
           <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete task'}
+        </button>
+      </footer>
+    </dialog>
+  </div>
+}
+
+function TodoDeleteDialog({
+  todo,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  todo: PersonalTodo
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open className="danger-dialog" aria-labelledby="todo-delete-title">
+      <header>
+        <div>
+          <p className="eyebrow">Permanent delete</p>
+          <h2 id="todo-delete-title">Delete {todo.title}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <section className="danger-dialog-body">
+        <div className="danger-dialog-icon"><AlertTriangle /></div>
+        <div>
+          <p>This will permanently delete the todo and its notes.</p>
+          <strong>This action cannot be rolled back.</strong>
+        </div>
+      </section>
+      <footer>
+        <button className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="primary danger-primary" disabled={busy} onClick={onConfirm}>
+          <Trash2 size={16} /> {busy ? 'Deleting...' : 'Delete todo'}
         </button>
       </footer>
     </dialog>
@@ -3809,6 +3876,7 @@ function TodoPage({
   onUpdate,
   onToggle,
   onDelete,
+  onAddComment,
 }: {
   todos: PersonalTodo[]
   totalCount: number
@@ -3825,7 +3893,8 @@ function TodoPage({
   onCreate: (title: string, date: string, notes: string, priority: TodoPriority) => Promise<void>
   onUpdate: (todo: PersonalTodo, title: string, date: string, notes: string, priority: TodoPriority) => Promise<void>
   onToggle: (todo: PersonalTodo) => Promise<void>
-  onDelete: (todo: PersonalTodo) => Promise<void>
+  onDelete: (todo: PersonalTodo) => void
+  onAddComment: (todo: PersonalTodo, body: string) => Promise<void>
 }) {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
@@ -3837,6 +3906,8 @@ function TodoPage({
   const [editDate, setEditDate] = useState(selectedDate)
   const [editPriority, setEditPriority] = useState<TodoPriority>('Medium')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
+  const [commentBusyId, setCommentBusyId] = useState<string | null>(null)
   const completedCount = todos.filter((todo) => todo.isCompleted).length
   const openCount = todos.length - completedCount
   const totalPages = totalCount === 0
@@ -3885,6 +3956,30 @@ function TodoPage({
       await action(todo)
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const toggleComments = (todoId: string) => {
+    setExpandedComments((current) => {
+      const next = new Set(current)
+      if (next.has(todoId)) next.delete(todoId)
+      else next.add(todoId)
+      return next
+    })
+  }
+
+  const submitComment = async (todo: PersonalTodo, event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const data = new FormData(form)
+    const body = String(data.get('body') ?? '').trim()
+    if (!body) return
+    setCommentBusyId(todo.id)
+    try {
+      await onAddComment(todo, body)
+      form.reset()
+    } finally {
+      setCommentBusyId(null)
     }
   }
 
@@ -3950,6 +4045,36 @@ function TodoPage({
                         {todo.carriedOverFromDate && <span className="carryover-badge">Carry over from {formatDate(todo.originalTodoDate)}</span>}
                         {todo.notes && <p>{todo.notes}</p>}
                         <small>{todo.isCompleted && todo.completedAt ? `Completed ${new Date(todo.completedAt).toLocaleString()}` : `Updated ${new Date(todo.updatedAt).toLocaleString()}`}</small>
+                        <button
+                          type="button"
+                          className="link-button todo-comments-toggle"
+                          onClick={() => toggleComments(todo.id)}
+                        >
+                          <MessageSquare size={14} />
+                          {todo.comments.length ? `${todo.comments.length} comment${todo.comments.length === 1 ? '' : 's'}` : 'Add comment'}
+                          {expandedComments.has(todo.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {expandedComments.has(todo.id) && <div className="todo-comments">
+                          {todo.comments.length > 0 && <div className="note-list">
+                            {todo.comments.map((comment) => <article key={comment.id}>
+                              <MessageSquare size={15} />
+                              <p>{comment.body}</p>
+                              <small>{new Date(comment.createdAt).toLocaleString()}</small>
+                            </article>)}
+                          </div>}
+                          <form className="todo-comment-form" onSubmit={(event) => void submitComment(todo, event)}>
+                            <textarea
+                              name="body"
+                              rows={2}
+                              maxLength={2000}
+                              placeholder="Add a comment..."
+                              disabled={commentBusyId === todo.id}
+                            />
+                            <button className="secondary" disabled={commentBusyId === todo.id}>
+                              {commentBusyId === todo.id ? 'Adding...' : 'Comment'}
+                            </button>
+                          </form>
+                        </div>}
                       </>}
                 </div>
                 <div className="todo-actions">
@@ -3960,7 +4085,7 @@ function TodoPage({
                       </>
                     : <>
                         <button className="icon-button" onClick={() => startEdit(todo)} aria-label={`Edit ${todo.title}`}><Pencil /></button>
-                        <button className="icon-button danger-action" onClick={() => void runItemAction(todo, onDelete)} disabled={busyId === todo.id} aria-label={`Delete ${todo.title}`}><Trash2 /></button>
+                        <button className="icon-button danger-action" onClick={() => onDelete(todo)} disabled={busyId === todo.id} aria-label={`Delete ${todo.title}`}><Trash2 /></button>
                       </>}
                 </div>
               </article>

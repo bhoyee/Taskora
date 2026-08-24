@@ -83,4 +83,44 @@ public sealed class PersonalTodoTests
         Assert.Equal(new DateOnly(2026, 7, 13), todo.CarriedOverFromDate);
         Assert.True(todo.IsCarriedOver);
     }
+
+    [Fact]
+    public void AddComment_AppendsCommentToTodo()
+    {
+        var todo = PersonalTodo.Create(
+            TodoId,
+            UserId,
+            "Review PR",
+            new DateOnly(2026, 7, 13),
+            null,
+            Now);
+
+        var comment = todo.AddComment(
+            Guid.Parse("c0000000-0000-0000-0000-000000000001"),
+            "  Called back, no answer.  ",
+            Now.AddHours(3));
+
+        var stored = Assert.Single(todo.Comments);
+        Assert.Same(comment, stored);
+        Assert.Equal(TodoId, comment.TodoId);
+        Assert.Equal("Called back, no answer.", comment.Body);
+        Assert.Equal(Now.AddHours(3), comment.CreatedAt);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AddComment_WhenBodyIsBlank_ThrowsValidationError(string body)
+    {
+        var todo = PersonalTodo.Create(
+            TodoId,
+            UserId,
+            "Review PR",
+            new DateOnly(2026, 7, 13),
+            null,
+            Now);
+
+        Assert.Throws<DomainValidationException>(
+            () => todo.AddComment(Guid.NewGuid(), body, Now));
+    }
 }

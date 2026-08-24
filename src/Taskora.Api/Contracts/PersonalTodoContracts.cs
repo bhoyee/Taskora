@@ -14,6 +14,8 @@ public sealed record UpdatePersonalTodoRequest(
     string? Notes,
     TodoPriority? Priority);
 
+public sealed record AddPersonalTodoCommentRequest(string Body);
+
 public sealed record CreateDailyRoutineRequest(
     string Title,
     string? Notes,
