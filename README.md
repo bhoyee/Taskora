@@ -385,7 +385,7 @@ App__TimeZoneId=Europe/London
 Database__Provider=Postgres
 ConnectionStrings__TodoApp=Host=your-neon-host.neon.tech;Port=5432;Database=neondb;Username=your-user;Password=your-password;SSL Mode=Require;Trust Server Certificate=true
 Database__EnsureCreatedOnStartup=false
-Database__ApplyMigrationsOnStartup=false
+Database__ApplyMigrationsOnStartup=true
 
 DemoData__SeedOnStartup=false
 
@@ -460,7 +460,7 @@ Render can deploy the API from the included `render.yaml` and root
 ASPNETCORE_ENVIRONMENT=Production
 Database__Provider=Postgres
 Database__EnsureCreatedOnStartup=false
-Database__ApplyMigrationsOnStartup=false
+Database__ApplyMigrationsOnStartup=true
 ConnectionStrings__TodoApp=<Neon PostgreSQL connection string>
 App__PublicBaseUrl=https://your-taskora-app.vercel.app
 App__TimeZoneId=Europe/London
@@ -491,6 +491,16 @@ Database__EnsureCreatedOnStartup=true
 Database__ApplyMigrationsOnStartup=false
 DemoData__SeedOnStartup=true
 ```
+
+`EnsureCreatedOnStartup` builds the schema straight from the current model and
+does **not** write anything to EF's migration-history table
+(`__EFMigrationsHistory`). Before switching back to
+`Database__ApplyMigrationsOnStartup=true` for normal deploys, either mark
+every existing migration as already applied (insert one row per migration
+into `__EFMigrationsHistory`, matching the `Id`/`ProductVersion` values in
+`src/Taskora.Infrastructure/Persistence/Migrations/`) or `dotnet ef
+database update` against production once by hand. Otherwise the next deploy
+will try to recreate tables that already exist and fail on startup.
 
 After the first successful deploy and login, set them back to:
 

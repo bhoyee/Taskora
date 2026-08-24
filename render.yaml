@@ -14,7 +14,7 @@ services:
       - key: Database__EnsureCreatedOnStartup
         value: false
       - key: Database__ApplyMigrationsOnStartup
-        value: false
+        value: true
       - key: DemoData__SeedOnStartup
         value: false
       - key: ConnectionStrings__TodoApp
