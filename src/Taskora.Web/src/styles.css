@@ -322,9 +322,14 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .inline-check { display: flex !important; grid-auto-flow: column; justify-content: start; align-items: center; gap: 7px; text-transform: none !important; font-size: 12px !important; }
 .inline-check input { width: auto; }
 .reports-page { display: grid; gap: 18px; }
-.report-toolbar { display: flex; justify-content: space-between; align-items: end; gap: 18px; }
+.report-toolbar { display: flex; justify-content: space-between; align-items: end; gap: 18px; flex-wrap: wrap; }
 .report-toolbar h2 { margin: 0 0 4px; font-size: 18px; }
 .report-toolbar p { margin: 0; color: #667281; }
+.report-toolbar-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+.date-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.date-presets button { padding: 8px 12px; font-size: 12px; }
+.report-export-actions { display: flex; gap: 8px; align-items: end; }
+.print-only { display: none; }
 .date-range { display: flex; gap: 10px; align-items: end; }
 .date-range label span { display: block; margin-bottom: 5px; color: #667281; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .date-range input { border: 1px solid #cbd2d9; border-radius: 6px; background: white; padding: 9px 10px; }
@@ -751,3 +756,16 @@ label input:read-only, label select:disabled { background: #f3f6f8; color: #6672
   .chart-legend { width: 100%; justify-self: stretch; }
 }
 @media (prefers-reduced-motion: reduce) { .landing-section article, .analytics-card, .governance-card, .governance-list li, .readiness-list li, .decision-list svg, .donut-segment, .bar-track i, .progress-track i { transition: none; }.landing-section article:hover, .analytics-card:hover, .governance-card:hover, .governance-card:hover .governance-list li, .governance-card:hover .readiness-list li, .governance-card:hover .decision-list svg { transform: none; } }
+@media print {
+  .sidebar, .topbar, .mobile-menu, .nav-backdrop, .app-credit { display: none !important; }
+  .app-shell { display: block; }
+  main { padding: 0; }
+  .date-presets, .date-range, .report-export-actions, .pagination { display: none !important; }
+  .report-toolbar { display: block; }
+  .screen-only { display: none !important; }
+  .print-only { display: block !important; }
+  .panel-page { border: 0; padding: 0; }
+  .report-grid { grid-template-columns: 1fr 1fr; }
+  .analytics-card, .report-card { break-inside: avoid; box-shadow: none; }
+  .report-table.print-only .task-row { break-inside: avoid; }
+}

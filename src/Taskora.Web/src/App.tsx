@@ -7,14 +7,14 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleGauge,
-  Clock3, Columns3, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
-  Menu, MessageSquare, Pencil, Pin, Plus, Save, Search, Settings2, ShieldCheck,
+  Clock3, Columns3, Download, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
+  Menu, MessageSquare, Pencil, Pin, Plus, Printer, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
 import { api, streamWorkspaceEvents } from './api'
 import type {
   AccountSession, DailyRoutine, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
-  DatabaseBackupFile, PlatformProjectSummary, PlatformWorkspaceDetail, PlatformWorkspaceSummary, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
+  DatabaseBackupFile, PlatformProjectSummary, PlatformWorkspaceDetail, PlatformWorkspaceSummary, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport, WorkspaceReportTask,
 } from './api'
 import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
@@ -59,7 +59,6 @@ const defaultProfile: UserProfile = {
 
 const defaultAccount: AccountSession | null = null
 const todayInput = new Date().toISOString().slice(0, 10)
-const nextMonthInput = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 const boardTaskPageSize = 100
 type DashboardWarning = Dashboard['warnings'][number]
 type NotificationItem = DashboardWarning & {
@@ -337,8 +336,8 @@ export default function App() {
       localStorage.getItem('todoapp_workspace_id') ?? ''))
   const [report, setReport] = useState<WorkspaceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
-  const [reportFrom, setReportFrom] = useState(todayInput)
-  const [reportTo, setReportTo] = useState(nextMonthInput)
+  const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+  const [reportTo, setReportTo] = useState(todayInput)
   const [loggedOut, setLoggedOut] = useState(() =>
     localStorage.getItem('todoapp_logged_out') === 'true')
   const [notice, setNotice] = useState('')
@@ -2204,6 +2203,39 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function csvField(value: string) {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+function tasksToCsv(tasks: WorkspaceReportTask[]) {
+  const header = ['Task', 'Project', 'Status', 'Due date', 'Completed at', 'Priority band', 'Priority score', 'Tags']
+  const rows = tasks.map((task) => [
+    task.title,
+    task.projectName,
+    statusLabels[task.status],
+    task.dueDate ?? '',
+    task.completedAt ? new Date(task.completedAt).toLocaleDateString() : '',
+    task.priorityBand ?? '',
+    task.priorityScore != null ? String(task.priorityScore) : '',
+    task.tags.join('; '),
+  ])
+  return [header, ...rows]
+    .map((row) => row.map(csvField).join(','))
+    .join('\r\n')
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob(['\ufeff' + content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 function TaskDeleteDialog({
@@ -4323,15 +4355,48 @@ function ReportsPage({
   const totalPages = Math.max(1, Math.ceil(tasks.length / pageSize))
   const pageTasks = tasks.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
 
+  const applyPreset = (days: number) => {
+    onFromChange(new Date(Date.now() - days * 86400000).toISOString().slice(0, 10))
+    onToChange(new Date().toISOString().slice(0, 10))
+  }
+  const applyThisMonth = () => {
+    const now = new Date()
+    onFromChange(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10))
+    onToChange(new Date().toISOString().slice(0, 10))
+  }
+  const exportCsv = () => {
+    downloadTextFile(
+      `workspace-report_${from}_to_${to}.csv`,
+      tasksToCsv(tasks),
+      'text/csv;charset=utf-8;',
+    )
+  }
+
   return <section className="panel-page reports-page" aria-label="Reports">
     <div className="report-toolbar">
       <div>
         <h2>Workspace reports</h2>
         <p>Workspace-wide task and project delivery activity for the selected date range.</p>
       </div>
-      <div className="date-range">
-        <label><span>From</span><input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></label>
-        <label><span>To</span><input type="date" value={to} onChange={(event) => onToChange(event.target.value)} /></label>
+      <div className="report-toolbar-actions">
+        <div className="date-presets">
+          <button type="button" className="secondary" onClick={() => applyPreset(7)}>Last 7 days</button>
+          <button type="button" className="secondary" onClick={() => applyPreset(30)}>Last 30 days</button>
+          <button type="button" className="secondary" onClick={() => applyPreset(90)}>Last 90 days</button>
+          <button type="button" className="secondary" onClick={applyThisMonth}>This month</button>
+        </div>
+        <div className="date-range">
+          <label><span>From</span><input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></label>
+          <label><span>To</span><input type="date" value={to} onChange={(event) => onToChange(event.target.value)} /></label>
+        </div>
+        <div className="report-export-actions">
+          <button type="button" className="secondary" onClick={exportCsv} disabled={!tasks.length} title="Download the task list as a CSV file, opens in Excel or Sheets">
+            <Download size={16} /> Export CSV
+          </button>
+          <button type="button" className="secondary" onClick={() => window.print()}>
+            <Printer size={16} /> Print / Save as PDF
+          </button>
+        </div>
       </div>
     </div>
 
@@ -4369,7 +4434,7 @@ function ReportsPage({
       </article>
     </section>
 
-    <section className="work-area report-table">
+    <section className="work-area report-table screen-only">
       <div className="table-head report-head"><span>Task</span><span>Status</span><span>Due</span><span>Priority</span></div>
       {loading ? <div className="loading">Loading reports...</div> : pageTasks.length
         ? pageTasks.map((task) => <article className="task-row report-row" key={task.id}>
@@ -4387,6 +4452,17 @@ function ReportsPage({
         totalPages={totalPages}
         onPageChange={setPageNumber}
       />
+    </section>
+
+    <section className="work-area report-table print-only" aria-hidden="true">
+      <div className="table-head report-head"><span>Task</span><span>Status</span><span>Due</span><span>Priority</span></div>
+      {tasks.map((task) => <article className="task-row report-row" key={task.id}>
+        <div className="task-name"><span className={`priority-line ${task.priorityBand?.toLowerCase() ?? 'low'}`} /><div><strong>{task.title}</strong><small>{task.tags.length ? task.tags.join(', ') : 'No tags'}</small></div></div>
+        <span className={`status ${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>
+        <span className={`deadline ${task.deadlineHealth.toLowerCase()}`}>{task.dueDate ? formatDate(task.dueDate) : task.completedAt ? `Done ${new Date(task.completedAt).toLocaleDateString()}` : 'No date'}</span>
+        <span className="score"><strong>{task.priorityBand ?? 'Unscored'}</strong><small>{task.priorityScore ?? 0}</small></span>
+        <div className="metadata-line"><span className="category-pill">{task.projectName}</span></div>
+      </article>)}
     </section>
   </section>
 }
