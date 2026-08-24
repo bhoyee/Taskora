@@ -18,6 +18,7 @@ public sealed class PersonalTodoRepository(TodoAppDbContext context)
         Guid todoId,
         CancellationToken cancellationToken) =>
         context.PersonalTodos
+            .Include("_comments")
             .FirstOrDefaultAsync(todo => todo.Id == todoId, cancellationToken);
 
     public async Task<PersonalTodoSearchResult> SearchAsync(
@@ -26,6 +27,7 @@ public sealed class PersonalTodoRepository(TodoAppDbContext context)
     {
         var query = context.PersonalTodos
             .AsNoTracking()
+            .Include("_comments")
             .Where(todo => todo.UserId == criteria.UserId);
 
         if (criteria.Date.HasValue)
