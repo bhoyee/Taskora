@@ -68,6 +68,8 @@ public static class DependencyInjection
             PortfolioDashboardReadRepository>();
         services.AddScoped<IWorkspaceReportReadRepository,
             WorkspaceReportReadRepository>();
+        services.AddScoped<IPlatformReadRepository,
+            PlatformReadRepository>();
         services.AddScoped<IDueDateNotificationReadRepository,
             DueDateNotificationReadRepository>();
         var smtpOptions = ReadSmtpOptions(configuration);

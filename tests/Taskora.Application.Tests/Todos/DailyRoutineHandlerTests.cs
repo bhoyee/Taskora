@@ -164,6 +164,13 @@ public sealed class DailyRoutineHandlerTests
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<PersonalTodoOwner>>([]);
 
+        public Task<IReadOnlyList<PersonalTodo>> ListForUserBetweenAsync(
+            Guid userId,
+            DateOnly from,
+            DateOnly to,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
+
         public Task RemoveAsync(
             PersonalTodo todo,
             CancellationToken cancellationToken)

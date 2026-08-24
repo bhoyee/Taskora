@@ -113,6 +113,125 @@ public sealed class WorkspaceManagementHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    [Fact]
+    public async Task DeleteWorkspace_WhenBypassAndOnlyWorkspace_RemovesWorkspace()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubCurrentUser(Guid.NewGuid()));
+
+        var result = await handler.HandleAsync(
+            new DeleteWorkspaceCommand(WorkspaceId, HasAdministrativeBypass: true),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(WorkspaceId, repository.RemovedWorkspace?.Id);
+    }
+
+    [Fact]
+    public async Task SuspendWorkspace_SetsSuspensionAndSaves()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var adminId = Guid.NewGuid();
+        var handler = new SuspendWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubClock(DateTimeOffset.UtcNow),
+            new StubCurrentUser(adminId));
+
+        var result = await handler.HandleAsync(
+            new SuspendWorkspaceCommand(WorkspaceId, "Non-payment"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(workspace.IsSuspended);
+        Assert.Equal(adminId, workspace.SuspendedByUserId);
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task ReactivateWorkspace_ClearsSuspension()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.Suspend(Guid.NewGuid(), "Investigation", DateTimeOffset.UtcNow);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new ReactivateWorkspaceHandler(repository, unitOfWork);
+
+        var result = await handler.HandleAsync(
+            new ReactivateWorkspaceCommand(WorkspaceId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(workspace.IsSuspended);
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task GetWorkspaceMembers_WhenWorkspaceIsSuspended_ReturnsNotFoundForMember()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.Suspend(Guid.NewGuid(), null, DateTimeOffset.UtcNow);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var handler = new GetWorkspaceMembersHandler(
+            repository,
+            new StubUserProfileRepository(),
+            new StubCurrentUser(OwnerId));
+
+        var result = await handler.HandleAsync(
+            new GetWorkspaceMembersQuery(WorkspaceId),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.NotFound, result.Error.Type);
+    }
+
+    [Fact]
+    public async Task GetWorkspaceMembers_WhenSuspendedButBypassed_Succeeds()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.Suspend(Guid.NewGuid(), null, DateTimeOffset.UtcNow);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var handler = new GetWorkspaceMembersHandler(
+            repository,
+            new StubUserProfileRepository(),
+            new StubCurrentUser(Guid.NewGuid()));
+
+        var result = await handler.HandleAsync(
+            new GetWorkspaceMembersQuery(WorkspaceId, HasAdministrativeBypass: true),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value);
+    }
+
+    private sealed class StubClock(DateTimeOffset now) : IClock
+    {
+        public DateTimeOffset UtcNow => now;
+    }
+
+    private sealed class StubUserProfileRepository : IUserProfileRepository
+    {
+        public Task<UserProfile?> GetByEmailAsync(
+            string email,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<UserProfile?>(null);
+
+        public Task<IReadOnlyList<UserProfile>> GetByIdsAsync(
+            IReadOnlyCollection<Guid> userIds,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UserProfile>>(
+                userIds
+                    .Select(id => UserProfile.Create(id, "Workspace Owner", $"{id}@example.com"))
+                    .ToArray());
+    }
+
     private sealed class InMemoryWorkspaceRepository(params Workspace[] workspaces)
         : IWorkspaceRepository
     {

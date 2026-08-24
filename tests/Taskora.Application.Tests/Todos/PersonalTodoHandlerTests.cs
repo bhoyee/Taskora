@@ -144,6 +144,13 @@ public sealed class PersonalTodoHandlerTests
                 owners?.Where(owner => userIds.Contains(owner.UserId)).ToArray() ??
                 []);
 
+        public Task<IReadOnlyList<PersonalTodo>> ListForUserBetweenAsync(
+            Guid userId,
+            DateOnly from,
+            DateOnly to,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PersonalTodo>>([]);
+
         public Task RemoveAsync(
             PersonalTodo todo,
             CancellationToken cancellationToken) =>

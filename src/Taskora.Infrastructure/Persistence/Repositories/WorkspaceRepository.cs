@@ -103,6 +103,7 @@ public sealed class WorkspaceRepository(TodoAppDbContext context)
             .AsNoTracking()
             .Include("_memberships")
             .Where(workspace =>
+                workspace.SuspendedAt == null &&
                 context.WorkspaceMemberships.Any(membership =>
                     membership.WorkspaceId == workspace.Id &&
                     membership.UserId == userId))

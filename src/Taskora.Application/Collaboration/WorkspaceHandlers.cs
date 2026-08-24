@@ -102,7 +102,8 @@ public sealed class UpdateWorkspaceHandler(
             cancellationToken);
         if (workspace is null ||
             (!command.HasAdministrativeBypass &&
-             !workspace.HasMember(currentUser.UserId)))
+             (!workspace.HasMember(currentUser.UserId) ||
+              workspace.IsSuspended)))
         {
             return WorkspaceHandlerErrors.WorkspaceNotFound<WorkspaceDto>();
         }
@@ -163,21 +164,25 @@ public sealed class DeleteWorkspaceHandler(
             cancellationToken);
         if (workspace is null ||
             (!command.HasAdministrativeBypass &&
-             !workspace.HasMember(currentUser.UserId)))
+             (!workspace.HasMember(currentUser.UserId) ||
+              workspace.IsSuspended)))
         {
             return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
         }
 
-        var userWorkspaces = await workspaces.ListForUserAsync(
-            currentUser.UserId,
-            cancellationToken);
-        if (userWorkspaces.Count <= 1)
+        if (!command.HasAdministrativeBypass)
         {
-            return Result<bool>.Failure(
-                new ApplicationError(
-                    "workspace.last_workspace",
-                    "Create or switch to another workspace before deleting this one.",
-                    ErrorType.Conflict));
+            var userWorkspaces = await workspaces.ListForUserAsync(
+                currentUser.UserId,
+                cancellationToken);
+            if (userWorkspaces.Count <= 1)
+            {
+                return Result<bool>.Failure(
+                    new ApplicationError(
+                        "workspace.last_workspace",
+                        "Create or switch to another workspace before deleting this one.",
+                        ErrorType.Conflict));
+            }
         }
 
         if (!command.HasAdministrativeBypass &&
@@ -196,6 +201,52 @@ public sealed class DeleteWorkspaceHandler(
     }
 }
 
+public sealed class SuspendWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork,
+    IClock clock,
+    ICurrentUser currentUser)
+{
+    public async Task<Result<bool>> HandleAsync(
+        SuspendWorkspaceCommand command,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await workspaces.GetByIdAsync(
+            command.WorkspaceId,
+            cancellationToken);
+        if (workspace is null)
+        {
+            return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
+        }
+
+        workspace.Suspend(currentUser.UserId, command.Reason, clock.UtcNow);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
+public sealed class ReactivateWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork)
+{
+    public async Task<Result<bool>> HandleAsync(
+        ReactivateWorkspaceCommand command,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await workspaces.GetByIdAsync(
+            command.WorkspaceId,
+            cancellationToken);
+        if (workspace is null)
+        {
+            return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
+        }
+
+        workspace.Reactivate();
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Result<bool>.Success(true);
+    }
+}
+
 public sealed class GetWorkspaceMembersHandler(
     IWorkspaceRepository workspaces,
     IUserProfileRepository profiles,
@@ -205,18 +256,39 @@ public sealed class GetWorkspaceMembersHandler(
         GetWorkspaceMembersQuery query,
         CancellationToken cancellationToken)
     {
-        var access = await GetWorkspaceAsync(
-            workspaces, currentUser, query.WorkspaceId, cancellationToken);
-        if (!access.IsSuccess)
+        Workspace workspace;
+        if (query.HasAdministrativeBypass)
         {
-            return Result<IReadOnlyList<WorkspaceMemberDto>>.Failure(access.Error);
+            var found = await workspaces.GetByIdAsync(
+                query.WorkspaceId, cancellationToken);
+            if (found is null)
+            {
+                return Result<IReadOnlyList<WorkspaceMemberDto>>.Failure(
+                    new ApplicationError(
+                        "workspace.not_found",
+                        "The workspace was not found.",
+                        ErrorType.NotFound));
+            }
+
+            workspace = found;
+        }
+        else
+        {
+            var access = await GetWorkspaceAsync(
+                workspaces, currentUser, query.WorkspaceId, cancellationToken);
+            if (!access.IsSuccess)
+            {
+                return Result<IReadOnlyList<WorkspaceMemberDto>>.Failure(access.Error);
+            }
+
+            workspace = access.Value;
         }
 
         var users = await profiles.GetByIdsAsync(
-            access.Value.Memberships.Select(member => member.UserId).ToArray(),
+            workspace.Memberships.Select(member => member.UserId).ToArray(),
             cancellationToken);
         return Result<IReadOnlyList<WorkspaceMemberDto>>.Success(
-            access.Value.Memberships.Select(membership =>
+            workspace.Memberships.Select(membership =>
             {
                 var user = users.Single(item => item.Id == membership.UserId);
                 return new WorkspaceMemberDto(
@@ -240,7 +312,9 @@ public sealed class GetWorkspaceMembersHandler(
 
         var workspace = await workspaces.GetByIdAsync(
             workspaceId, cancellationToken);
-        if (workspace is null || !workspace.HasMember(currentUser.UserId))
+        if (workspace is null ||
+            !workspace.HasMember(currentUser.UserId) ||
+            workspace.IsSuspended)
         {
             return Result<Workspace>.Failure(new ApplicationError(
                 "workspace.not_found",

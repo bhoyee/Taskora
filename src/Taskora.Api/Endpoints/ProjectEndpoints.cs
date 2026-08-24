@@ -1,3 +1,4 @@
+using TodoApp.Api.Authorization;
 using TodoApp.Api.Contracts;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Projects;
@@ -140,12 +141,8 @@ internal static class ProjectEndpoints
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var account = await accounts.GetByIdAsync(
-            currentUser.UserId,
-            cancellationToken);
-
-        var isSuperAdmin = account is not null &&
-            IsSuperAdmin(account.User.Email, configuration);
+        var isSuperAdmin = await SuperAdminAuthorization.IsSuperAdminAsync(
+            currentUser, accounts, configuration, cancellationToken);
 
         return ApiResult.From(await handler.HandleAsync(
             new DeleteProjectCommand(projectId, isSuperAdmin),
@@ -230,28 +227,17 @@ internal static class ProjectEndpoints
         Guid projectId,
         Guid sprintId,
         DeleteSprintHandler handler,
-        CancellationToken cancellationToken) =>
-        ApiResult.From(await handler.HandleAsync(
-            new DeleteSprintCommand(projectId, sprintId),
-            cancellationToken));
-
-    private static bool IsSuperAdmin(
-        string email,
-        IConfiguration configuration)
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
     {
-        var emails = configuration
-            .GetSection("Administration:SuperAdminEmails")
-            .Get<string[]>() ?? [];
-        var singleEmail = configuration["Administration:SuperAdminEmail"];
-        if (!string.IsNullOrWhiteSpace(singleEmail))
-        {
-            emails = [.. emails, singleEmail];
-        }
+        var isSuperAdmin = await SuperAdminAuthorization.IsSuperAdminAsync(
+            currentUser, accounts, configuration, cancellationToken);
 
-        return emails.Any(candidate =>
-            email.Equals(
-                candidate?.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+        return ApiResult.From(await handler.HandleAsync(
+            new DeleteSprintCommand(projectId, sprintId, isSuperAdmin),
+            cancellationToken));
     }
 }
 

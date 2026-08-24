@@ -33,6 +33,7 @@ public sealed class AssignTaskHandler(
         if (project is null ||
             workspace is null ||
             !workspace.HasMember(currentUser.UserId) ||
+            workspace.IsSuspended ||
             workspace.GetRole(currentUser.UserId) == WorkspaceRole.Member)
         {
             return Forbidden();
@@ -105,6 +106,7 @@ public sealed class UnassignTaskHandler(
                 project.WorkspaceId, cancellationToken);
         if (workspace is null ||
             !workspace.HasMember(currentUser.UserId) ||
+            workspace.IsSuspended ||
             workspace.GetRole(currentUser.UserId) == WorkspaceRole.Member)
         {
             return AssignTaskHandler.Forbidden();

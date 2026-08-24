@@ -1,3 +1,4 @@
+using TodoApp.Api.Authorization;
 using TodoApp.Api.Contracts;
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Collaboration;
@@ -40,6 +41,16 @@ internal static class WorkspaceEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/{workspaceId:guid}/suspend", SuspendWorkspaceAsync)
+            .WithName("SuspendWorkspace")
+            .Produces<bool>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPost("/{workspaceId:guid}/reactivate", ReactivateWorkspaceAsync)
+            .WithName("ReactivateWorkspace")
+            .Produces<bool>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         group.MapGet("/{workspaceId:guid}/members", async (
             Guid workspaceId,
             GetWorkspaceMembersHandler handler,
@@ -182,7 +193,7 @@ internal static class WorkspaceEndpoints
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var isSuperAdmin = await IsSuperAdminAsync(
+        var isSuperAdmin = await SuperAdminAuthorization.IsSuperAdminAsync(
             currentUser,
             accounts,
             configuration,
@@ -204,7 +215,7 @@ internal static class WorkspaceEndpoints
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var isSuperAdmin = await IsSuperAdminAsync(
+        var isSuperAdmin = await SuperAdminAuthorization.IsSuperAdminAsync(
             currentUser,
             accounts,
             configuration,
@@ -215,33 +226,43 @@ internal static class WorkspaceEndpoints
             cancellationToken));
     }
 
-    private static async Task<bool> IsSuperAdminAsync(
+    private static async Task<IResult> SuspendWorkspaceAsync(
+        Guid workspaceId,
+        SuspendWorkspaceRequest request,
+        SuspendWorkspaceHandler handler,
         ICurrentUser currentUser,
         IAccountRepository accounts,
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var account = await accounts.GetByIdAsync(
-            currentUser.UserId,
-            cancellationToken);
-        if (account is null)
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
+                currentUser, accounts, configuration, cancellationToken))
         {
-            return false;
+            return Results.Forbid();
         }
 
-        var emails = configuration
-            .GetSection("Administration:SuperAdminEmails")
-            .Get<string[]>() ?? [];
-        var singleEmail = configuration["Administration:SuperAdminEmail"];
-        if (!string.IsNullOrWhiteSpace(singleEmail))
+        return ApiResult.From(await handler.HandleAsync(
+            new SuspendWorkspaceCommand(workspaceId, request.Reason),
+            cancellationToken));
+    }
+
+    private static async Task<IResult> ReactivateWorkspaceAsync(
+        Guid workspaceId,
+        ReactivateWorkspaceHandler handler,
+        ICurrentUser currentUser,
+        IAccountRepository accounts,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
+                currentUser, accounts, configuration, cancellationToken))
         {
-            emails = [.. emails, singleEmail];
+            return Results.Forbid();
         }
 
-        return emails.Any(candidate =>
-            account.User.Email.Equals(
-                candidate?.Trim(),
-                StringComparison.OrdinalIgnoreCase));
+        return ApiResult.From(await handler.HandleAsync(
+            new ReactivateWorkspaceCommand(workspaceId),
+            cancellationToken));
     }
 }
 
@@ -253,6 +274,8 @@ public sealed record CreateWorkspaceProjectRequest(
 public sealed record CreateWorkspaceRequest(string Name);
 
 public sealed record UpdateWorkspaceRequest(string Name);
+
+public sealed record SuspendWorkspaceRequest(string? Reason);
 
 public sealed record InviteWorkspaceMemberRequest(
     string FullName,

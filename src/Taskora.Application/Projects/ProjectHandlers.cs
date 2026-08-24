@@ -271,7 +271,8 @@ internal static class ProjectAccess
             project.WorkspaceId,
             cancellationToken);
         if (workspace is null ||
-            !workspace.HasMember(currentUser.UserId))
+            !workspace.HasMember(currentUser.UserId) ||
+            workspace.IsSuspended)
         {
             return Result<bool>.Failure(
                 new ApplicationError(
@@ -653,14 +654,17 @@ public sealed class DeleteSprintHandler(
                     ErrorType.NotFound));
         }
 
-        var permission = await ProjectAccess.RequireManagerAsync(
-            workspaces,
-            currentUser,
-            project,
-            cancellationToken);
-        if (!permission.IsSuccess)
+        if (!command.HasAdministrativeBypass)
         {
-            return Result<bool>.Failure(permission.Error);
+            var permission = await ProjectAccess.RequireManagerAsync(
+                workspaces,
+                currentUser,
+                project,
+                cancellationToken);
+            if (!permission.IsSuccess)
+            {
+                return Result<bool>.Failure(permission.Error);
+            }
         }
 
         try

@@ -306,6 +306,40 @@ export interface OperationLogRecord {
   correlationId: string | null
 }
 
+export interface PlatformWorkspaceSummary {
+  workspaceId: string
+  workspaceName: string
+  ownerId: string
+  ownerName: string
+  ownerEmail: string
+  isSuspended: boolean
+  suspendedAt: string | null
+  managerCount: number
+  memberCount: number
+  projectCount: number
+  sprintCount: number
+  taskCount: number
+}
+
+export interface PlatformProjectSummary {
+  projectId: string
+  projectName: string
+  isArchived: boolean
+  sprintCount: number
+  taskCount: number
+}
+
+export interface PlatformWorkspaceDetail {
+  workspaceId: string
+  workspaceName: string
+  isSuspended: boolean
+  suspendedAt: string | null
+  suspendedReason: string | null
+  members: WorkspaceMember[]
+  projects: PlatformProjectSummary[]
+  dashboard: Dashboard
+}
+
 async function downloadFile(path: string): Promise<Blob> {
   const response = await fetch(apiUrl(path), {
     headers: {
@@ -881,6 +915,19 @@ export const api = {
     }),
   downloadOperationBackup: (fileName: string) =>
     downloadFile(`/api/v1/operations/backups/${encodeURIComponent(fileName)}`),
+  platformWorkspaces: () =>
+    request<PlatformWorkspaceSummary[]>('/api/v1/platform/workspaces'),
+  platformWorkspaceDetail: (workspaceId: string) =>
+    request<PlatformWorkspaceDetail>(`/api/v1/platform/workspaces/${workspaceId}`),
+  suspendWorkspace: (workspaceId: string, reason: string) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}/suspend`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+    }),
+  reactivateWorkspace: (workspaceId: string) =>
+    request<boolean>(`/api/v1/workspaces/${workspaceId}/reactivate`, {
+      method: 'POST',
+    }),
   register: (
     displayName: string,
     email: string,

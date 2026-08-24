@@ -70,4 +70,5 @@ public sealed record ChangeSprintStatusCommand(
 
 public sealed record DeleteSprintCommand(
     Guid ProjectId,
-    Guid SprintId);
+    Guid SprintId,
+    bool HasAdministrativeBypass = false);

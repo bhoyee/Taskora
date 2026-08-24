@@ -37,6 +37,14 @@ public sealed class Workspace
 
     public Guid OwnerId { get; private set; }
 
+    public bool IsSuspended => SuspendedAt.HasValue;
+
+    public DateTimeOffset? SuspendedAt { get; private set; }
+
+    public Guid? SuspendedByUserId { get; private set; }
+
+    public string? SuspendedReason { get; private set; }
+
     public IReadOnlyCollection<WorkspaceMembership> Memberships =>
         _memberships.AsReadOnly();
 
@@ -104,6 +112,31 @@ public sealed class Workspace
         }
 
         _memberships.Remove(GetMembership(userId));
+    }
+
+    public void Suspend(
+        Guid suspendedByUserId,
+        string? reason,
+        DateTimeOffset occurredAt)
+    {
+        if (suspendedByUserId == Guid.Empty)
+        {
+            throw new DomainValidationException(
+                "Suspending user identifier is required.");
+        }
+
+        SuspendedAt = occurredAt;
+        SuspendedByUserId = suspendedByUserId;
+        SuspendedReason = string.IsNullOrWhiteSpace(reason)
+            ? null
+            : reason.Trim();
+    }
+
+    public void Reactivate()
+    {
+        SuspendedAt = null;
+        SuspendedByUserId = null;
+        SuspendedReason = null;
     }
 
     public bool HasMember(Guid userId) =>

@@ -15,7 +15,15 @@ public sealed record DeleteWorkspaceCommand(
     Guid WorkspaceId,
     bool HasAdministrativeBypass = false);
 
-public sealed record GetWorkspaceMembersQuery(Guid WorkspaceId);
+public sealed record SuspendWorkspaceCommand(
+    Guid WorkspaceId,
+    string? Reason);
+
+public sealed record ReactivateWorkspaceCommand(Guid WorkspaceId);
+
+public sealed record GetWorkspaceMembersQuery(
+    Guid WorkspaceId,
+    bool HasAdministrativeBypass = false);
 
 public sealed record AddWorkspaceMemberCommand(
     Guid WorkspaceId,

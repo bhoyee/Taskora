@@ -91,6 +91,54 @@ public sealed class WorkspaceTests
             () => Workspace.Create(Guid.NewGuid(), name, OwnerId));
     }
 
+    [Fact]
+    public void Suspend_SetsSuspensionFields()
+    {
+        var workspace = CreateWorkspace();
+        var adminId = Guid.NewGuid();
+        var occurredAt = DateTimeOffset.UtcNow;
+
+        workspace.Suspend(adminId, "Non-payment", occurredAt);
+
+        Assert.True(workspace.IsSuspended);
+        Assert.Equal(occurredAt, workspace.SuspendedAt);
+        Assert.Equal(adminId, workspace.SuspendedByUserId);
+        Assert.Equal("Non-payment", workspace.SuspendedReason);
+    }
+
+    [Fact]
+    public void Suspend_WhenReasonIsBlank_StoresNull()
+    {
+        var workspace = CreateWorkspace();
+
+        workspace.Suspend(Guid.NewGuid(), "   ", DateTimeOffset.UtcNow);
+
+        Assert.Null(workspace.SuspendedReason);
+    }
+
+    [Fact]
+    public void Suspend_WhenActorIsEmpty_IsRejected()
+    {
+        var workspace = CreateWorkspace();
+
+        Assert.Throws<DomainValidationException>(
+            () => workspace.Suspend(Guid.Empty, null, DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void Reactivate_ClearsSuspensionFields()
+    {
+        var workspace = CreateWorkspace();
+        workspace.Suspend(Guid.NewGuid(), "Investigation", DateTimeOffset.UtcNow);
+
+        workspace.Reactivate();
+
+        Assert.False(workspace.IsSuspended);
+        Assert.Null(workspace.SuspendedAt);
+        Assert.Null(workspace.SuspendedByUserId);
+        Assert.Null(workspace.SuspendedReason);
+    }
+
     private static Workspace CreateWorkspace() =>
         Workspace.Create(Guid.NewGuid(), "Portfolio team", OwnerId);
 }

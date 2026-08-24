@@ -256,6 +256,7 @@ app.MapNotificationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapAccountEndpoints();
 app.MapOperationsEndpoints();
+app.MapPlatformEndpoints();
 app.MapRealtimeEndpoints();
 app.Map("/api/{**path}", () => Results.Problem(
     statusCode: StatusCodes.Status404NotFound,

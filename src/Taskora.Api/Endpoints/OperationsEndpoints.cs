@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TodoApp.Application.Abstractions;
+using TodoApp.Api.Authorization;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Notifications;
 using TodoApp.Api.Operations;
@@ -48,11 +49,8 @@ internal static class OperationsEndpoints
         IBusinessDateProvider dates,
         CancellationToken cancellationToken)
     {
-        var account = await accounts.GetByIdAsync(
-            currentUser.UserId,
-            cancellationToken);
-        if (account is null ||
-            !IsSuperAdmin(account.User.Email, configuration))
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
+                currentUser, accounts, configuration, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -136,7 +134,7 @@ internal static class OperationsEndpoints
         DatabaseBackupService backups,
         CancellationToken cancellationToken)
     {
-        if (!await IsSuperAdminAsync(
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
                 currentUser,
                 accounts,
                 configuration,
@@ -155,7 +153,7 @@ internal static class OperationsEndpoints
         DatabaseBackupService backups,
         CancellationToken cancellationToken)
     {
-        if (!await IsSuperAdminAsync(
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
                 currentUser,
                 accounts,
                 configuration,
@@ -175,7 +173,7 @@ internal static class OperationsEndpoints
         DatabaseBackupService backups,
         CancellationToken cancellationToken)
     {
-        if (!await IsSuperAdminAsync(
+        if (!await SuperAdminAuthorization.IsSuperAdminAsync(
                 currentUser,
                 accounts,
                 configuration,
@@ -192,38 +190,6 @@ internal static class OperationsEndpoints
                 "application/json",
                 file.Name,
                 enableRangeProcessing: true);
-    }
-
-    private static bool IsSuperAdmin(
-        string email,
-        IConfiguration configuration)
-    {
-        var emails = configuration
-            .GetSection("Administration:SuperAdminEmails")
-            .Get<string[]>() ?? [];
-        var singleEmail = configuration["Administration:SuperAdminEmail"];
-        if (!string.IsNullOrWhiteSpace(singleEmail))
-        {
-            emails = [.. emails, singleEmail];
-        }
-
-        return emails.Any(candidate =>
-            email.Equals(
-                candidate?.Trim(),
-                StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static async Task<bool> IsSuperAdminAsync(
-        ICurrentUser currentUser,
-        IAccountRepository accounts,
-        IConfiguration configuration,
-        CancellationToken cancellationToken)
-    {
-        var account = await accounts.GetByIdAsync(
-            currentUser.UserId,
-            cancellationToken);
-        return account is not null &&
-            IsSuperAdmin(account.User.Email, configuration);
     }
 
     private static bool ReadBool(string? value, bool defaultValue = false) =>

@@ -3,6 +3,7 @@ using TodoApp.Application.Accounts;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Intelligence;
 using TodoApp.Application.Notifications;
+using TodoApp.Application.Platform;
 using TodoApp.Application.Projects.Board;
 using TodoApp.Application.Tasks.CreateTask;
 using TodoApp.Application.Tasks.Activity;
@@ -31,6 +32,10 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<CreateWorkspaceHandler>();
         services.AddScoped<UpdateWorkspaceHandler>();
         services.AddScoped<DeleteWorkspaceHandler>();
+        services.AddScoped<SuspendWorkspaceHandler>();
+        services.AddScoped<ReactivateWorkspaceHandler>();
+        services.AddScoped<ListPlatformWorkspacesHandler>();
+        services.AddScoped<GetPlatformWorkspaceDetailHandler>();
         services.AddScoped<GetMyWorkspacesHandler>();
         services.AddScoped<GetWorkspaceMembersHandler>();
         services.AddScoped<AddWorkspaceMemberHandler>();

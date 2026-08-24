@@ -631,6 +631,22 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .operation-log-row.warning .log-level { background: #fff4d8; color: #9b690d; }
 .operation-log-row.error .log-level, .operation-log-row.critical .log-level { background: #fde7e4; color: #a6372e; }
 .operation-log-row.information .log-level { background: #e6f0fb; color: #295f8f; }
+.platform-head, .platform-row { grid-template-columns: minmax(220px, 1.4fr) 130px 80px 80px 80px 110px minmax(210px, auto); }
+.platform-owner strong, .platform-owner small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.platform-owner small { margin-top: 2px; color: #667281; }
+.platform-status-badge { justify-self: start; border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 800; }
+.platform-status-badge.active { background: #e3f4ef; color: #17624f; }
+.platform-status-badge.suspended { background: #fce8e6; color: #a6372e; }
+.platform-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.platform-row-actions button { padding: 6px 10px; font-size: 12px; }
+.platform-detail { margin-top: 18px; display: grid; gap: 16px; }
+.platform-detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.platform-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.platform-project-list { display: grid; gap: 8px; }
+.platform-project-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid #e2e6ea; border-radius: 6px; background: #fbfcfd; }
+.platform-project-row strong { display: block; overflow-wrap: anywhere; }
+.platform-project-row small { color: #667281; }
+.platform-project-row span { color: #667281; font-size: 12px; }
 .member-list, .invitation-list { display: grid; gap: 8px; }
 .member-row, .invitation-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e1e6eb; border-radius: 6px; }
 .member-row strong, .member-row small, .invitation-row strong, .invitation-row small { display: block; min-width: 0; overflow-wrap: anywhere; }

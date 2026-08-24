@@ -15,12 +15,20 @@ internal sealed class WorkspaceConfiguration
             .HasMaxLength(160)
             .IsRequired();
         builder.Property(workspace => workspace.OwnerId).IsRequired();
+        builder.Property(workspace => workspace.SuspendedAt);
+        builder.Property(workspace => workspace.SuspendedByUserId);
+        builder.Property(workspace => workspace.SuspendedReason)
+            .HasMaxLength(500);
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
         builder.HasOne<UserProfile>()
             .WithMany()
             .HasForeignKey(workspace => workspace.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<UserProfile>()
+            .WithMany()
+            .HasForeignKey(workspace => workspace.SuspendedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.Ignore(workspace => workspace.Memberships);
         builder.HasMany<WorkspaceMembership>("_memberships")
             .WithOne()

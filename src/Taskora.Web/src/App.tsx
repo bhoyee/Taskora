@@ -14,7 +14,7 @@ import {
 import { api, streamWorkspaceEvents } from './api'
 import type {
   AccountSession, DailyRoutine, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
-  DatabaseBackupFile, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
+  DatabaseBackupFile, PlatformProjectSummary, PlatformWorkspaceDetail, PlatformWorkspaceSummary, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport,
 } from './api'
 import landingDashboard from './assets/landing-dashboard.png'
 import './styles.css'
@@ -34,10 +34,10 @@ const emptyDashboard: Dashboard = {
   warnings: [],
 }
 
-type View = 'home' | 'tasks' | 'myday' | 'routines' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations' | 'backups'
+type View = 'home' | 'tasks' | 'myday' | 'routines' | 'projects' | 'sprints' | 'board' | 'reports' | 'calendar' | 'activity' | 'team' | 'profile' | 'operations' | 'backups' | 'platform'
 type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 
-const views: View[] = ['home', 'tasks', 'myday', 'routines', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups']
+const views: View[] = ['home', 'tasks', 'myday', 'routines', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups', 'platform']
 const todoPriorities: TodoPriority[] = ['Low', 'Medium', 'High', 'Critical']
 
 function viewFromHash(hash: string): View {
@@ -1099,6 +1099,7 @@ export default function App() {
           {operations?.isSuperAdmin && <>
             <button className={view === 'operations' ? 'active' : ''} onClick={() => openView('operations')}><ShieldCheck size={18} /> Operations</button>
             <button className={view === 'backups' ? 'active' : ''} onClick={() => openView('backups')}><Save size={18} /> Database Backups</button>
+            <button className={view === 'platform' ? 'active' : ''} onClick={() => openView('platform')}><UserRound size={18} /> Platform</button>
           </>}
         </nav>
         <PinnedProjects
@@ -1451,6 +1452,7 @@ export default function App() {
         />}
         {view === 'operations' && operations?.isSuperAdmin && <OperationsPage summary={operations} />}
         {view === 'backups' && operations?.isSuperAdmin && <DatabaseBackupsPage summary={operations} />}
+        {view === 'platform' && operations?.isSuperAdmin && <PlatformPage />}
         <footer className="app-credit">Copyright 2026 - Developed by <a href="https://salisu.dev" target="_blank" rel="noreferrer">salisu.dev</a></footer>
       </main>
       {dialogOpen && project && <TaskDialog projectId={project.id} isMember={workspace?.role === 'Member'} members={members} categories={categories} sprints={project.sprints} onCategoryCreated={(category) => setCategories((items) => [...items, category].sort((left, right) => left.name.localeCompare(right.name)))} onClose={() => setDialogOpen(false)} onCreated={() => { setDialogOpen(false); void load() }} />}
@@ -5050,6 +5052,293 @@ function DatabaseBackupsPage({ summary }: { summary: OperationsSummary }) {
         </div>
       </article>
     </div>
+  </section>
+}
+
+function SuspendWorkspaceDialog({
+  workspaceName,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  workspaceName: string
+  busy: boolean
+  onClose: () => void
+  onConfirm: (reason: string) => void
+}) {
+  const [reason, setReason] = useState('')
+  return <div className="dialog-backdrop" role="presentation">
+    <dialog open aria-labelledby="suspend-workspace-title">
+      <header>
+        <div>
+          <p className="eyebrow">Suspend workspace</p>
+          <h2 id="suspend-workspace-title">Suspend {workspaceName}?</h2>
+        </div>
+        <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button>
+      </header>
+      <form onSubmit={(event) => { event.preventDefault(); onConfirm(reason) }}>
+        <p className="field-help">
+          Members lose access immediately and the workspace disappears from their workspace switcher.
+          Nothing is deleted, and you can reactivate it at any time.
+        </p>
+        <label>Reason (optional)
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            autoFocus
+          />
+        </label>
+        <footer>
+          <button type="button" className="secondary" disabled={busy} onClick={onClose}>Cancel</button>
+          <button className="primary danger-primary" disabled={busy}>{busy ? 'Suspending...' : 'Suspend workspace'}</button>
+        </footer>
+      </form>
+    </dialog>
+  </div>
+}
+
+function PlatformPage() {
+  const [summaries, setSummaries] = useState<PlatformWorkspaceSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<PlatformWorkspaceDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null)
+  const [suspendTarget, setSuspendTarget] = useState<PlatformWorkspaceSummary | null>(null)
+  const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<PlatformWorkspaceSummary | null>(null)
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<PlatformProjectSummary | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      setSummaries(await api.platformWorkspaces())
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to load platform data.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load() }, [])
+
+  const openDetail = async (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId)
+    setDetailLoading(true)
+    setDetail(null)
+    try {
+      setDetail(await api.platformWorkspaceDetail(workspaceId))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to load workspace detail.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const closeDetail = () => {
+    setSelectedWorkspaceId(null)
+    setDetail(null)
+  }
+
+  const suspend = async (reason: string) => {
+    if (!suspendTarget) return
+    const target = suspendTarget
+    setBusyWorkspaceId(target.workspaceId)
+    try {
+      await api.suspendWorkspace(target.workspaceId, reason)
+      setNotice(`${target.workspaceName} suspended.`)
+      setSuspendTarget(null)
+      await load()
+      if (selectedWorkspaceId === target.workspaceId) await openDetail(target.workspaceId)
+    } catch (reason2) {
+      setError(reason2 instanceof Error ? reason2.message : 'Unable to suspend workspace.')
+    } finally {
+      setBusyWorkspaceId(null)
+    }
+  }
+
+  const reactivate = async (summary: PlatformWorkspaceSummary) => {
+    setBusyWorkspaceId(summary.workspaceId)
+    try {
+      await api.reactivateWorkspace(summary.workspaceId)
+      setNotice(`${summary.workspaceName} reactivated.`)
+      await load()
+      if (selectedWorkspaceId === summary.workspaceId) await openDetail(summary.workspaceId)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to reactivate workspace.')
+    } finally {
+      setBusyWorkspaceId(null)
+    }
+  }
+
+  const confirmDeleteWorkspace = async () => {
+    if (!deleteWorkspaceTarget) return
+    const target = deleteWorkspaceTarget
+    setBusyWorkspaceId(target.workspaceId)
+    try {
+      await api.deleteWorkspace(target.workspaceId)
+      setNotice(`${target.workspaceName} deleted.`)
+      setDeleteWorkspaceTarget(null)
+      if (selectedWorkspaceId === target.workspaceId) closeDetail()
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to delete workspace.')
+    } finally {
+      setBusyWorkspaceId(null)
+    }
+  }
+
+  const confirmDeleteProject = async () => {
+    if (!deleteProjectTarget || !selectedWorkspaceId) return
+    const workspaceId = selectedWorkspaceId
+    setBusyWorkspaceId(workspaceId)
+    try {
+      await api.deleteProject(deleteProjectTarget.projectId)
+      setNotice(`${deleteProjectTarget.projectName} deleted.`)
+      setDeleteProjectTarget(null)
+      await openDetail(workspaceId)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to delete project.')
+    } finally {
+      setBusyWorkspaceId(null)
+    }
+  }
+
+  const taskChartItems = [...summaries]
+    .sort((left, right) => right.taskCount - left.taskCount)
+    .slice(0, 10)
+    .map((summary) => ({ label: summary.workspaceName, count: summary.taskCount }))
+
+  return <section className="panel-page platform-page" aria-label="Platform administration">
+    <div className="activity-toolbar">
+      <div>
+        <p className="eyebrow">Super admin</p>
+        <h2>Platform workspaces</h2>
+        <p>{summaries.length} workspace{summaries.length === 1 ? '' : 's'} across the platform, one per owner.</p>
+      </div>
+    </div>
+
+    {notice && <div className="success-state"><CheckCircle2 /><span>{notice}</span><button type="button" onClick={() => setNotice('')}>Dismiss</button></div>}
+    {error && <div className="error-state"><AlertTriangle /><span>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
+
+    {loading
+      ? <div className="loading">Loading platform data...</div>
+      : summaries.length === 0
+        ? <div className="empty compact"><UserRound /><h2>No workspaces yet</h2></div>
+        : <>
+          {taskChartItems.some((item) => item.count > 0) &&
+            <BarChart title="Tasks per workspace" items={taskChartItems} colors={{}} />}
+          <div className="report-table">
+            <div className="table-head platform-head">
+              <span>Owner / workspace</span>
+              <span>Roles</span>
+              <span>Projects</span>
+              <span>Sprints</span>
+              <span>Tasks</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            {summaries.map((summary) => <article className="task-row platform-row" key={summary.workspaceId}>
+              <div className="platform-owner">
+                <strong>{summary.workspaceName}</strong>
+                <small>{summary.ownerName} - {summary.ownerEmail}</small>
+              </div>
+              <span>{summary.managerCount} mgr - {summary.memberCount} mem</span>
+              <span>{summary.projectCount}</span>
+              <span>{summary.sprintCount}</span>
+              <span>{summary.taskCount}</span>
+              <span className={`platform-status-badge ${summary.isSuspended ? 'suspended' : 'active'}`}>
+                {summary.isSuspended ? 'Suspended' : 'Active'}
+              </span>
+              <div className="platform-row-actions">
+                <button type="button" className="secondary" onClick={() => void openDetail(summary.workspaceId)}>View</button>
+                {summary.isSuspended
+                  ? <button type="button" className="secondary" disabled={busyWorkspaceId === summary.workspaceId} onClick={() => void reactivate(summary)}>Reactivate</button>
+                  : <button type="button" className="secondary" disabled={busyWorkspaceId === summary.workspaceId} onClick={() => setSuspendTarget(summary)}>Suspend</button>}
+                <button type="button" className="secondary danger-action" disabled={busyWorkspaceId === summary.workspaceId} onClick={() => setDeleteWorkspaceTarget(summary)}>Delete</button>
+              </div>
+            </article>)}
+          </div>
+        </>}
+
+    {selectedWorkspaceId && <div className="platform-detail panel-page">
+      <div className="platform-detail-header">
+        <div>
+          <p className="eyebrow">Workspace detail</p>
+          <h2>{detail?.workspaceName ?? 'Loading...'}</h2>
+          {detail?.isSuspended && <p className="field-error">Suspended{detail.suspendedReason ? `: ${detail.suspendedReason}` : ''}</p>}
+        </div>
+        <button className="icon-button" onClick={closeDetail} aria-label="Close detail"><X /></button>
+      </div>
+
+      {detailLoading || !detail
+        ? <div className="loading">Loading...</div>
+        : <>
+          <div className="platform-detail-grid">
+            <DonutChart title="Task status" items={detail.dashboard.statusBreakdown} colors={statusChartColors} />
+            <BarChart title="Task priority" items={detail.dashboard.priorityBreakdown} colors={priorityChartColors} />
+          </div>
+
+          <h3>Members ({detail.members.length})</h3>
+          <div className="member-list">
+            {detail.members.map((member) => <article className="member-row" key={member.userId}>
+              <span className="avatar">{member.displayName.slice(0, 1).toUpperCase()}</span>
+              <div><strong>{member.displayName}</strong><small>{member.email}</small></div>
+              <span className={`role-pill ${member.role.toLowerCase()}`}>{member.role}</span>
+            </article>)}
+          </div>
+
+          <h3>Projects ({detail.projects.length})</h3>
+          <div className="platform-project-list">
+            {detail.projects.length
+              ? detail.projects.map((project) => <article className="platform-project-row" key={project.projectId}>
+                  <div>
+                    <strong>{project.projectName}</strong>
+                    {project.isArchived && <small> - Archived</small>}
+                  </div>
+                  <span>{project.sprintCount} sprint{project.sprintCount === 1 ? '' : 's'}</span>
+                  <span>{project.taskCount} task{project.taskCount === 1 ? '' : 's'}</span>
+                  <button type="button" className="secondary danger-action" onClick={() => setDeleteProjectTarget(project)}>Delete</button>
+                </article>)
+              : <p className="empty compact">No projects yet.</p>}
+          </div>
+        </>}
+    </div>}
+
+    {suspendTarget && <SuspendWorkspaceDialog
+      workspaceName={suspendTarget.workspaceName}
+      busy={busyWorkspaceId === suspendTarget.workspaceId}
+      onClose={() => setSuspendTarget(null)}
+      onConfirm={(reason) => void suspend(reason)}
+    />}
+
+    {deleteWorkspaceTarget && <WorkspaceDeleteDialog
+      workspace={{ id: deleteWorkspaceTarget.workspaceId, name: deleteWorkspaceTarget.workspaceName, role: 'Owner' }}
+      busy={busyWorkspaceId === deleteWorkspaceTarget.workspaceId}
+      onClose={() => setDeleteWorkspaceTarget(null)}
+      onConfirm={() => void confirmDeleteWorkspace()}
+    />}
+
+    {deleteProjectTarget && <ProjectDeleteDialog
+      project={{
+        id: deleteProjectTarget.projectId,
+        name: deleteProjectTarget.projectName,
+        description: null,
+        targetDate: null,
+        isArchived: deleteProjectTarget.isArchived,
+        archivedAt: null,
+        categories: [],
+        sprints: [],
+      }}
+      busy={busyWorkspaceId === selectedWorkspaceId}
+      onClose={() => setDeleteProjectTarget(null)}
+      onConfirm={() => void confirmDeleteProject()}
+    />}
   </section>
 }
 
