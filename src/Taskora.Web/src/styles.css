@@ -9,7 +9,8 @@ button:disabled { cursor: not-allowed; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 28px; }
 .sidebar-close { display: none; margin-left: auto; color: #d8dee6; }
 .nav-backdrop { display: none; }
-.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: #45c4a1; color: #10231e; font-weight: 800; border-radius: 6px; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; line-height: 0; }
+.brand-mark svg { display: block; border-radius: 7px; }
 .sidebar nav { display: grid; gap: 4px; }
 .sidebar nav button { color: #aeb8c5; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
 .sidebar nav button.active, .sidebar nav button:hover { background: #293442; color: white; }

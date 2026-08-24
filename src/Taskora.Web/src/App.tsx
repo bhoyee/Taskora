@@ -254,6 +254,15 @@ const activityTypes = [
   'NoteAdded',
 ] as const
 
+function BrandMark({ size = 30 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 32 32" role="img" aria-label="Taskora">
+    <rect width="32" height="32" rx="7" fill="#147d68" />
+    <rect x="7" y="19" width="4" height="8" rx="1.5" fill="#ffffff" fillOpacity=".55" />
+    <rect x="14" y="14" width="4" height="13" rx="1.5" fill="#ffffff" fillOpacity=".8" />
+    <rect x="21" y="9" width="4" height="18" rx="1.5" fill="#ffffff" />
+  </svg>
+}
+
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
@@ -1102,7 +1111,7 @@ export default function App() {
       {navOpen && <button className="nav-backdrop" onClick={() => setNavOpen(false)} aria-label="Close navigation" />}
       <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand">
-          <span className="brand-mark">T</span><strong>Taskora</strong>
+          <span className="brand-mark"><BrandMark /></span><strong>Taskora</strong>
           <button className="icon-button sidebar-close" onClick={() => setNavOpen(false)} aria-label="Close navigation"><X /></button>
         </div>
         <nav aria-label="Primary navigation">
@@ -1645,7 +1654,7 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
 
   return <main className="landing-page">
     <header className="landing-nav">
-      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+      <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       <nav aria-label="Public navigation">
         <button className="secondary" onClick={() => setMode('login')}><KeyRound size={16} /> Sign in</button>
         <button className="primary" onClick={() => setMode('register')}><UserRound size={16} /> Create account</button>
@@ -1771,7 +1780,7 @@ function AuthPage({
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+      <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">Account access</p>
         <h1>{mode === 'login'
@@ -1863,7 +1872,7 @@ function InvitationPage({
 
   return <main className="auth-shell">
     <section className="auth-panel">
-      <div className="brand"><span className="brand-mark">T</span><strong>Taskora</strong></div>
+      <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       {declined ? <>
         <div><p className="eyebrow">Workspace invitation</p><h1>Invitation declined</h1></div>
         <p className="muted">The workspace owner can send a new invitation later.</p>

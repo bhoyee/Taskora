@@ -1,0 +1,14 @@
+{
+  "name": "Taskora",
+  "short_name": "Taskora",
+  "description": "Workspace delivery platform for project boards, tasks, reports, and personal todos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f8",
+  "theme_color": "#147d68",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
