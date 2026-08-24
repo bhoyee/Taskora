@@ -330,7 +330,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .date-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .date-presets button { padding: 8px 12px; font-size: 12px; }
 .report-export-actions { display: flex; gap: 8px; align-items: end; }
-.print-only { display: none; }
+.print-only { display: none !important; }
 .date-range { display: flex; gap: 10px; align-items: end; }
 .date-range label span { display: block; margin-bottom: 5px; color: #667281; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .date-range input { border: 1px solid #cbd2d9; border-radius: 6px; background: white; padding: 9px 10px; }
