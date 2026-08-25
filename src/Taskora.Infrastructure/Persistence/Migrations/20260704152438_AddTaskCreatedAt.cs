@@ -4,6 +4,8 @@
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds a CreatedAt column (with supporting index) to Tasks, likely to support
+    // sorting/filtering tasks by creation time.
     /// <inheritdoc />
     public partial class AddTaskCreatedAt : Migration
     {

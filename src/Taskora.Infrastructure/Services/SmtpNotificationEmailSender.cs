@@ -6,6 +6,11 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Infrastructure.Services;
 
+/// <summary>
+/// <see cref="INotificationEmailSender"/> that delivers notification emails
+/// over SMTP using the configured <see cref="SmtpEmailOptions"/>. Registered
+/// only when SMTP is enabled; otherwise <see cref="LoggingNotificationEmailSender"/> is used instead.
+/// </summary>
 public sealed class SmtpNotificationEmailSender(
     IOptions<SmtpEmailOptions> options,
     ILogger<SmtpNotificationEmailSender> logger)
@@ -13,6 +18,7 @@ public sealed class SmtpNotificationEmailSender(
 {
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(30);
 
+    /// <summary>Sends the given notification email via SMTP to its distinct recipients, doing nothing if there are none.</summary>
     public async Task SendAsync(
         NotificationEmailMessage message,
         CancellationToken cancellationToken)
@@ -103,6 +109,8 @@ public sealed class SmtpNotificationEmailSender(
         }
     }
 
+    // Fails fast with a clear message when SMTP is enabled but missing
+    // required settings, rather than letting SmtpClient throw an opaque error.
     private static void Validate(SmtpEmailOptions settings)
     {
         if (string.IsNullOrWhiteSpace(settings.Host))

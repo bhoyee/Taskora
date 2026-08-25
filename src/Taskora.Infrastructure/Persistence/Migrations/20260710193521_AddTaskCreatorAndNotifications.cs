@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds a nullable CreatedByUserId to Tasks to track task authorship, likely as
+    // groundwork for creator-targeted notifications (no notification table added here).
     /// <inheritdoc />
     public partial class AddTaskCreatorAndNotifications : Migration
     {

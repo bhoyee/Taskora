@@ -2,8 +2,21 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Abstractions;
 
+/// <summary>
+/// Read-only repository that aggregates project and task data into a workspace-level
+/// report snapshot, optionally filtered by date range and project.
+/// </summary>
 public interface IWorkspaceReportReadRepository
 {
+    /// <summary>
+    /// Builds a report snapshot for a workspace, optionally scoped to a date range and/or a single project.
+    /// </summary>
+    /// <param name="workspaceId">The identifier of the workspace to report on.</param>
+    /// <param name="from">The inclusive start of the date range to include, or null for no lower bound.</param>
+    /// <param name="to">The inclusive end of the date range to include, or null for no upper bound.</param>
+    /// <param name="projectId">The project to scope the report to, or null to include all projects in the workspace.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The aggregated workspace report snapshot.</returns>
     Task<WorkspaceReportSnapshot> GetAsync(
         Guid workspaceId,
         DateOnly? from,

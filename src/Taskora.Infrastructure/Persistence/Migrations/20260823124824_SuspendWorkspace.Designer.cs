@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // EF Core design-time model snapshot paired with the SuspendWorkspace migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260823124824_SuspendWorkspace")]
     partial class SuspendWorkspace

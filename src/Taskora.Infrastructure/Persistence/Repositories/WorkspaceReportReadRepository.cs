@@ -4,12 +4,28 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository that builds the workspace-level reporting snapshot:
+/// project and task rollups, breakdowns, and notification-style warnings,
+/// optionally filtered to a date range and/or a single project.
+/// </summary>
 public sealed class WorkspaceReportReadRepository(
     TodoAppDbContext context,
     ICurrentUser currentUser,
     IBusinessDateProvider dates)
     : IWorkspaceReportReadRepository
 {
+    /// <summary>
+    /// Builds the full <see cref="WorkspaceReportSnapshot"/> for a workspace.
+    /// Loads projects and tasks as flat <c>AsNoTracking()</c> projections
+    /// (tasks additionally require explicit <c>Include("_tags")</c> and
+    /// <c>Include("_dependencies")</c> since those are shadow-named
+    /// collections on <see cref="TaskItem"/>, not owned navigations that
+    /// load automatically), then performs all range filtering, grouping,
+    /// and breakdown computation client-side over the materialized arrays
+    /// rather than in SQL, since the range/health logic mixes several date
+    /// fields and enum comparisons that are simpler to express in C#.
+    /// </summary>
     public async Task<WorkspaceReportSnapshot> GetAsync(
         Guid workspaceId,
         DateOnly? from,
@@ -192,6 +208,9 @@ public sealed class WorkspaceReportReadRepository(
             notifications);
     }
 
+    // Buckets an in-memory task set into Overdue/Due today/Due in 7 days/Healthy
+    // counts relative to today, mirroring the same buckets used elsewhere
+    // (e.g. the portfolio dashboard) for consistent reporting semantics.
     private static IReadOnlyList<DashboardBreakdownItem> BuildDeadlineBreakdown(
         IReadOnlyCollection<TaskReportValue> tasks,
         DateOnly today)
@@ -224,6 +243,9 @@ public sealed class WorkspaceReportReadRepository(
         ];
     }
 
+    // Combines due-soon task warnings, delivery-date-tomorrow project
+    // warnings, assigned-to-current-user warnings, and carried-over My Day
+    // todo warnings into a single chronologically ordered warning list.
     private async Task<IReadOnlyCollection<DashboardWarning>> BuildNotificationsAsync(
         IEnumerable<ProjectReportValue> projects,
         IEnumerable<TaskReportValue> tasks,
@@ -296,6 +318,9 @@ public sealed class WorkspaceReportReadRepository(
             .ToArray();
     }
 
+    // Builds a single summarized warning (if any) for the given user's My Day
+    // todos that were carried over from an earlier date into today, sampling
+    // up to three titles for the message text.
     private async Task<IReadOnlyCollection<DashboardWarning>> BuildPersonalTodoCarryOverWarningsAsync(
         DateOnly today,
         Guid? currentUserId,
@@ -348,6 +373,8 @@ public sealed class WorkspaceReportReadRepository(
         ];
     }
 
+    // A task is considered "in range" if any of its created/due/completed
+    // dates fall within the optional [from, to] window.
     private static bool IsTaskInRange(
         DateTimeOffset createdAt,
         DateOnly? dueDate,
@@ -359,10 +386,14 @@ public sealed class WorkspaceReportReadRepository(
         (completedAt.HasValue &&
          DateInRange(DateOnly.FromDateTime(completedAt.Value.UtcDateTime), from, to));
 
+    // An unset from/to bound is treated as unbounded on that side.
     private static bool DateInRange(DateOnly value, DateOnly? from, DateOnly? to) =>
         (!from.HasValue || value >= from.Value) &&
         (!to.HasValue || value <= to.Value);
 
+    // Classifies a task's deadline health: Completed tasks are always
+    // healthy-by-completion, tasks without a due date are Healthy, overdue
+    // due dates are Overdue, and due dates within 3 days are AtRisk.
     private static DeadlineHealth GetDeadlineHealth(
         TaskItemStatus status,
         DateOnly? dueDate,

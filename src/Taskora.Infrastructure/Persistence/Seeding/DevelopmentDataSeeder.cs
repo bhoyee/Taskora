@@ -6,8 +6,21 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Seeding;
 
+/// <summary>
+/// Populates a fresh database with a fixed set of demo data (a workspace,
+/// three users with well-known credentials, and a handful of projects,
+/// sprints, and tasks in various states) so local development and portfolio
+/// demos have something realistic to look at. Intended to be invoked once at
+/// application startup in non-production environments; it is idempotent —
+/// each stage checks whether its data already exists before inserting, so
+/// running it repeatedly against the same database is a no-op after the
+/// first run (aside from keeping the owner's demo email in sync).
+/// </summary>
 public static class DevelopmentDataSeeder
 {
+    // Fixed (non-random) GUIDs and demo credentials below so seeded data is
+    // stable across runs and reseeds, and so demo login credentials are
+    // predictable for local testing/demos.
     public static readonly Guid OwnerId =
         Guid.Parse("30000000-0000-0000-0000-000000000001");
     public static readonly Guid ManagerId =
@@ -38,10 +51,17 @@ public static class DevelopmentDataSeeder
     private static readonly Guid OnboardingSprintId =
         Guid.Parse("70000000-0000-0000-0000-000000000003");
 
+    /// <summary>
+    /// Seeds demo users/workspace and demo projects/tasks if they don't
+    /// already exist. Safe to call on every startup in development —
+    /// each section below is guarded by an existence check.
+    /// </summary>
     public static async Task SeedAsync(
         TodoAppDbContext context,
         CancellationToken cancellationToken)
     {
+        // Step 1: create the demo workspace and its three users (owner,
+        // manager, member) the first time the database is empty.
         if (!await context.UserProfiles.AnyAsync(cancellationToken))
         {
             var owner = UserProfile.Create(
@@ -73,6 +93,9 @@ public static class DevelopmentDataSeeder
         }
         else
         {
+            // Users already exist (e.g. from a previous seed run) — just
+            // keep the demo owner's email address in sync with the constant
+            // above in case it was changed between deployments.
             var owner = await context.UserProfiles
                 .SingleOrDefaultAsync(
                     user => user.Id == OwnerId,
@@ -80,16 +103,23 @@ public static class DevelopmentDataSeeder
             owner?.UpdateEmail(DemoOwnerEmail);
         }
 
+        // Step 2: ensure each demo user has a login credential, even if the
+        // user rows themselves were seeded in an earlier run.
         await AddMissingCredentialAsync(context, OwnerId, cancellationToken);
         await AddMissingCredentialAsync(context, ManagerId, cancellationToken);
         await AddMissingCredentialAsync(context, MemberId, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
+        // Step 3: only seed demo projects/tasks once — if any project
+        // already exists, assume the rest of the demo data is in place too.
         if (await context.Projects.AnyAsync(cancellationToken))
         {
             return;
         }
 
+        // Step 4: build the primary "Portfolio launch" project with two
+        // sprints and a spread of tasks across backlog/ready/blocked/
+        // in-progress/completed states, to exercise the board and reports.
         var project = Project.Create(
             ProjectId,
             "Portfolio launch",
@@ -212,6 +242,8 @@ public static class DevelopmentDataSeeder
         completed.Complete(DateTimeOffset.UtcNow.AddDays(-1));
         completed.AddTag("security");
 
+        // Step 5: a short second project with its own sprint, used to
+        // exercise workspace-wide (cross-project) reporting.
         var sprintProject = Project.Create(
             SprintProjectId,
             "Client onboarding sprint",
@@ -243,6 +275,8 @@ public static class DevelopmentDataSeeder
         sprintTask.AddTag("client");
         sprintTask.AddTag("notification");
 
+        // Step 6: a fully completed and archived project, so completed/
+        // archived-project reporting has demo data to show as well.
         var closedProject = Project.Create(
             ClosedProjectId,
             "Discovery phase",
@@ -297,6 +331,8 @@ public static class DevelopmentDataSeeder
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    // Inserts a demo credential (using the shared DemoPassword) for the
+    // given user if one doesn't already exist.
     private static async Task AddMissingCredentialAsync(
         TodoAppDbContext context,
         Guid userId,
@@ -317,12 +353,18 @@ public static class DevelopmentDataSeeder
     }
 }
 
+/// <summary>
+/// Minimal PBKDF2 password hasher used only to produce demo user credentials
+/// during development seeding. Not intended as the production password
+/// hashing implementation.
+/// </summary>
 internal static class DevelopmentPasswordHasher
 {
     private const int Iterations = 100_000;
     private const int SaltSize = 16;
     private const int KeySize = 32;
 
+    /// <summary>Hashes a password with a random salt, returning "iterations.salt.hash" (base64 salt/hash).</summary>
     public static string Hash(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(SaltSize);

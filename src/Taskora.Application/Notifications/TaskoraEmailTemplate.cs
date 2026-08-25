@@ -4,10 +4,24 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Application.Notifications;
 
+/// <summary>A single labeled key/value row rendered in the email's detail table.</summary>
 public sealed record EmailDetail(string Label, string Value);
 
+/// <summary>
+/// Builds Taskora-branded transactional email messages, producing both a
+/// plain-text and an HTML rendering of the same content so callers only need
+/// to supply the content, not the layout/markup.
+/// </summary>
 public static class TaskoraEmailTemplate
 {
+    /// <summary>
+    /// Composes a <see cref="NotificationEmailMessage"/> for the given
+    /// recipients with a standard Taskora layout: eyebrow label, title,
+    /// greeting/intro text, a table of labeled details, a primary
+    /// call-to-action (as a link when <paramref name="actionUrl"/> is given,
+    /// or plain text otherwise), and an optional secondary note. Produces
+    /// matching plain-text and HTML bodies.
+    /// </summary>
     public static NotificationEmailMessage Build(
         IReadOnlyCollection<string> recipients,
         string subject,
@@ -43,6 +57,7 @@ public static class TaskoraEmailTemplate
             html);
     }
 
+    // Renders the plain-text version of the email body.
     private static string BuildPlainText(
         string greeting,
         string intro,
@@ -80,6 +95,7 @@ public static class TaskoraEmailTemplate
         return body.ToString();
     }
 
+    // Renders the HTML version of the email body, encoding all dynamic text.
     private static string BuildHtml(
         string eyebrow,
         string title,
@@ -156,6 +172,7 @@ public static class TaskoraEmailTemplate
         """;
     }
 
+    // HTML-encodes a value before it is embedded in the email markup.
     private static string Encode(string value) =>
         WebUtility.HtmlEncode(value);
 }

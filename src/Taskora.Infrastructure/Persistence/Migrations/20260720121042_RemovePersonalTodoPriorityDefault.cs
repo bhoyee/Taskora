@@ -4,6 +4,9 @@
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // Removes the "Medium" default value from PersonalTodos.Priority,
+    // requiring callers to set priority explicitly instead of relying on a
+    // database-level default.
     /// <inheritdoc />
     public partial class RemovePersonalTodoPriorityDefault : Migration
     {

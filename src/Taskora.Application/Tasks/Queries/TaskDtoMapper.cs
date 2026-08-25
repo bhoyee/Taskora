@@ -3,8 +3,10 @@ using TodoApp.Application.Tasks.Metadata;
 
 namespace TodoApp.Application.Tasks.Queries;
 
+// Maps domain TaskItem entities to the read-side DTOs exposed by query handlers.
 internal static class TaskDtoMapper
 {
+    // Maps a task to its list-view DTO, computing deadline health against the given date.
     public static TaskListItemDto ToListItem(TaskItem task, DateOnly today) =>
         new(
             task.Id,
@@ -24,6 +26,7 @@ internal static class TaskDtoMapper
             ToExplanation(task),
             task.GetDeadlineHealth(today));
 
+    // Maps a task to its full detail DTO, including notes (newest first) and dependencies.
     public static TaskDetailsDto ToDetails(TaskItem task, DateOnly today) =>
         new(
             task.Id,
@@ -56,6 +59,7 @@ internal static class TaskDtoMapper
             task.DependencyIds,
             task.CompletedAt);
 
+    // Builds the priority breakdown DTO, or null if the task has no planning factors set.
     private static PriorityExplanationDto? ToExplanation(TaskItem task)
     {
         if (!task.HasPlanningFactors)

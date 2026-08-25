@@ -5,6 +5,8 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Tasks.Lifecycle;
 
+// Covers the task lifecycle handlers (start, complete, add dependency) that
+// transition a task between statuses and enforce assignment/ownership rules.
 public sealed class TaskLifecycleHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
@@ -180,6 +182,8 @@ public sealed class TaskLifecycleHandlerTests
     private static TaskItem CreateTask() =>
         TaskItem.Create(Guid.NewGuid(), ProjectId, "Publish portfolio");
 
+    // Builds a task already moved past Backlog into Ready, the precondition
+    // most lifecycle handlers under test here require.
     private static TaskItem CreateReadyTask()
     {
         var task = CreateTask();
@@ -187,6 +191,7 @@ public sealed class TaskLifecycleHandlerTests
         return task;
     }
 
+    // In-memory ITaskRepository fake seeded with a fixed set of tasks.
     private sealed class InMemoryTaskRepository(params TaskItem[] tasks)
         : ITaskRepository
     {
@@ -218,6 +223,7 @@ public sealed class TaskLifecycleHandlerTests
         }
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -229,11 +235,13 @@ public sealed class TaskLifecycleHandlerTests
         }
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class TestCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;

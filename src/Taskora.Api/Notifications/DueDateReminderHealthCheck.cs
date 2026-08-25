@@ -2,10 +2,20 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace TodoApp.Api.Notifications;
 
+/// <summary>
+/// ASP.NET Core health check that reports the status of the background due-date
+/// reminder scheduler, surfacing it as Degraded when disabled or when the last
+/// run failed, and Healthy otherwise.
+/// </summary>
 public sealed class DueDateReminderHealthCheck(
     DueDateReminderSchedulerStatus status)
     : IHealthCheck
 {
+    /// <summary>
+    /// Evaluates the current scheduler status snapshot and returns the
+    /// corresponding health result (Degraded if the scheduler is disabled or its
+    /// last run failed, Healthy otherwise).
+    /// </summary>
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)

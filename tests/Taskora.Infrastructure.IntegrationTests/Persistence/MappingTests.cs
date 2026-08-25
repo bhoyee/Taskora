@@ -7,6 +7,9 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.IntegrationTests.Persistence;
 
+// Verifies EF Core mapping correctness by round-tripping domain aggregates
+// (workspaces, projects, tasks) through a real SQLite-backed DbContext and
+// asserting persisted state matches the in-memory state.
 public sealed class MappingTests
 {
     [Fact]
@@ -120,6 +123,7 @@ public sealed class MappingTests
         Assert.Equal(completedAt, reloaded.CompletedAt);
         Assert.Equal(new DateOnly(2026, 8, 1), reloaded.DueDate?.Value);
         Assert.Equal(5, reloaded.EffortEstimate?.Value);
+        // Priority is derived from the PlanningFactors(5, 4, 3, 2) set above.
         Assert.Equal(14.5m, reloaded.Priority.Value);
     }
 
@@ -226,11 +230,15 @@ public sealed class MappingTests
             () => deleteContext.SaveChangesAsync());
     }
 
+    // Test fixture wrapping an in-memory SQLite connection so multiple
+    // DbContext instances can share the same database within a single test.
     private sealed class TestDatabase(
         SqliteConnection connection,
         DbContextOptions<TodoAppDbContext> options)
         : IAsyncDisposable
     {
+        // Opens the in-memory connection and creates the schema so
+        // subsequent contexts can read/write immediately.
         public static async Task<TestDatabase> CreateAsync()
         {
             var connection = new SqliteConnection("Data Source=:memory:");

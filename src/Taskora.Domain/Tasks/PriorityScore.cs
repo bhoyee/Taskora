@@ -1,5 +1,10 @@
 namespace TodoApp.Domain.Tasks;
 
+/// <summary>
+/// Value object representing a task's computed priority: a weighted combination of
+/// business value, urgency, and risk reduction, normalized by effort (a WSJF-style
+/// score), together with the <see cref="PriorityBand"/> it falls into.
+/// </summary>
 public sealed record PriorityScore
 {
     private const int BusinessValueWeight = 3;
@@ -30,6 +35,11 @@ public sealed record PriorityScore
 
     public PriorityBand Band { get; }
 
+    /// <summary>
+    /// Computes the priority score from the given <see cref="PlanningFactors"/>: each
+    /// factor is weighted, summed, and divided by effort — higher value/urgency/risk
+    /// reduction and lower effort both push the score (and therefore the band) higher.
+    /// </summary>
     public static PriorityScore Calculate(PlanningFactors factors)
     {
         var businessValueContribution =
@@ -54,6 +64,7 @@ public sealed record PriorityScore
             DetermineBand(value));
     }
 
+    // Maps the numeric score to a band using fixed thresholds.
     private static PriorityBand DetermineBand(decimal value) =>
         value switch
         {

@@ -3,6 +3,8 @@ using TodoApp.Application.Notifications;
 
 namespace TodoApp.Application.Tests.Notifications;
 
+// Covers SendDueDateNotificationsHandler, which emails reminders for tasks
+// and projects approaching their due/target dates.
 public sealed class DueDateNotificationHandlerTests
 {
     [Fact]
@@ -51,6 +53,8 @@ public sealed class DueDateNotificationHandlerTests
                 StringComparison.OrdinalIgnoreCase));
     }
 
+    // IDueDateNotificationReadRepository stub returning fixed task and
+    // project reminder lists regardless of the requested date.
     private sealed class StubDueDateNotificationReader(
         IReadOnlyList<TaskDueNotification> taskReminders,
         IReadOnlyList<ProjectTargetNotification> projectReminders)
@@ -67,6 +71,7 @@ public sealed class DueDateNotificationHandlerTests
             Task.FromResult(projectReminders);
     }
 
+    // INotificationEmailSender fake that records every message sent.
     private sealed class RecordingEmailSender : INotificationEmailSender
     {
         public List<NotificationEmailMessage> Messages { get; } = [];
@@ -80,6 +85,7 @@ public sealed class DueDateNotificationHandlerTests
         }
     }
 
+    // IBusinessDateProvider stub returning a fixed "today" business date.
     private sealed class StubBusinessDateProvider(DateOnly today)
         : IBusinessDateProvider
     {

@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddPersonalTodos migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260713073916_AddPersonalTodos")]
     partial class AddPersonalTodos

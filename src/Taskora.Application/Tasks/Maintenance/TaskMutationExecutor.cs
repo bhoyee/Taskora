@@ -5,8 +5,14 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Maintenance;
 
+/// <summary>
+/// Shared execution pipeline for simple task maintenance mutations: loads the task (when needed),
+/// applies a domain mutation, persists the change, and translates domain exceptions into
+/// <see cref="Result{T}"/> failures with consistent error codes.
+/// </summary>
 internal static class TaskMutationExecutor
 {
+    // Standard "task not found" failure result shared by maintenance handlers.
     public static Result<TaskItemStatus> NotFound() =>
         Result<TaskItemStatus>.Failure(
             new ApplicationError(
@@ -14,6 +20,11 @@ internal static class TaskMutationExecutor
                 "The task was not found.",
                 ErrorType.NotFound));
 
+    /// <summary>
+    /// Loads the task by id, then applies <paramref name="mutation"/> and saves via
+    /// <see cref="ExecuteLoadedAsync"/>. Returns a <see cref="Result{T}"/> with the resulting status
+    /// on success, or a failure with a not-found, validation, or conflict error.
+    /// </summary>
     public static async Task<Result<TaskItemStatus>> ExecuteAsync(
         Guid taskId,
         ITaskRepository tasks,
@@ -55,6 +66,12 @@ internal static class TaskMutationExecutor
         }
     }
 
+    /// <summary>
+    /// Applies <paramref name="mutation"/> to an already-loaded task and saves the change. Domain
+    /// validation and rule violations are caught and mapped to failed <see cref="Result{T}"/>s
+    /// (validation or conflict errors respectively); otherwise returns success with the task's
+    /// resulting status.
+    /// </summary>
     public static async Task<Result<TaskItemStatus>> ExecuteLoadedAsync(
         TaskItem task,
         Guid taskId,

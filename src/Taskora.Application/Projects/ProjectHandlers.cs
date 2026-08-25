@@ -8,11 +8,18 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Projects;
 
+/// <summary>Creates a new standalone (non-workspace) project.</summary>
 public sealed class CreateProjectHandler(
     IProjectRepository projects,
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers)
 {
+    /// <summary>
+    /// Requires a target delivery date, then creates and persists a new
+    /// <see cref="Project"/> with that date. Returns a validation failure if
+    /// the date is missing or domain validation fails, otherwise the created
+    /// project as a <see cref="ProjectDto"/>.
+    /// </summary>
     public async Task<Result<ProjectDto>> HandleAsync(
         CreateProjectCommand command,
         CancellationToken cancellationToken)
@@ -42,6 +49,7 @@ public sealed class CreateProjectHandler(
         }
     }
 
+    // Builds a validation-typed failure result for this handler.
     private static Result<ProjectDto> ValidationFailure(string description) =>
         Result<ProjectDto>.Failure(
             new ApplicationError(
@@ -49,6 +57,7 @@ public sealed class CreateProjectHandler(
                 description,
                 ErrorType.Validation));
 
+    // Maps a project aggregate (with its categories and sprints) to its DTO.
     internal static ProjectDto ToDto(Project project) =>
         new(
             project.Id,
@@ -70,6 +79,7 @@ public sealed class CreateProjectHandler(
                 .Select(ToSprintDto)
                 .ToArray());
 
+    // Maps a sprint entity to its DTO.
     internal static SprintDto ToSprintDto(Sprint sprint) =>
         new(
             sprint.Id,
@@ -82,12 +92,21 @@ public sealed class CreateProjectHandler(
             sprint.ClosedAt);
 }
 
+/// <summary>Updates an existing project's name, description, and target date.</summary>
 public sealed class UpdateProjectHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project to exist and, for workspace-scoped projects, the
+    /// current user to be a workspace owner or manager (via
+    /// <see cref="ProjectAccess.RequireManagerAsync"/>). Requires a target
+    /// delivery date, then applies the rename/description/date changes and
+    /// persists them, translating domain validation/rule violations into
+    /// typed failures.
+    /// </summary>
     public async Task<Result<ProjectDto>> HandleAsync(
         UpdateProjectCommand command,
         CancellationToken cancellationToken)
@@ -146,12 +165,14 @@ public sealed class UpdateProjectHandler(
         }
     }
 
+    // Builds the "project not found" failure.
     private static Result<ProjectDto> ProjectNotFound() =>
         Failure(
             "project.not_found",
             "The project was not found.",
             ErrorType.NotFound);
 
+    // Builds a typed failure result for this handler.
     private static Result<ProjectDto> Failure(
         string code,
         string description,
@@ -160,6 +181,7 @@ public sealed class UpdateProjectHandler(
             new ApplicationError(code, description, type));
 }
 
+/// <summary>Archives a project, marking it as no longer active.</summary>
 public sealed class ArchiveProjectHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
@@ -167,6 +189,12 @@ public sealed class ArchiveProjectHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project to exist and, for workspace-scoped projects, the
+    /// current user to be a workspace owner or manager. Archives the project
+    /// with the current timestamp, converting a domain rule violation (e.g.
+    /// already archived) into a conflict failure.
+    /// </summary>
     public async Task<Result<ProjectDto>> HandleAsync(
         ArchiveProjectCommand command,
         CancellationToken cancellationToken)
@@ -212,12 +240,19 @@ public sealed class ArchiveProjectHandler(
     }
 }
 
+/// <summary>Deletes a project and its associated data.</summary>
 public sealed class DeleteProjectHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project to exist. Unless
+    /// <see cref="DeleteProjectCommand.HasAdministrativeBypass"/> is set,
+    /// requires the current user to be a workspace owner or manager for
+    /// workspace-scoped projects. Removes the project on success.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         DeleteProjectCommand command,
         CancellationToken cancellationToken)
@@ -254,8 +289,17 @@ public sealed class DeleteProjectHandler(
     }
 }
 
+/// <summary>Shared authorization checks for project-management operations.</summary>
 internal static class ProjectAccess
 {
+    /// <summary>
+    /// Verifies that, for a workspace-scoped project, the current user is an
+    /// active (non-suspended-workspace) member with the Owner or Manager
+    /// role; returns success unconditionally for projects with no workspace.
+    /// Returns <see cref="ErrorType.NotFound"/> if the workspace is missing,
+    /// the user is not a member, or the workspace is suspended, and
+    /// <see cref="ErrorType.Forbidden"/> if the user's role is only Member.
+    /// </summary>
     public static async Task<Result<bool>> RequireManagerAsync(
         IWorkspaceRepository workspaces,
         ICurrentUser currentUser,
@@ -295,8 +339,14 @@ internal static class ProjectAccess
     }
 }
 
+/// <summary>Retrieves a single project by its identifier.</summary>
 public sealed class GetProjectByIdHandler(IProjectRepository projects)
 {
+    /// <summary>
+    /// Returns the project as a <see cref="ProjectDto"/>, or
+    /// <see cref="ErrorType.NotFound"/> if no project with the given
+    /// identifier exists.
+    /// </summary>
     public async Task<Result<ProjectDto>> HandleAsync(
         GetProjectByIdQuery query,
         CancellationToken cancellationToken)
@@ -316,11 +366,17 @@ public sealed class GetProjectByIdHandler(IProjectRepository projects)
     }
 }
 
+/// <summary>Lists all projects belonging to a workspace.</summary>
 public sealed class ListWorkspaceProjectsHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the current user to be an active member of the workspace,
+    /// then returns all of that workspace's projects as
+    /// <see cref="ProjectDto"/> instances.
+    /// </summary>
     public async Task<Result<IReadOnlyList<ProjectDto>>> HandleAsync(
         ListWorkspaceProjectsQuery query,
         CancellationToken cancellationToken)
@@ -343,6 +399,7 @@ public sealed class ListWorkspaceProjectsHandler(
     }
 }
 
+/// <summary>Creates a new project scoped to a workspace.</summary>
 public sealed class CreateWorkspaceProjectHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
@@ -350,6 +407,12 @@ public sealed class CreateWorkspaceProjectHandler(
     IIdentifierGenerator identifiers,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the current user to be an active workspace member with the
+    /// Owner or Manager role (Members are forbidden from creating projects),
+    /// and requires a target delivery date. Creates and persists the new
+    /// project on success.
+    /// </summary>
     public async Task<Result<ProjectDto>> HandleAsync(
         CreateWorkspaceProjectCommand command,
         CancellationToken cancellationToken)
@@ -410,6 +473,7 @@ public sealed class CreateWorkspaceProjectHandler(
     }
 }
 
+/// <summary>Adds a new sprint to a project.</summary>
 public sealed class CreateSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
@@ -417,6 +481,12 @@ public sealed class CreateSprintHandler(
     IIdentifierGenerator identifiers,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project to exist and the current user to be a workspace
+    /// owner or manager (via <see cref="ProjectAccess.RequireManagerAsync"/>),
+    /// then adds and persists a new sprint, translating domain
+    /// validation/rule violations into typed failures.
+    /// </summary>
     public async Task<Result<SprintDto>> HandleAsync(
         CreateSprintCommand command,
         CancellationToken cancellationToken)
@@ -461,6 +531,7 @@ public sealed class CreateSprintHandler(
         }
     }
 
+    // Builds a typed failure result for this handler.
     private static Result<SprintDto> Failure(
         string code,
         string description,
@@ -468,12 +539,19 @@ public sealed class CreateSprintHandler(
         Result<SprintDto>.Failure(new ApplicationError(code, description, type));
 }
 
+/// <summary>Updates an existing sprint's name, goal, and dates.</summary>
 public sealed class UpdateSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project and sprint to exist and the current user to be a
+    /// workspace owner or manager (via
+    /// <see cref="SprintAccess.RequireSprintManagerAsync"/>), then applies
+    /// the update and persists it.
+    /// </summary>
     public async Task<Result<SprintDto>> HandleAsync(
         UpdateSprintCommand command,
         CancellationToken cancellationToken)
@@ -511,6 +589,7 @@ public sealed class UpdateSprintHandler(
         }
     }
 
+    // Builds a typed failure result for this handler.
     private static Result<SprintDto> Failure(
         string code,
         string description,
@@ -518,12 +597,19 @@ public sealed class UpdateSprintHandler(
         Result<SprintDto>.Failure(new ApplicationError(code, description, type));
 }
 
+/// <summary>Transitions a sprint from Planned to Active status.</summary>
 public sealed class StartSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project and sprint to exist and the current user to be a
+    /// workspace owner or manager, then starts the sprint, converting a
+    /// domain rule violation (e.g. invalid status transition) into a
+    /// conflict failure.
+    /// </summary>
     public async Task<Result<SprintDto>> HandleAsync(
         ChangeSprintStatusCommand command,
         CancellationToken cancellationToken)
@@ -555,6 +641,7 @@ public sealed class StartSprintHandler(
     }
 }
 
+/// <summary>Transitions a sprint to the Completed status.</summary>
 public sealed class CompleteSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
@@ -562,6 +649,12 @@ public sealed class CompleteSprintHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project and sprint to exist and the current user to be a
+    /// workspace owner or manager, then completes the sprint with the
+    /// current timestamp, converting a domain rule violation into a conflict
+    /// failure.
+    /// </summary>
     public async Task<Result<SprintDto>> HandleAsync(
         ChangeSprintStatusCommand command,
         CancellationToken cancellationToken)
@@ -593,6 +686,7 @@ public sealed class CompleteSprintHandler(
     }
 }
 
+/// <summary>Transitions a sprint to the Cancelled status.</summary>
 public sealed class CancelSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
@@ -600,6 +694,12 @@ public sealed class CancelSprintHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project and sprint to exist and the current user to be a
+    /// workspace owner or manager, then cancels the sprint with the current
+    /// timestamp, converting a domain rule violation into a conflict
+    /// failure.
+    /// </summary>
     public async Task<Result<SprintDto>> HandleAsync(
         ChangeSprintStatusCommand command,
         CancellationToken cancellationToken)
@@ -631,12 +731,19 @@ public sealed class CancelSprintHandler(
     }
 }
 
+/// <summary>Deletes a sprint from a project.</summary>
 public sealed class DeleteSprintHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires the project to exist. Unless
+    /// <see cref="DeleteSprintCommand.HasAdministrativeBypass"/> is set,
+    /// requires the current user to be a workspace owner or manager. Removes
+    /// the sprint, translating a missing sprint into a not-found failure.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         DeleteSprintCommand command,
         CancellationToken cancellationToken)
@@ -684,8 +791,15 @@ public sealed class DeleteSprintHandler(
     }
 }
 
+/// <summary>Shared authorization and lookup checks for sprint-management operations.</summary>
 internal static class SprintAccess
 {
+    /// <summary>
+    /// Resolves the parent project (not-found failure if missing), verifies
+    /// the current user is a workspace owner or manager for it, then resolves
+    /// the sprint within the project (not-found failure if it does not
+    /// exist). Returns the sprint on success.
+    /// </summary>
     public static async Task<Result<Sprint>> RequireSprintManagerAsync(
         Guid projectId,
         Guid sprintId,

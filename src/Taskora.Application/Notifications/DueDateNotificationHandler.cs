@@ -2,18 +2,29 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Application.Notifications;
 
+/// <summary>Command to run the scheduled due-date reminder notification job.</summary>
 public sealed record SendDueDateNotificationsCommand;
 
+/// <summary>Summarizes the outcome of a due-date notification run.</summary>
 public sealed record DueDateNotificationRunDto(
     int TaskReminderCount,
     int ProjectReminderCount,
     int EmailCount);
 
+/// <summary>
+/// Background job handler that emails reminders for tasks and projects whose
+/// deadlines are approaching or have arrived.
+/// </summary>
 public sealed class SendDueDateNotificationsHandler(
     IDueDateNotificationReadRepository notifications,
     INotificationEmailSender emailSender,
     IBusinessDateProvider dates)
 {
+    /// <summary>
+    /// Reads today's due task reminders and project target-date reminders
+    /// from the read repository and emails one reminder per item. Returns
+    /// counts of task reminders, project reminders, and emails sent.
+    /// </summary>
     public async Task<DueDateNotificationRunDto> HandleAsync(
         SendDueDateNotificationsCommand command,
         CancellationToken cancellationToken)
@@ -50,6 +61,7 @@ public sealed class SendDueDateNotificationsHandler(
             emailCount);
     }
 
+    // Composes the reminder email for a single task nearing or at its due date.
     private static NotificationEmailMessage BuildTaskMessage(
         TaskDueNotification reminder)
     {
@@ -76,6 +88,7 @@ public sealed class SendDueDateNotificationsHandler(
             "Please review ownership, update progress, and resolve any blockers before the deadline.");
     }
 
+    // Composes the reminder email for a project whose delivery date is in 24 hours.
     private static NotificationEmailMessage BuildProjectMessage(
         ProjectTargetNotification reminder)
     {

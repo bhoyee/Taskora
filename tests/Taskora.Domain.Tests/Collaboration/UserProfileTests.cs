@@ -4,6 +4,7 @@ using Xunit;
 
 namespace TodoApp.Domain.Tests.Collaboration;
 
+// Tests for UserProfile creation, covering identity normalization (trimming/casing) and email validation.
 public sealed class UserProfileTests
 {
     [Fact]

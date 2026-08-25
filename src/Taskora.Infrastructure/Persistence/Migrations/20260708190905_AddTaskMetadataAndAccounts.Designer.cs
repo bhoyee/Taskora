@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddTaskMetadataAndAccounts migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260708190905_AddTaskMetadataAndAccounts")]
     partial class AddTaskMetadataAndAccounts

@@ -2,8 +2,16 @@ using Microsoft.Extensions.Logging;
 
 namespace TodoApp.Api.Diagnostics;
 
+/// <summary>
+/// Helper for reading well-known values out of the ambient logging scope stack.
+/// </summary>
 internal static class ScopeReader
 {
+    /// <summary>
+    /// Walks the active logging scopes (innermost first, via <see cref="IExternalScopeProvider"/>)
+    /// looking for a "CorrelationId" entry, e.g. as set by <c>CorrelationIdMiddleware</c>.
+    /// Returns the first value found, or null if no scope carries one.
+    /// </summary>
     public static string? FindCorrelationId(IExternalScopeProvider scopeProvider)
     {
         string? correlationId = null;

@@ -3,11 +3,24 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace TodoApp.Api.Diagnostics;
 
+/// <summary>
+/// Global unhandled-exception handler (registered via
+/// <c>AddExceptionHandler&lt;ApiExceptionHandler&gt;</c> and <c>UseExceptionHandler()</c>
+/// in Program.cs) that converts any exception which escapes an endpoint into
+/// a ProblemDetails HTTP response instead of a raw 500/stack trace.
+/// </summary>
 internal sealed class ApiExceptionHandler(
     IProblemDetailsService problemDetails,
     ILogger<ApiExceptionHandler> logger)
     : IExceptionHandler
 {
+    /// <summary>
+    /// Logs the exception (unless it's a client-caused <see cref="BadHttpRequestException"/>)
+    /// and writes a ProblemDetails response: 400 with a generic "malformed
+    /// request" message for bad request bodies, or 500 with a generic
+    /// "unexpected error" message for everything else. Always returns true,
+    /// indicating the exception was handled.
+    /// </summary>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,

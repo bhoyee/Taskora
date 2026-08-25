@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Broader end-to-end coverage of project/sprint/task management beyond the basic contract
+// tests: project update/board/archive, sprint-scoped task creation, task planning fields,
+// dependencies, the full status-transition lifecycle, activity history, search/filtering,
+// and the dashboard summary.
 public sealed class ExtendedEndpointTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
@@ -35,6 +39,7 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.OK, board.StatusCode);
         Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
 
+        // An archived project must reject new task creation.
         var rejectedTask = await _client.PostAsJsonAsync(
             $"/api/v1/projects/{projectId}/tasks",
             new { title = "Too late" });
@@ -76,6 +81,9 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             task.GetProperty("sprintId").GetGuid());
     }
 
+    // Exercises planning fields, dependency add/remove, the full ready->assign->start->
+    // block->unblock->start->complete->reopen status lifecycle, the resulting activity
+    // log, search/filter query params, and the dashboard aggregate counts.
     [Fact]
     public async Task Task_supports_planning_dependencies_and_full_maintenance()
     {
@@ -193,6 +201,8 @@ public sealed class ExtendedEndpointTests(ApiFactory factory)
             .GetGuid();
     }
 
+    // Shorthand for the parameterless task lifecycle action endpoints
+    // (e.g. "ready", "start", "unblock", "complete", "reopen").
     private Task<HttpResponseMessage> PostAsync(
         Guid taskId,
         string action) =>

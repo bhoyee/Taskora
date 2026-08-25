@@ -5,12 +5,21 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Lifecycle;
 
+/// <summary>
+/// Handles <see cref="CompleteTaskCommand"/> by transitioning a task to its completed status.
+/// </summary>
 public sealed class CompleteTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is the assigned worker (only the assignee may
+    /// complete the task), then applies the domain completion rule and persists the change.
+    /// Returns a <see cref="Result{T}"/> with the resulting status on success, or a failure carrying
+    /// a not-found, authorization, or conflict error (e.g. completing from an invalid status).
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         CompleteTaskCommand command,
         CancellationToken cancellationToken)

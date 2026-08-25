@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // Adds SuspendedAt/SuspendedByUserId/SuspendedReason to Workspaces (with
+    // an FK to UserProfiles), supporting an admin workspace suspend/
+    // reactivate feature.
     /// <inheritdoc />
     public partial class SuspendWorkspace : Migration
     {

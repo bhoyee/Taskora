@@ -5,11 +5,33 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository that builds the Kanban board snapshot (status
+/// counts, overdue/at-risk/critical counts, and high-priority blocked
+/// tasks) for a single project.
+/// </summary>
 public sealed class ProjectBoardReadRepository(
     TodoAppDbContext context,
     IClock clock)
     : IProjectBoardReadRepository
 {
+    /// <summary>
+    /// Assembles a <see cref="ProjectBoardSnapshot"/> for the given project by
+    /// combining a grouped status-count query, two raw SQL queries for
+    /// overdue/at-risk task counts, and an EF LINQ query for critical and
+    /// high-priority-blocked tasks.
+    /// The overdue and at-risk counts use <c>SqlQueryRaw</c> against the
+    /// <c>Tasks</c> table directly (parameterized, so it is safe from
+    /// injection) rather than LINQ, since the same date-comparison logic is
+    /// simplest expressed as raw SQL that works identically against both the
+    /// Postgres and SQLite providers.
+    /// The priority and dependency lookups use <c>EF.Property</c> to reach
+    /// the shadow/backing fields <c>_priority</c> and <c>_dependencies</c>,
+    /// which are not exposed as public navigation/properties on
+    /// <see cref="TaskItem"/>; <c>_dependencies</c> additionally requires an
+    /// explicit <c>Include("_dependencies")</c> because it is not an owned
+    /// navigation and would not otherwise be loaded.
+    /// </summary>
     public async Task<ProjectBoardSnapshot> GetAsync(
         Guid projectId,
         CancellationToken cancellationToken)

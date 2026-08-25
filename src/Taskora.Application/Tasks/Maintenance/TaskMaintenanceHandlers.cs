@@ -6,10 +6,18 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Maintenance;
 
+/// <summary>
+/// Handles <see cref="MoveTaskToReadyCommand"/> by moving a task back to the ready-to-start state.
+/// </summary>
 public sealed class MoveTaskToReadyHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Applies the domain's move-to-ready rule via <see cref="TaskMutationExecutor"/> and persists
+    /// the change. Returns a <see cref="Result{T}"/> with the resulting status on success, or a
+    /// failure carrying a not-found, validation, or conflict error.
+    /// </summary>
     public Task<Result<TaskItemStatus>> HandleAsync(
         MoveTaskToReadyCommand command,
         CancellationToken cancellationToken) =>
@@ -21,11 +29,21 @@ public sealed class MoveTaskToReadyHandler(
             cancellationToken);
 }
 
+/// <summary>
+/// Handles <see cref="UpdateTaskCommand"/> by updating a task's title, due date, effort estimate,
+/// and sprint assignment.
+/// </summary>
 public sealed class UpdateTaskHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Loads the task and, when a sprint is requested, verifies that sprint belongs to the task's
+    /// project before applying the rename/reschedule/re-estimate/sprint-assignment changes. Returns
+    /// a <see cref="Result{T}"/> with the resulting status on success, or a failure carrying a
+    /// not-found, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         UpdateTaskCommand command,
         CancellationToken cancellationToken)
@@ -75,11 +93,20 @@ public sealed class UpdateTaskHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="BlockTaskCommand"/> by marking a task as blocked with a recorded reason.
+/// </summary>
 public sealed class BlockTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is the assigned worker (only the assignee may
+    /// block their own task), then applies the domain block rule and persists the change. Returns a
+    /// <see cref="Result{T}"/> with the resulting status on success, or a failure carrying a
+    /// not-found, authorization, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         BlockTaskCommand command,
         CancellationToken cancellationToken)
@@ -107,6 +134,10 @@ public sealed class BlockTaskHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="UnblockTaskCommand"/> by clearing a task's blocked status, restricting who may
+/// do so to the assignee, creator, or a workspace owner/manager.
+/// </summary>
 public sealed class UnblockTaskHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
@@ -114,6 +145,12 @@ public sealed class UnblockTaskHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is authorized to clear its blocker (see
+    /// <see cref="EnsureCanClearBlockerAsync"/>), then applies the domain unblock rule and persists
+    /// the change. Returns a <see cref="Result{T}"/> with the resulting status on success, or a
+    /// failure carrying a not-found, authorization, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         UnblockTaskCommand command,
         CancellationToken cancellationToken)
@@ -140,6 +177,9 @@ public sealed class UnblockTaskHandler(
             cancellationToken);
     }
 
+    // Authorizes clearing a task's blocker: allowed for the assignee, the creator, or a workspace
+    // owner/manager; denied otherwise (including when the user is not signed in, or the project or
+    // workspace cannot be resolved).
     private async Task<Result<bool>> EnsureCanClearBlockerAsync(
         TaskItem task,
         CancellationToken cancellationToken)
@@ -193,11 +233,20 @@ public sealed class UnblockTaskHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="ResumeTaskCommand"/> by resuming a paused task's active work.
+/// </summary>
 public sealed class ResumeTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is the assigned worker (only the assignee may
+    /// resume their own task), then applies the domain resume rule and persists the change. Returns
+    /// a <see cref="Result{T}"/> with the resulting status on success, or a failure carrying a
+    /// not-found, authorization, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         ResumeTaskCommand command,
         CancellationToken cancellationToken)
@@ -225,10 +274,18 @@ public sealed class ResumeTaskHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="ReopenTaskCommand"/> by reopening a completed or closed task.
+/// </summary>
 public sealed class ReopenTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Applies the domain's reopen rule via <see cref="TaskMutationExecutor"/> and persists the
+    /// change. Returns a <see cref="Result{T}"/> with the resulting status on success, or a failure
+    /// carrying a not-found, validation, or conflict error.
+    /// </summary>
     public Task<Result<TaskItemStatus>> HandleAsync(
         ReopenTaskCommand command,
         CancellationToken cancellationToken) =>
@@ -240,11 +297,20 @@ public sealed class ReopenTaskHandler(
             cancellationToken);
 }
 
+/// <summary>
+/// Handles <see cref="DeleteTaskCommand"/> by permanently removing a task, restricted to the task's
+/// creator.
+/// </summary>
 public sealed class DeleteTaskHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is signed in and is the task's creator, then
+    /// removes the task and persists the change. Returns a <see cref="Result{T}"/> of
+    /// <see langword="true"/> on success, or a failure carrying a not-found or forbidden error.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         DeleteTaskCommand command,
         CancellationToken cancellationToken)
@@ -277,11 +343,21 @@ public sealed class DeleteTaskHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="UpdatePlanningFactorsCommand"/> by updating a task's prioritization inputs,
+/// restricted to the task's creator.
+/// </summary>
 public sealed class UpdatePlanningFactorsHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, verifies the current user is signed in and (when the task has a recorded
+    /// creator) is that creator, then applies the new planning factors and persists the change.
+    /// Returns a <see cref="Result{T}"/> with the resulting status on success, or a failure carrying
+    /// a not-found, forbidden, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskItemStatus>> HandleAsync(
         UpdatePlanningFactorsCommand command,
         CancellationToken cancellationToken)
@@ -322,10 +398,18 @@ public sealed class UpdatePlanningFactorsHandler(
     }
 }
 
+/// <summary>
+/// Handles <see cref="RemoveTaskDependencyCommand"/> by removing a dependency link from a task.
+/// </summary>
 public sealed class RemoveTaskDependencyHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Applies the domain's remove-dependency rule via <see cref="TaskMutationExecutor"/> and
+    /// persists the change. Returns a <see cref="Result{T}"/> with the resulting status on success,
+    /// or a failure carrying a not-found, validation, or conflict error.
+    /// </summary>
     public Task<Result<TaskItemStatus>> HandleAsync(
         RemoveTaskDependencyCommand command,
         CancellationToken cancellationToken) =>

@@ -4,9 +4,27 @@ using TodoApp.Domain.Collaboration;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository backing the platform admin views: cross-workspace
+/// summaries and per-project task counts, aggregated across the whole
+/// database rather than scoped to a single workspace or project.
+/// </summary>
 public sealed class PlatformReadRepository(TodoAppDbContext context)
     : IPlatformReadRepository
 {
+    /// <summary>
+    /// Builds a summary row per workspace (owner info, role counts, project/
+    /// sprint/task counts) for the platform admin dashboard. Runs several
+    /// independent aggregate queries (owners by id, membership role counts
+    /// grouped by workspace+role, and project/sprint/task counts grouped by
+    /// workspace) and stitches them together client-side by dictionary
+    /// lookup, rather than a single large join, to keep each grouped
+    /// aggregate query simple and independently cacheable. Sprint and task
+    /// counts are computed via an explicit <c>Join</c> to <c>Projects</c>
+    /// because neither <c>Sprint</c> nor <c>TaskItem</c> carries a direct
+    /// workspace id. All queries use <c>AsNoTracking()</c> since this is a
+    /// pure reporting read.
+    /// </summary>
     public async Task<IReadOnlyList<PlatformWorkspaceSummary>> ListWorkspaceSummariesAsync(
         CancellationToken cancellationToken)
     {
@@ -107,6 +125,11 @@ public sealed class PlatformReadRepository(TodoAppDbContext context)
         }).ToArray();
     }
 
+    /// <summary>
+    /// Returns a task-count-per-project dictionary for the given project ids
+    /// via a grouped <c>AsNoTracking()</c> query; returns an empty dictionary
+    /// without querying if no project ids are supplied.
+    /// </summary>
     public async Task<IReadOnlyDictionary<Guid, int>> GetTaskCountsByProjectAsync(
         IReadOnlyCollection<Guid> projectIds,
         CancellationToken cancellationToken)

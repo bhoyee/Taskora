@@ -2,15 +2,26 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Application.Intelligence;
 
+/// <summary>
+/// Query for a workspace activity/report snapshot over an optional date
+/// range, optionally narrowed to a single project.
+/// </summary>
 public sealed record GetWorkspaceReportQuery(
     Guid WorkspaceId,
     DateOnly? From,
     DateOnly? To,
     Guid? ProjectId = null);
 
+/// <summary>Builds workspace reporting snapshots for a given date range.</summary>
 public sealed class GetWorkspaceReportHandler(
     IWorkspaceReportReadRepository reports)
 {
+    /// <summary>
+    /// Validates that a workspace identifier was supplied and, when both
+    /// bounds are given, that the date range is not inverted (throws
+    /// <see cref="ArgumentException"/> otherwise), then delegates to the read
+    /// repository to build the workspace report snapshot.
+    /// </summary>
     public Task<WorkspaceReportSnapshot> HandleAsync(
         GetWorkspaceReportQuery query,
         CancellationToken cancellationToken)

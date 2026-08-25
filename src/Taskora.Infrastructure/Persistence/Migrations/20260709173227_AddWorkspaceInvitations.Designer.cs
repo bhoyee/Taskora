@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddWorkspaceInvitations migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260709173227_AddWorkspaceInvitations")]
     partial class AddWorkspaceInvitations

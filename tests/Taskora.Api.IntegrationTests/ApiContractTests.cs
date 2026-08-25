@@ -5,6 +5,9 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Smoke-tests the core HTTP contract for projects and tasks: successful creation/retrieval
+// shapes, the create-to-complete task lifecycle, and RFC 7807 problem-details responses for
+// not-found, validation, and unmapped-route errors.
 public sealed class ApiContractTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
@@ -118,6 +121,8 @@ public sealed class ApiContractTests(ApiFactory factory)
             response.Content.Headers.ContentType?.MediaType);
     }
 
+    // Creates a fresh workspace and then a project inside it, since projects cannot
+    // be created without an owning workspace.
     private async Task<Guid> CreateProjectAsync()
     {
         var workspace = await _client.PostAsJsonAsync(

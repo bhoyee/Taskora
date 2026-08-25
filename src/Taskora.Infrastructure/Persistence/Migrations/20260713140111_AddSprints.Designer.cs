@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // EF Core design-time model snapshot paired with the AddSprints migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260713140111_AddSprints")]
     partial class AddSprints

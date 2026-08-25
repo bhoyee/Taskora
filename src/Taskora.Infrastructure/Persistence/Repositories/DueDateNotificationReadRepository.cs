@@ -5,10 +5,26 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository that computes due-date reminder notifications for
+/// tasks and projects. Queries here are analytical/reporting in nature and
+/// do not track entities, so results are plain snapshot values rather than
+/// domain aggregates.
+/// </summary>
 public sealed class DueDateNotificationReadRepository(
     TodoAppDbContext context)
     : IDueDateNotificationReadRepository
 {
+    /// <summary>
+    /// Finds incomplete tasks whose due date falls today, tomorrow, or two
+    /// days out, and resolves the email recipients (creator and assignee)
+    /// for each. The candidate task set and reminder-date filter are
+    /// evaluated in memory after the initial <c>AsNoTracking()</c> query
+    /// because <c>DueDate</c> comparisons involving <see cref="DateOnly"/>
+    /// equality against an in-memory array are done client-side; only tasks
+    /// with a non-null due date and a non-completed status are pulled from
+    /// the database first to keep the transferred set small.
+    /// </summary>
     public async Task<IReadOnlyList<TaskDueNotification>> GetTaskDueNotificationsAsync(
         DateOnly today,
         CancellationToken cancellationToken)
@@ -69,6 +85,15 @@ public sealed class DueDateNotificationReadRepository(
             .ToArray();
     }
 
+    /// <summary>
+    /// Finds active (non-archived) projects whose target/delivery date is
+    /// exactly one day away, then resolves Owner and Manager workspace
+    /// members as the notification recipients via an explicit join between
+    /// <c>WorkspaceMemberships</c> and <c>UserProfiles</c> (no navigation
+    /// property is used, so the join is written by hand with LINQ
+    /// <c>Join</c>). Both queries use <c>AsNoTracking()</c> since results
+    /// are read-only projections.
+    /// </summary>
     public async Task<IReadOnlyList<ProjectTargetNotification>> GetProjectTargetNotificationsAsync(
         DateOnly today,
         CancellationToken cancellationToken)

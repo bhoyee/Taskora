@@ -4,6 +4,7 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Tests.Projects;
 
+// Tests for the Sprint aggregate lifecycle (planned/active/completed), Project-Sprint management, and TaskItem sprint assignment.
 public sealed class SprintTests
 {
     private static readonly Guid ProjectId =
@@ -79,6 +80,7 @@ public sealed class SprintTests
         Assert.Equal("Only planned sprints can be edited.", exception.Message);
     }
 
+    // Sprint name uniqueness within a project ignores case and surrounding whitespace.
     [Fact]
     public void Project_AddSprint_WhenNameAlreadyExists_ThrowsDomainRuleException()
     {

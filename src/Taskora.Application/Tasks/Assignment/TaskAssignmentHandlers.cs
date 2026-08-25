@@ -5,10 +5,21 @@ using TodoApp.Domain.Collaboration;
 
 namespace TodoApp.Application.Tasks.Assignment;
 
+/// <summary>
+/// Command requesting that the task identified by <see cref="TaskId"/> be assigned to
+/// <see cref="UserId"/>.
+/// </summary>
 public sealed record AssignTaskCommand(Guid TaskId, Guid UserId);
 
+/// <summary>
+/// Command requesting that the task identified by <see cref="TaskId"/> be unassigned.
+/// </summary>
 public sealed record UnassignTaskCommand(Guid TaskId);
 
+/// <summary>
+/// Handles <see cref="AssignTaskCommand"/> by assigning a task to a workspace member, restricted to
+/// workspace owners/managers, and notifying the new assignee by email.
+/// </summary>
 public sealed class AssignTaskHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
@@ -18,6 +29,13 @@ public sealed class AssignTaskHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, its project, and workspace, verifying the current user is an active,
+    /// non-suspended workspace owner or manager and that the requested assignee is a workspace
+    /// member. On success, assigns the task, persists the change, and best-effort emails the new
+    /// assignee a notification. Returns a <see cref="Result{T}"/> of <see langword="true"/> on
+    /// success, or a failure carrying a not-found, forbidden, or validation error.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         AssignTaskCommand command,
         CancellationToken cancellationToken)
@@ -74,10 +92,12 @@ public sealed class AssignTaskHandler(
         return Result<bool>.Success(true);
     }
 
+    // Standard "task not found" failure, shared with UnassignTaskHandler.
     internal static Result<bool> NotFound() =>
         Result<bool>.Failure(new ApplicationError(
             "task.not_found", "The task was not found.", ErrorType.NotFound));
 
+    // Standard "insufficient role" failure, shared with UnassignTaskHandler.
     internal static Result<bool> Forbidden() =>
         Result<bool>.Failure(new ApplicationError(
             "assignment.forbidden",
@@ -85,6 +105,10 @@ public sealed class AssignTaskHandler(
             ErrorType.Forbidden));
 }
 
+/// <summary>
+/// Handles <see cref="UnassignTaskCommand"/> by clearing a task's assignee, restricted to active,
+/// non-suspended workspace owners/managers.
+/// </summary>
 public sealed class UnassignTaskHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
@@ -92,6 +116,12 @@ public sealed class UnassignTaskHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the task, its project, and workspace, verifying the current user is an active,
+    /// non-suspended workspace owner or manager, then unassigns the task and persists the change.
+    /// Returns a <see cref="Result{T}"/> of <see langword="true"/> on success, or a failure carrying
+    /// a not-found or forbidden error.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         UnassignTaskCommand command,
         CancellationToken cancellationToken)

@@ -4,6 +4,7 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Tests.Tasks;
 
+// Tests for the DueDate and EffortEstimate value objects, and their effects when applied to TaskItem and Project.
 public sealed class SchedulingValueObjectTests
 {
     [Fact]
@@ -25,6 +26,7 @@ public sealed class SchedulingValueObjectTests
         Assert.Equal("Due date is required.", exception.Message);
     }
 
+    // Only these five Fibonacci-like sizes are valid effort estimates.
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -65,6 +67,7 @@ public sealed class SchedulingValueObjectTests
         Assert.True(isOverdue);
     }
 
+    // A completed task is never considered overdue, regardless of how far past the due date it is.
     [Fact]
     public void IsOverdue_WhenTaskIsCompleted_ReturnsFalse()
     {

@@ -3,6 +3,11 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Projects;
 
+/// <summary>
+/// A time-boxed iteration of work within a <see cref="Project"/>. Tracks its own
+/// lifecycle (planned -> active -> completed/cancelled) and only allows edits to
+/// its name/goal/dates while still in the planned state.
+/// </summary>
 public sealed class Sprint
 {
     private Sprint(
@@ -50,6 +55,7 @@ public sealed class Sprint
 
     public DateTimeOffset? ClosedAt { get; private set; }
 
+    /// <summary>Creates a new sprint in the <see cref="SprintStatus.Planned"/> state.</summary>
     public static Sprint Create(
         Guid id,
         Guid projectId,
@@ -59,6 +65,7 @@ public sealed class Sprint
         DateOnly endDate) =>
         new(id, projectId, name, goal, startDate, endDate);
 
+    /// <summary>Updates the sprint's details. Only permitted while the sprint is still planned.</summary>
     public void Update(
         string name,
         string? goal,
@@ -73,12 +80,14 @@ public sealed class Sprint
         EndDate = endDate;
     }
 
+    /// <summary>Transitions the sprint from planned to active.</summary>
     public void Start()
     {
         EnsureStatus(SprintStatus.Planned, "Only a planned sprint can be started.");
         Status = SprintStatus.Active;
     }
 
+    /// <summary>Transitions an active sprint to completed, recording the close time.</summary>
     public void Complete(DateTimeOffset closedAt)
     {
         EnsureStatus(SprintStatus.Active, "Only an active sprint can be completed.");
@@ -86,6 +95,10 @@ public sealed class Sprint
         ClosedAt = closedAt;
     }
 
+    /// <summary>
+    /// Cancels the sprint, provided it has not already been closed (completed or
+    /// previously cancelled) — a closed sprint's outcome is final.
+    /// </summary>
     public void Cancel(DateTimeOffset closedAt)
     {
         if (Status is SprintStatus.Completed or SprintStatus.Cancelled)
@@ -97,9 +110,12 @@ public sealed class Sprint
         ClosedAt = closedAt;
     }
 
+    /// <summary>True if the given due date falls within this sprint's start/end window (inclusive).</summary>
     public bool Contains(DueDate dueDate) =>
         dueDate.Value >= StartDate && dueDate.Value <= EndDate;
 
+    // Sprint details can only change while still in the Planned state, to avoid
+    // rewriting the scope/timeline of a sprint that is already underway or closed.
     private void EnsureEditable()
     {
         if (Status != SprintStatus.Planned)
@@ -109,6 +125,7 @@ public sealed class Sprint
         }
     }
 
+    // Guards a status transition, requiring the sprint to currently be in requiredStatus.
     private void EnsureStatus(SprintStatus requiredStatus, string message)
     {
         if (Status != requiredStatus)

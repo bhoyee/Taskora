@@ -5,6 +5,9 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Application.Tests.Notifications;
 
+// Covers SendPersonalTodoCarryOverNotificationsHandler, which rolls overdue
+// personal todos forward to the current business date and emails their
+// owners a summary of what carried over.
 public sealed class PersonalTodoCarryOverNotificationHandlerTests
 {
     private static readonly DateTimeOffset Now =
@@ -62,6 +65,8 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
             StringComparison.Ordinal);
     }
 
+    // IPersonalTodoRepository stub that serves a fixed set of overdue todos
+    // and their owners; all other members are no-ops/empty results.
     private sealed class StubPersonalTodoRepository(
         IReadOnlyList<PersonalTodo> overdueTodos,
         IReadOnlyList<PersonalTodoOwner> owners)
@@ -111,6 +116,7 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
             Task.CompletedTask;
     }
 
+    // INotificationEmailSender fake that records every message sent.
     private sealed class RecordingEmailSender : INotificationEmailSender
     {
         public List<NotificationEmailMessage> Messages { get; } = [];
@@ -124,6 +130,7 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         }
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -135,11 +142,13 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         }
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
     }
 
+    // IBusinessDateProvider stub returning a fixed "today" business date.
     private sealed class StubBusinessDateProvider(DateOnly today)
         : IBusinessDateProvider
     {
@@ -148,6 +157,8 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
         public string TimeZoneId => "Europe/London";
     }
 
+    // IDailyRoutineRepository fake with no seeded routines, used here only
+    // to satisfy the routine-generation handler's dependency.
     private sealed class EmptyDailyRoutineRepository : IDailyRoutineRepository
     {
         public Task AddAsync(
@@ -184,6 +195,7 @@ public sealed class PersonalTodoCarryOverNotificationHandlerTests
             Task.CompletedTask;
     }
 
+    // IIdentifierGenerator stub producing random identifiers.
     private sealed class StubIdentifierGenerator : IIdentifierGenerator
     {
         public Guid NewId() => Guid.NewGuid();

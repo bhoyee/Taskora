@@ -4,10 +4,20 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Application.Tasks.Lifecycle;
 
+/// <summary>
+/// Handles <see cref="AddTaskDependencyCommand"/> by linking one task as a prerequisite of another.
+/// </summary>
 public sealed class AddTaskDependencyHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Loads the target task and the proposed dependency, then delegates to the domain to enforce
+    /// dependency rules (e.g. no self- or circular dependencies) before persisting the change.
+    /// Returns a <see cref="Result{T}"/> that fails with a not-found error if either task does not
+    /// exist, or with a conflict/validation error if the domain rejects the dependency; otherwise
+    /// succeeds with <see langword="true"/>.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         AddTaskDependencyCommand command,
         CancellationToken cancellationToken)

@@ -2,6 +2,11 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Domain.Todos;
 
+/// <summary>
+/// Aggregate root describing a recurring personal todo template: a title/notes/priority
+/// paired with an active date range, used to generate one <see cref="PersonalTodo"/>
+/// instance per eligible calendar day.
+/// </summary>
 public sealed class DailyRoutine
 {
     private DailyRoutine(
@@ -62,6 +67,7 @@ public sealed class DailyRoutine
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    /// <summary>Creates a new, active daily routine.</summary>
     public static DailyRoutine Create(
         Guid id,
         Guid userId,
@@ -82,6 +88,7 @@ public sealed class DailyRoutine
             isActive: true,
             createdAt);
 
+    /// <summary>Updates the routine's editable fields, including its active flag and date range.</summary>
     public void Update(
         string title,
         string? notes,
@@ -101,12 +108,22 @@ public sealed class DailyRoutine
         ValidateDateRange();
     }
 
+    /// <summary>
+    /// True if a todo should be generated for the given date: the routine must be
+    /// active, the date must fall within its start/end range, and a todo must not
+    /// already have been generated for that exact date (idempotency guard).
+    /// </summary>
     public bool ShouldGenerateFor(DateOnly businessDate) =>
         IsActive &&
         businessDate >= StartDate &&
         (EndDate is null || businessDate <= EndDate.Value) &&
         LastGeneratedDate != businessDate;
 
+    /// <summary>
+    /// Generates a new <see cref="PersonalTodo"/> for the given date, re-validating
+    /// eligibility via <see cref="ShouldGenerateFor"/> and updating
+    /// <see cref="LastGeneratedDate"/> to prevent duplicate generation for the same date.
+    /// </summary>
     public PersonalTodo GenerateTodo(
         Guid todoId,
         DateOnly businessDate,
@@ -131,6 +148,7 @@ public sealed class DailyRoutine
             generatedAt);
     }
 
+    // Ensures the optional end date, if set, is not before the start date.
     private void ValidateDateRange()
     {
         if (EndDate.HasValue && EndDate.Value < StartDate)
@@ -140,6 +158,7 @@ public sealed class DailyRoutine
         }
     }
 
+    // Trims the title and enforces it is present and within the 160-character limit.
     private static string NormalizeTitle(string title)
     {
         var normalized = title.Trim();

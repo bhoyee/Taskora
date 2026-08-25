@@ -1,7 +1,18 @@
 namespace TodoApp.Application.Abstractions;
 
+/// <summary>
+/// Read-only repository that aggregates task and project data into a single
+/// portfolio dashboard snapshot for reporting purposes.
+/// </summary>
 public interface IPortfolioDashboardReadRepository
 {
+    /// <summary>
+    /// Builds a portfolio dashboard snapshot, optionally scoped to a specific workspace and/or project.
+    /// </summary>
+    /// <param name="workspaceId">The workspace to scope the snapshot to, or null to include all workspaces.</param>
+    /// <param name="projectId">The project to scope the snapshot to, or null to include all projects.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The aggregated portfolio dashboard snapshot.</returns>
     Task<PortfolioDashboardSnapshot> GetAsync(
         Guid? workspaceId,
         Guid? projectId,

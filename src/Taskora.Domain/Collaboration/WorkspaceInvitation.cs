@@ -2,8 +2,15 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Domain.Collaboration;
 
+/// <summary>
+/// Aggregate root representing an outstanding invitation for someone to join a
+/// workspace with a specific role. Tracks its own lifecycle (pending, accepted,
+/// declined, cancelled, or expired) and enforces that an invitation cannot grant
+/// the <see cref="WorkspaceRole.Owner"/> role.
+/// </summary>
 public sealed class WorkspaceInvitation
 {
+    // Reserved for ORM materialization; domain code must use the factory method.
     private WorkspaceInvitation()
     {
     }
@@ -77,9 +84,14 @@ public sealed class WorkspaceInvitation
 
     public DateTimeOffset? RespondedAt { get; private set; }
 
+    /// <summary>True if the invitation is still awaiting a response and has not expired as of <paramref name="now"/>.</summary>
     public bool IsPending(DateTimeOffset now) =>
         Status == WorkspaceInvitationStatus.Pending && ExpiresAt > now;
 
+    /// <summary>
+    /// Creates a new pending invitation. Rejects <see cref="WorkspaceRole.Owner"/> since
+    /// ownership cannot be granted via invitation.
+    /// </summary>
     public static WorkspaceInvitation Create(
         Guid id,
         Guid workspaceId,
@@ -101,6 +113,7 @@ public sealed class WorkspaceInvitation
             createdAt,
             expiresAt);
 
+    /// <summary>Accepts the invitation, provided it is still pending and unexpired.</summary>
     public void Accept(DateTimeOffset acceptedAt)
     {
         EnsurePending(acceptedAt);
@@ -108,6 +121,7 @@ public sealed class WorkspaceInvitation
         RespondedAt = acceptedAt;
     }
 
+    /// <summary>Declines the invitation, provided it is still pending and unexpired.</summary>
     public void Decline(DateTimeOffset declinedAt)
     {
         EnsurePending(declinedAt);
@@ -115,6 +129,7 @@ public sealed class WorkspaceInvitation
         RespondedAt = declinedAt;
     }
 
+    /// <summary>Cancels the invitation (e.g. withdrawn by the inviter), provided it is still pending and unexpired.</summary>
     public void Cancel(DateTimeOffset cancelledAt)
     {
         EnsurePending(cancelledAt);
@@ -122,6 +137,10 @@ public sealed class WorkspaceInvitation
         RespondedAt = cancelledAt;
     }
 
+    /// <summary>
+    /// Transitions a still-pending invitation to <see cref="WorkspaceInvitationStatus.Expired"/>
+    /// once its expiry has passed. No-op if the invitation has already been resolved.
+    /// </summary>
     public void MarkExpired(DateTimeOffset expiredAt)
     {
         if (Status == WorkspaceInvitationStatus.Pending &&
@@ -132,6 +151,8 @@ public sealed class WorkspaceInvitation
         }
     }
 
+    // Lazily expires the invitation if its window has passed, then guards that any
+    // response (accept/decline/cancel) can only happen while still pending.
     private void EnsurePending(DateTimeOffset now)
     {
         MarkExpired(now);
@@ -143,6 +164,7 @@ public sealed class WorkspaceInvitation
         }
     }
 
+    // Trims a required string field, rejecting blank values with the given message.
     private static string NormalizeRequired(string value, string message)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -153,6 +175,7 @@ public sealed class WorkspaceInvitation
         return value.Trim();
     }
 
+    // Trims, requires, lowercases, and sanity-checks the invitee email contains '@'.
     private static string NormalizeEmail(string email)
     {
         var normalized = NormalizeRequired(

@@ -4,6 +4,7 @@ using TodoApp.Domain.Tasks.Events;
 
 namespace TodoApp.Domain.Tests.Tasks;
 
+// Tests verifying TaskItem records a TaskStatusChangedDomainEvent on successful status transitions, and not on failed ones.
 public sealed class TaskItemDomainEventTests
 {
     [Fact]

@@ -2,8 +2,19 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Api.Endpoints;
 
+/// <summary>
+/// Translates application-layer <see cref="Result{T}"/> values into minimal-API
+/// <see cref="IResult"/> responses, so every endpoint maps errors to HTTP
+/// status codes/ProblemDetails consistently.
+/// </summary>
 internal static class ApiResult
 {
+    /// <summary>
+    /// Converts a <see cref="Result{T}"/> into an HTTP response: 200 OK with
+    /// the value on success, or a ProblemDetails response (with a status code
+    /// derived from <see cref="ErrorType"/> and the error code in the
+    /// "code" extension) on failure.
+    /// </summary>
     public static IResult From<T>(Result<T> result)
     {
         if (result.IsSuccess)
@@ -31,6 +42,7 @@ internal static class ApiResult
             });
     }
 
+    // Maps an ErrorType to a human-readable ProblemDetails title.
     private static string TitleFor(ErrorType type) =>
         type switch
         {

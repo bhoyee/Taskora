@@ -6,9 +6,14 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Verifies authentication and role-based authorization across workspaces, tasks, and the
+// super-admin operations endpoint: unauthenticated requests are rejected, membership is
+// scoped per user, and Member/Manager/Owner roles get the expected Forbidden/OK outcomes.
 public sealed class SecurityContractTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
+    // Fixed GUIDs matching the users/workspace/task seeded by the application host in the
+    // Development environment (see ApiFactory), so each test can act as a specific role.
     private static readonly Guid OwnerId =
         Guid.Parse("30000000-0000-0000-0000-000000000001");
     private static readonly Guid MemberId =
@@ -137,6 +142,9 @@ public sealed class SecurityContractTests(ApiFactory factory)
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(summary.GetProperty("isSuperAdmin").GetBoolean());
+        // "Degraded" is expected here: the test host runs with SMTP and CORS origins
+        // unconfigured and Development header authentication enabled, each of which
+        // reports Degraded rather than Healthy.
         Assert.Equal(
             "Degraded",
             summary.GetProperty("overallHealth").GetString());

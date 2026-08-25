@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds PasswordResetTokenHash/PasswordResetTokenExpiresAt to UserCredentials,
+    // supporting a self-service "forgot password" reset flow.
     /// <inheritdoc />
     public partial class AddPasswordResetTokens : Migration
     {

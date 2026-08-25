@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds a PersonalTodos table (per-user, date-scoped todo items with completion
+    // tracking) to support a personal to-do list feature separate from project tasks.
     /// <inheritdoc />
     public partial class AddPersonalTodos : Migration
     {

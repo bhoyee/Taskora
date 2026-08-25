@@ -4,12 +4,31 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository that assembles the portfolio dashboard snapshot
+/// (project/task counts, status/priority/deadline breakdowns, and
+/// notification-style warnings) optionally scoped to a workspace and/or
+/// project.
+/// </summary>
 public sealed class PortfolioDashboardReadRepository(
     TodoAppDbContext context,
     ICurrentUser currentUser,
     IBusinessDateProvider dates)
     : IPortfolioDashboardReadRepository
 {
+    /// <summary>
+    /// Builds the full <see cref="PortfolioDashboardSnapshot"/>: task/project
+    /// counts, blocked/critical counts (via <c>EF.Property</c> access to the
+    /// shadow <c>_priority</c> and <c>_dependencies</c> fields on
+    /// <see cref="TaskItem"/>, since those aren't public navigations),
+    /// status/priority/deadline breakdowns computed client-side after
+    /// pulling a flat projection of all in-scope tasks, and due-soon/
+    /// assigned-to-me/carried-over-todo warnings. All queries use
+    /// <c>AsNoTracking()</c> as this is a pure read model; workspace/project
+    /// scoping is applied by filtering on <c>Projects</c> via a correlated
+    /// <c>Any()</c> subquery rather than a navigation, since <see cref="TaskItem"/>
+    /// does not expose a direct project navigation property.
+    /// </summary>
     public async Task<PortfolioDashboardSnapshot> GetAsync(
         Guid? workspaceId,
         Guid? projectId,
@@ -206,6 +225,9 @@ public sealed class PortfolioDashboardReadRepository(
                 .ToArray());
     }
 
+    // Builds a single summarized warning (if any) for the current user's
+    // My Day todos that were carried over from an earlier date into today,
+    // sampling up to three titles for the message text.
     private async Task<IReadOnlyCollection<DashboardWarning>> BuildPersonalTodoCarryOverWarningsAsync(
         DateOnly today,
         CancellationToken cancellationToken)

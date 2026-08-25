@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds task categorization/organization (ProjectCategories, TaskTags, TaskNotes,
+    // and a CategoryId on Tasks) plus UserCredentials for local password-based login.
     /// <inheritdoc />
     public partial class AddTaskMetadataAndAccounts : Migration
     {

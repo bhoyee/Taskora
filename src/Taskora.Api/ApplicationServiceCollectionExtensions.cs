@@ -16,8 +16,20 @@ using TodoApp.Application.Todos;
 
 namespace TodoApp.Api;
 
+/// <summary>
+/// Wires up dependency injection for the application layer's use-case
+/// handlers (one per command/query across accounts, workspaces, projects,
+/// tasks, notifications, and personal todos).
+/// </summary>
 internal static class ApplicationServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers every application-layer command/query handler as a scoped
+    /// service so minimal-API endpoints can request them via DI. Grouped
+    /// loosely by feature area (accounts/workspaces, projects/sprints,
+    /// tasks, personal todos) but each line is otherwise an independent
+    /// <c>AddScoped</c> registration.
+    /// </summary>
     public static IServiceCollection AddApplicationUseCases(
         this IServiceCollection services)
     {

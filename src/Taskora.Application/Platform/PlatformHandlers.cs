@@ -4,10 +4,13 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Application.Platform;
 
+/// <summary>Query to list summaries of every workspace on the platform, for platform-administration views.</summary>
 public sealed record ListPlatformWorkspacesQuery;
 
+/// <summary>Query for the detailed platform-administration view of a single workspace.</summary>
 public sealed record GetPlatformWorkspaceDetailQuery(Guid WorkspaceId);
 
+/// <summary>Summarizes a project's size for the platform workspace detail view.</summary>
 public sealed record PlatformProjectSummaryDto(
     Guid ProjectId,
     string ProjectName,
@@ -15,6 +18,7 @@ public sealed record PlatformProjectSummaryDto(
     int SprintCount,
     int TaskCount);
 
+/// <summary>Detailed platform-administration view of a workspace: its members, projects, and dashboard.</summary>
 public sealed record PlatformWorkspaceDetailDto(
     Guid WorkspaceId,
     string WorkspaceName,
@@ -25,8 +29,15 @@ public sealed record PlatformWorkspaceDetailDto(
     IReadOnlyList<PlatformProjectSummaryDto> Projects,
     PortfolioDashboardSnapshot Dashboard);
 
+/// <summary>Lists summaries of every workspace on the platform, for platform-administration views.</summary>
 public sealed class ListPlatformWorkspacesHandler(IPlatformReadRepository platform)
 {
+    /// <summary>
+    /// Returns a summary of every workspace on the platform. This is an
+    /// administrative read with no per-workspace membership checks; access
+    /// control is expected to be enforced by the caller (e.g. a
+    /// platform-admin-only endpoint).
+    /// </summary>
     public async Task<Result<IReadOnlyList<PlatformWorkspaceSummary>>> HandleAsync(
         ListPlatformWorkspacesQuery query,
         CancellationToken cancellationToken)
@@ -36,6 +47,7 @@ public sealed class ListPlatformWorkspacesHandler(IPlatformReadRepository platfo
     }
 }
 
+/// <summary>Builds the detailed platform-administration view of a single workspace.</summary>
 public sealed class GetPlatformWorkspaceDetailHandler(
     IWorkspaceRepository workspaces,
     IProjectRepository projects,
@@ -43,6 +55,13 @@ public sealed class GetPlatformWorkspaceDetailHandler(
     IPortfolioDashboardReadRepository dashboard,
     GetWorkspaceMembersHandler members)
 {
+    /// <summary>
+    /// Requires the workspace to exist, then assembles its member list (via
+    /// <see cref="GetWorkspaceMembersHandler"/> with the administrative
+    /// bypass, since this is a platform-admin view), its projects with task
+    /// counts, and its portfolio dashboard snapshot into a single
+    /// <see cref="PlatformWorkspaceDetailDto"/>.
+    /// </summary>
     public async Task<Result<PlatformWorkspaceDetailDto>> HandleAsync(
         GetPlatformWorkspaceDetailQuery query,
         CancellationToken cancellationToken)

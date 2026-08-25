@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddTaskCreatedAt migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260704152438_AddTaskCreatedAt")]
     partial class AddTaskCreatedAt

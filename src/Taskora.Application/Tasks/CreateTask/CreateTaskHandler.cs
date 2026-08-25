@@ -5,6 +5,10 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.CreateTask;
 
+/// <summary>
+/// Handles <see cref="CreateTaskCommand"/> by creating a new task within a project, applying any
+/// optional scheduling, effort, sprint, and planning-factor data supplied on the command.
+/// </summary>
 public sealed class CreateTaskHandler(
     IProjectRepository projects,
     ITaskRepository tasks,
@@ -13,6 +17,13 @@ public sealed class CreateTaskHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Loads the target project, verifies it can accept new tasks and that any requested sprint
+    /// belongs to it, then creates the task, records the creator when authenticated, applies
+    /// optional scheduling/effort/sprint/planning-factor data, and persists it. Returns a
+    /// <see cref="Result{T}"/> with the created task's <see cref="TaskDto"/> on success, or a
+    /// failure carrying a not-found, validation, or conflict error.
+    /// </summary>
     public async Task<Result<TaskDto>> HandleAsync(
         CreateTaskCommand command,
         CancellationToken cancellationToken)
@@ -101,6 +112,7 @@ public sealed class CreateTaskHandler(
         }
     }
 
+    // Projects a domain TaskItem into its application-layer DTO representation.
     private static TaskDto ToDto(TaskItem task) =>
         new(
             task.Id,

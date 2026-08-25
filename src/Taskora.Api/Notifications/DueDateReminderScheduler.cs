@@ -2,6 +2,14 @@ using TodoApp.Application.Notifications;
 
 namespace TodoApp.Api.Notifications;
 
+/// <summary>
+/// Background hosted service that periodically sends due-date reminder
+/// notifications (tasks/projects) and personal-todo carry-over alerts.
+/// Enabled/interval are read from configuration
+/// ("Notifications:Scheduler:Enabled"/"IntervalMinutes"), and progress is
+/// published to <see cref="DueDateReminderSchedulerStatus"/> for the
+/// Operations dashboard/API to surface.
+/// </summary>
 public sealed class DueDateReminderScheduler(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
@@ -9,6 +17,14 @@ public sealed class DueDateReminderScheduler(
     ILogger<DueDateReminderScheduler> logger)
     : BackgroundService
 {
+    /// <summary>
+    /// Entry point invoked by the host when the service starts. Reads
+    /// configuration, records the initial status, runs one pass immediately,
+    /// and then runs again on every tick of a <see cref="PeriodicTimer"/>
+    /// until <paramref name="stoppingToken"/> is cancelled. If the scheduler
+    /// is disabled via configuration, it records that and returns without
+    /// running anything.
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var enabled = ReadBool(
@@ -102,9 +118,13 @@ public sealed class DueDateReminderScheduler(
         }
     }
 
+    // Parses a config value as bool, falling back to defaultValue when
+    // missing or unparseable.
     private static bool ReadBool(string? value, bool defaultValue) =>
         bool.TryParse(value, out var result) ? result : defaultValue;
 
+    // Parses a config value as int, falling back to defaultValue when
+    // missing or unparseable.
     private static int ReadInt(string? value, int defaultValue) =>
         int.TryParse(value, out var result) ? result : defaultValue;
 }

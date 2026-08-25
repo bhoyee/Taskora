@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddTaskActivityActor migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260704152543_AddTaskActivityActor")]
     partial class AddTaskActivityActor

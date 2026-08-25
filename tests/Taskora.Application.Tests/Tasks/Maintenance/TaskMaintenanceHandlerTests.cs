@@ -7,6 +7,10 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Tasks.Maintenance;
 
+// Covers the task maintenance handlers: status housekeeping (move to ready,
+// block/unblock/resume, reopen, delete), field updates, planning-factor
+// updates, and dependency removal, including their ownership/role-based
+// authorization rules.
 public sealed class TaskMaintenanceHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
@@ -308,6 +312,9 @@ public sealed class TaskMaintenanceHandlerTests
         Assert.Equal(0, context.UnitOfWork.SaveCount);
     }
 
+    // A task created before creator-tracking existed has no CreatedByUserId
+    // recorded; the handler must still let any user set planning factors
+    // for the first time on such a legacy task.
     [Fact]
     public async Task UpdatePlanningFactors_WhenLegacyTaskHasNoCreator_AllowsPlanningInitialization()
     {
@@ -407,6 +414,9 @@ public sealed class TaskMaintenanceHandlerTests
         Assert.Equal("task.not_found", result.Error.Code);
     }
 
+    // Builds a full set of test doubles (task repository seeded with the
+    // given tasks, plus a workspace with a manager and a member, and its
+    // project) wired together, since most handlers here need all four.
     private static TestContext CreateContext(params TaskItem[] tasks)
     {
         var workspace = Workspace.Create(WorkspaceId, "Portfolio delivery", UserId);
@@ -424,6 +434,8 @@ public sealed class TaskMaintenanceHandlerTests
     private static TaskItem CreateTask() =>
         TaskItem.Create(Guid.NewGuid(), ProjectId, "Publish portfolio");
 
+    // Builds a task assigned to UserId and advanced through Ready into
+    // InProgress, the precondition several maintenance handlers require.
     private static TaskItem CreateInProgressTask()
     {
         var task = CreateTask();
@@ -433,12 +445,16 @@ public sealed class TaskMaintenanceHandlerTests
         return task;
     }
 
+    // Groups the test doubles produced by CreateContext for convenient
+    // destructuring in each test.
     private sealed record TestContext(
         InMemoryTaskRepository Tasks,
         StubProjectRepository Projects,
         StubWorkspaceRepository Workspaces,
         RecordingUnitOfWork UnitOfWork);
 
+    // In-memory ITaskRepository fake that also exposes WasRemoved for
+    // asserting deletions.
     private sealed class InMemoryTaskRepository(params TaskItem[] tasks)
         : ITaskRepository
     {
@@ -472,6 +488,7 @@ public sealed class TaskMaintenanceHandlerTests
         public bool WasRemoved(Guid taskId) => !_tasks.ContainsKey(taskId);
     }
 
+    // IProjectRepository stub backed by a single optional project.
     private sealed class StubProjectRepository(Project? project)
         : IProjectRepository
     {
@@ -499,6 +516,7 @@ public sealed class TaskMaintenanceHandlerTests
                     : []);
     }
 
+    // IWorkspaceRepository stub backed by a single optional workspace.
     private sealed class StubWorkspaceRepository(Workspace? workspace)
         : IWorkspaceRepository
     {
@@ -526,6 +544,7 @@ public sealed class TaskMaintenanceHandlerTests
                     : []);
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -537,6 +556,7 @@ public sealed class TaskMaintenanceHandlerTests
         }
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class TestCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;

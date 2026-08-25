@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds a WorkspaceInvitations table (token, role, expiry, status) to support
+    // inviting new members to a workspace by email.
     /// <inheritdoc />
     public partial class AddWorkspaceInvitations : Migration
     {

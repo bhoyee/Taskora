@@ -5,6 +5,9 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Application.Tests.Todos;
 
+// Covers ListPersonalTodosHandler's carry-over behavior: listing a future
+// date must leave stale todos untouched, while listing today's date must
+// roll incomplete overdue todos forward and notify their owner by email.
 public sealed class PersonalTodoHandlerTests
 {
     private static readonly DateTimeOffset Now =
@@ -46,6 +49,9 @@ public sealed class PersonalTodoHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    // Querying with today's date (the default when no explicit date is
+    // passed) should trigger carry-over of yesterday's incomplete todo and
+    // email its owner.
     [Fact]
     public async Task List_SendsCarryOverEmailWhenTodayFallbackMovesTodos()
     {
@@ -95,6 +101,9 @@ public sealed class PersonalTodoHandlerTests
             StringComparison.Ordinal);
     }
 
+    // IPersonalTodoRepository fake that serves seeded todos/owners for
+    // search and per-user carry-over lookups, tracking how many times the
+    // per-user carry-over lookup was invoked.
     private sealed class StubPersonalTodoRepository(
         IReadOnlyList<PersonalTodo> searchTodos,
         IReadOnlyList<PersonalTodoOwner>? owners = null)
@@ -157,6 +166,7 @@ public sealed class PersonalTodoHandlerTests
             Task.CompletedTask;
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -168,6 +178,7 @@ public sealed class PersonalTodoHandlerTests
         }
     }
 
+    // INotificationEmailSender fake that records every message sent.
     private sealed class RecordingEmailSender : INotificationEmailSender
     {
         public List<NotificationEmailMessage> Messages { get; } = [];
@@ -181,11 +192,13 @@ public sealed class PersonalTodoHandlerTests
         }
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
     }
 
+    // IBusinessDateProvider stub returning a fixed "today" business date.
     private sealed class StubBusinessDateProvider(DateOnly today)
         : IBusinessDateProvider
     {
@@ -194,6 +207,7 @@ public sealed class PersonalTodoHandlerTests
         public string TimeZoneId => "Europe/London";
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;
@@ -201,6 +215,9 @@ public sealed class PersonalTodoHandlerTests
         public Guid UserId { get; } = userId;
     }
 
+    // Wires a GenerateDailyRoutineTodosHandler dependency required by
+    // ListPersonalTodosHandler, backed by an empty routine repository since
+    // these tests aren't exercising routine generation.
     private static GenerateDailyRoutineTodosHandler CreateRoutineGenerator(
         IPersonalTodoRepository todos,
         IUnitOfWork unitOfWork) =>
@@ -212,6 +229,8 @@ public sealed class PersonalTodoHandlerTests
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)));
 
+    // IDailyRoutineRepository fake with no seeded routines, used here only
+    // to satisfy the routine-generation handler's dependency.
     private sealed class EmptyDailyRoutineRepository : IDailyRoutineRepository
     {
         public Task AddAsync(
@@ -248,6 +267,7 @@ public sealed class PersonalTodoHandlerTests
             Task.CompletedTask;
     }
 
+    // IIdentifierGenerator stub producing random identifiers.
     private sealed class StubIdentifierGenerator : IIdentifierGenerator
     {
         public Guid NewId() => Guid.NewGuid();

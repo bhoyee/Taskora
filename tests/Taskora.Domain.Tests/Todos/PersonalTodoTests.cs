@@ -3,6 +3,7 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Domain.Tests.Todos;
 
+// Tests for PersonalTodo: creation, completion/reopen, carry-over to another date, and comments.
 public sealed class PersonalTodoTests
 {
     private static readonly Guid TodoId =
@@ -65,6 +66,7 @@ public sealed class PersonalTodoTests
         Assert.Equal(Now.AddHours(2), todo.UpdatedAt);
     }
 
+    // A single carry-over keeps OriginalTodoDate and CarriedOverFromDate equal, since both still point at the todo's first date.
     [Fact]
     public void CarryOverTo_WhenTodoIsIncomplete_MovesTodoAndKeepsOriginalDate()
     {

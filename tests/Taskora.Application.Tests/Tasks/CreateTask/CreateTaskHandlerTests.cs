@@ -6,6 +6,8 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Tasks.CreateTask;
 
+// Covers CreateTaskHandler: creating a task under an existing project,
+// validation of the title, and rejecting creation under archived projects.
 public sealed class CreateTaskHandlerTests
 {
     private static readonly Guid ProjectId =
@@ -112,6 +114,8 @@ public sealed class CreateTaskHandlerTests
         Assert.Equal("Task title is required.", result.Error.Description);
     }
 
+    // Wires a CreateTaskHandler with fixed identifier/clock/user stubs so
+    // each test only needs to vary the repositories and unit of work.
     private static CreateTaskHandler CreateHandler(
         IProjectRepository projects,
         ITaskRepository tasks,
@@ -124,11 +128,13 @@ public sealed class CreateTaskHandlerTests
             new StubClock(Now),
             new StubCurrentUser(UserId));
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
     }
 
+    // IProjectRepository stub backed by a single optional project.
     private sealed class StubProjectRepository(Project? project)
         : IProjectRepository
     {
@@ -154,6 +160,8 @@ public sealed class CreateTaskHandlerTests
                 project is null ? [] : [project]);
     }
 
+    // ITaskRepository fake that records the task passed to AddAsync so
+    // tests can assert on what the handler created.
     private sealed class RecordingTaskRepository : ITaskRepository
     {
         public TaskItem? AddedTask { get; private set; }
@@ -188,6 +196,8 @@ public sealed class CreateTaskHandlerTests
         }
     }
 
+    // IUnitOfWork fake that counts saves and records the cancellation token
+    // it was called with for assertions.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -202,12 +212,14 @@ public sealed class CreateTaskHandlerTests
         }
     }
 
+    // IIdentifierGenerator stub returning a fixed, known identifier.
     private sealed class StubIdentifierGenerator(Guid identifier)
         : IIdentifierGenerator
     {
         public Guid NewId() => identifier;
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;

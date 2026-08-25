@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddTaskCreatorAndNotifications migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260710193521_AddTaskCreatorAndNotifications")]
     partial class AddTaskCreatorAndNotifications

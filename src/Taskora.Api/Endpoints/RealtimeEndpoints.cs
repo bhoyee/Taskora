@@ -4,14 +4,25 @@ using TodoApp.Application.Abstractions;
 
 namespace TodoApp.Api.Endpoints;
 
+/// <summary>
+/// Registers the Server-Sent Events (SSE) route that streams live workspace
+/// activity to connected clients.
+/// </summary>
 internal static class RealtimeEndpoints
 {
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
+    /// <summary>Maps the realtime workspace event stream route.</summary>
     public static IEndpointRouteBuilder MapRealtimeEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
+        // GET /api/v1/workspaces/{workspaceId}/events
+        // Requires authentication. Opens a long-lived text/event-stream
+        // connection and pushes workspace notifications as they occur; the
+        // caller must be a member of the workspace
+        // (200 SSE stream kept open until the client disconnects, 404 if the
+        // workspace does not exist or the caller is not a member).
         endpoints.MapGet(
                 "/api/v1/workspaces/{workspaceId:guid}/events",
                 StreamWorkspaceEventsAsync)
@@ -24,6 +35,10 @@ internal static class RealtimeEndpoints
         return endpoints;
     }
 
+    // Handler for GET /api/v1/workspaces/{workspaceId}/events. Verifies
+    // workspace membership, then subscribes to the broadcaster and streams
+    // each notification to the client as an SSE "event"/"data" pair until
+    // the request is cancelled (client disconnects).
     private static async Task<IResult> StreamWorkspaceEventsAsync(
         Guid workspaceId,
         ICurrentUser currentUser,

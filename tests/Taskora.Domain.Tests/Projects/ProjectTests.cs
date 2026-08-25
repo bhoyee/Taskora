@@ -3,6 +3,7 @@ using TodoApp.Domain.Projects;
 
 namespace TodoApp.Domain.Tests.Projects;
 
+// Tests for Project aggregate creation, renaming/description updates, and archival rules.
 public sealed class ProjectTests
 {
     private static readonly Guid ProjectId =

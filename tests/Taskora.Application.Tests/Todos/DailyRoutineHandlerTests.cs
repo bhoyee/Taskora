@@ -4,6 +4,9 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Application.Tests.Todos;
 
+// Covers daily routine handlers: creating a routine and generating today's
+// personal todo from due routines, including idempotency (no duplicate
+// todo generated for a routine/date pair already processed).
 public sealed class DailyRoutineHandlerTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
@@ -75,6 +78,8 @@ public sealed class DailyRoutineHandlerTests
         Assert.Equal(TodoPriority.High, todos.Items[0].Priority);
     }
 
+    // In-memory IDailyRoutineRepository fake backed by a mutable list of
+    // routines, optionally pre-seeded.
     private sealed class RecordingDailyRoutineRepository(
         IReadOnlyList<DailyRoutine>? seed = null)
         : IDailyRoutineRepository
@@ -126,6 +131,8 @@ public sealed class DailyRoutineHandlerTests
         }
     }
 
+    // In-memory IPersonalTodoRepository fake backed by a mutable list of
+    // todos, used here to observe todos generated from routines.
     private sealed class RecordingPersonalTodoRepository : IPersonalTodoRepository
     {
         public List<PersonalTodo> Items { get; } = [];
@@ -180,22 +187,27 @@ public sealed class DailyRoutineHandlerTests
         }
     }
 
+    // IUnitOfWork fake that just completes; no save-count tracking needed
+    // by these tests.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public Task SaveChangesAsync(CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
 
+    // IIdentifierGenerator stub producing random identifiers.
     private sealed class SequentialIdentifierGenerator : IIdentifierGenerator
     {
         public Guid NewId() => Guid.NewGuid();
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
     }
 
+    // IBusinessDateProvider stub returning a fixed "today" business date.
     private sealed class StubBusinessDateProvider(DateOnly today)
         : IBusinessDateProvider
     {
@@ -204,6 +216,7 @@ public sealed class DailyRoutineHandlerTests
         public string TimeZoneId => "Europe/London";
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;

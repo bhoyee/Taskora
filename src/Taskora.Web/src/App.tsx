@@ -40,6 +40,8 @@ type TaskDrilldown = 'all' | 'active' | 'critical' | 'blocked' | 'overdue'
 const views: View[] = ['home', 'tasks', 'myday', 'routines', 'projects', 'sprints', 'board', 'reports', 'calendar', 'activity', 'team', 'profile', 'operations', 'backups', 'platform']
 const todoPriorities: TodoPriority[] = ['Low', 'Medium', 'High', 'Critical']
 
+// Parses the URL hash into a known View, defaulting to 'home' for empty/unknown values
+// and mapping legacy hash aliases ('workspace', 'todos', 'my-day') to their current view.
 function viewFromHash(hash: string): View {
   const value = hash.replace('#', '').toLowerCase()
   if (value === 'workspace' || value === '') return 'home'
@@ -66,6 +68,8 @@ type NotificationItem = DashboardWarning & {
   read: boolean
 }
 
+// Reads and JSON-parses a value from localStorage, shallow-merging it onto the fallback
+// object so newly added fields still get sensible defaults; falls back silently on any error.
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const value = localStorage.getItem(key)
@@ -75,6 +79,7 @@ function readLocal<T>(key: string, fallback: T): T {
   }
 }
 
+// Loads the set of task IDs the given user has pinned, stored per-user in localStorage.
 function readPinnedTasks(userId: string) {
   if (!userId) return new Set<string>()
   try {
@@ -85,6 +90,7 @@ function readPinnedTasks(userId: string) {
   }
 }
 
+// Loads the set of project IDs the given user has pinned, stored per-user in localStorage.
 function readPinnedProjects(userId: string) {
   if (!userId) return new Set<string>()
   try {
@@ -95,6 +101,8 @@ function readPinnedProjects(userId: string) {
   }
 }
 
+// Builds a stable, deduplicated id for a dashboard warning by joining its identifying fields,
+// used to track read/unread state across renders since warnings don't carry their own id.
 function notificationId(warning: DashboardWarning) {
   return [
     warning.type,
@@ -105,6 +113,8 @@ function notificationId(warning: DashboardWarning) {
   ].join('|')
 }
 
+// Synthesizes a dashboard-style warning summarizing My Day todos that were carried over
+// (rolled forward from an earlier date) into the selected date and are still incomplete.
 function carryOverNotificationFromTodos(
   todos: PersonalTodo[],
   selectedDate: string,
@@ -140,14 +150,17 @@ function carryOverNotificationFromTodos(
   }]
 }
 
+// Builds the localStorage key used to track which notifications a user has read, per workspace.
 function notificationReadKey(userId: string, workspaceId: string) {
   return `todoapp_read_notifications_${userId || 'anonymous'}_${workspaceId || 'workspace'}`
 }
 
+// Builds the localStorage key used to track whether a user has already seen the onboarding dialog.
 function onboardingSeenKey(userId: string) {
   return `todoapp_onboarding_seen_${userId || 'development'}`
 }
 
+// Loads the set of notification ids the user has already marked read for a given workspace.
 function readStoredNotificationIds(userId: string, workspaceId: string) {
   try {
     const value = localStorage.getItem(notificationReadKey(userId, workspaceId))
@@ -157,6 +170,8 @@ function readStoredNotificationIds(userId: string, workspaceId: string) {
   }
 }
 
+// Maps each allowed board status transition (Backlog -> Ready -> InProgress -> ...) to the
+// API action name and optional request body used to perform it when a card is dragged.
 const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   action: string
   body?: object
@@ -177,6 +192,8 @@ const boardTransitions: Partial<Record<TaskStatus, Partial<Record<TaskStatus, {
   Completed: { Ready: { action: 'reopen' } },
 }
 
+// Determines whether the current user is permitted to drag a task from its current status
+// to the target status, based on the allowed transition table plus role/assignment rules.
 function canMoveTask(
   task: TaskItem,
   target: TaskStatus,
@@ -198,10 +215,13 @@ function canMoveTask(
   return false
 }
 
+// Only workspace Owners and Managers are allowed to create/edit/delete projects.
 function canManageProjects(workspaceRole?: Workspace['role'] | null) {
   return workspaceRole === 'Owner' || workspaceRole === 'Manager'
 }
 
+// Fetches all tasks for the board view by paging through the tasks API until every page
+// has been retrieved, since the board needs the full result set rather than one page at a time.
 async function loadBoardTasks(
   workspaceId: string,
   search: string,
@@ -254,6 +274,7 @@ const activityTypes = [
   'NoteAdded',
 ] as const
 
+/** Renders the Taskora logo mark as an inline SVG, sized via the optional `size` prop. */
 function BrandMark({ size = 30 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 32 32" role="img" aria-label="Taskora">
     <rect width="32" height="32" rx="7" fill="#147d68" />
@@ -263,6 +284,14 @@ function BrandMark({ size = 30 }: { size?: number }) {
   </svg>
 }
 
+/**
+ * Root application component. Owns all top-level state (auth/session, workspace data,
+ * tasks/todos/projects/sprints, dashboard, notifications, dialogs, and the active View)
+ * and renders either the public/auth pages or the authenticated app shell with routing
+ * driven by the URL hash (see `viewFromHash`). Most of the app's data fetching, mutation
+ * handlers, and dialog open/close state live here and are passed down as props to the
+ * page and dialog components defined later in this file.
+ */
 export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [taskTotal, setTaskTotal] = useState(0)
@@ -361,17 +390,22 @@ export default function App() {
     setOnboardingOpen(false)
   }
 
+  // Re-read pinned tasks/projects from localStorage whenever the logged-in user changes,
+  // since pins are stored per-user.
   useEffect(() => {
     setPinnedTaskIds(readPinnedTasks(currentUserId || account?.userId || ''))
     setPinnedProjectIds(readPinnedProjects(currentUserId || account?.userId || ''))
   }, [currentUserId, account?.userId])
 
+  // Re-read which notifications have been marked read whenever the user or workspace changes,
+  // since read-state is stored per-user-per-workspace.
   useEffect(() => {
     setReadNotificationIds(readStoredNotificationIds(
       currentUserId || account?.userId || '',
       workspace?.id ?? selectedWorkspaceId))
   }, [currentUserId, account?.userId, workspace?.id, selectedWorkspaceId])
 
+  // Shows the onboarding dialog once per user, the first time they arrive while logged in.
   useEffect(() => {
     if (loggedOut || !activeUserId) return
     if (localStorage.getItem(onboardingSeenKey(activeUserId)) === 'true') return
@@ -379,6 +413,11 @@ export default function App() {
     setOnboardingOpen(true)
   }, [activeUserId, loggedOut])
 
+  // Loads the full workspace snapshot: workspaces, projects/categories, dashboard summary,
+  // report, current page of tasks (or all tasks when on the board view), members, invitations,
+  // activity feed, current user profile, and operations summary. Also reconciles the selected
+  // workspace/project/sprint against what's actually available. `silent` skips toggling the
+  // page-level loading spinner, used for background polling refreshes.
   const load = async (options: { silent?: boolean } = {}) => {
     const silent = options.silent === true
     try {
@@ -456,6 +495,8 @@ export default function App() {
     }
   }
 
+  // Loads the page of My Day todos for the given date/search/page, and derives any
+  // carry-over notification for todos rolled forward from an earlier date.
   const loadTodos = async (
     date = todoDate,
     search = todoSearch,
@@ -479,6 +520,7 @@ export default function App() {
     }
   }
 
+  // Loads the current page of the user's daily routines.
   const loadDailyRoutines = async (
     pageNumber = dailyRoutinePageNumber,
   ) => {
@@ -500,7 +542,10 @@ export default function App() {
     }
   }
 
+  // Reloads workspace data whenever the active view, pagination, search, workspace,
+  // project, sprint, or activity filter changes.
   useEffect(() => { void load() }, [view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityType])
+  // Resets the "load more" activity pagination whenever the workspace or activity filter changes.
   useEffect(() => {
     setActivityMore([])
     setActivityMorePage(1)
@@ -513,11 +558,15 @@ export default function App() {
     if (loggedOut) return
     void loadDailyRoutines(dailyRoutinePageNumber)
   }, [dailyRoutinePageNumber, loggedOut])
+  // Polls the workspace snapshot every 15s in the background (silent, no spinner) so the
+  // dashboard/board stay reasonably fresh even without a live event arriving.
   useEffect(() => {
     if (loading || loggedOut) return undefined
     const interval = window.setInterval(() => void load({ silent: true }), 15000)
     return () => window.clearInterval(interval)
   }, [loading, loggedOut, view, pageNumber, search, selectedWorkspaceId, selectedProjectId, selectedSprintId, activityType])
+  // Subscribes to the workspace's server-sent event stream and triggers a debounced silent
+  // reload whenever an event arrives, so changes from other users/tabs show up quickly.
   useEffect(() => {
     if (!selectedWorkspaceId || loading || loggedOut) return undefined
 
@@ -545,6 +594,8 @@ export default function App() {
       controller.abort()
     }
   }, [selectedWorkspaceId, loading, loggedOut, view, pageNumber, search, selectedProjectId, selectedSprintId, activityType])
+  // Fetches the workspace report (and its notifications) whenever the Reports view is active
+  // and the date range or workspace changes; clears the report when navigating away.
   useEffect(() => {
     if (view !== 'reports' || !workspace) {
       setReport(null)
@@ -571,6 +622,8 @@ export default function App() {
       cancelled = true
     }
   }, [view, workspace?.id, reportFrom, reportTo])
+  // Keeps `view` in sync with the URL hash for both back/forward navigation (popstate)
+  // and direct hash edits, and runs once on mount to pick up the initial hash.
   useEffect(() => {
     const syncViewFromHash = () => setView(viewFromHash(window.location.hash))
     window.addEventListener('hashchange', syncViewFromHash)
@@ -584,6 +637,8 @@ export default function App() {
   const visible = useMemo(() => filterTasksByDrilldown(tasks, drilldown), [tasks, drilldown])
   const filteredTaskTotal = drilldown === 'all' ? taskTotal : visible.length
   const totalPages = Math.max(1, Math.ceil(filteredTaskTotal / pageSize))
+  // Merges workspace warnings and todo carry-over warnings into a single notification list,
+  // tagging each with a stable id and whether the user has already read it.
   const notificationItems = useMemo<NotificationItem[]>(
     () => [...notifications, ...todoNotifications].map((warning) => {
       const id = notificationId(warning)
@@ -914,6 +969,8 @@ export default function App() {
       setWorkspaceDeleteBusy(false)
     }
   }
+  // Moves a task to a new board status optimistically (updating local state and the
+  // dashboard counts immediately) then calls the API; rolls both back on failure.
   const moveTask = async (task: TaskItem, target: TaskStatus) => {
     if (target === task.status) return
     const previousTasks = tasks
@@ -1098,6 +1155,9 @@ export default function App() {
     }
   }
 
+  // Routing gate: an invitation link always takes over the page regardless of auth state,
+  // otherwise an unauthenticated user (or explicit logout) sees the public landing/auth page
+  // instead of the app shell. Dev mode is allowed through without a stored token.
   if (inviteToken) {
     return <InvitationPage token={inviteToken} onAuthenticated={authenticated} />
   }
@@ -1531,6 +1591,7 @@ export default function App() {
   )
 }
 
+// Derives up to two-letter initials from a display name, used for avatar badges; falls back to 'U'.
 function initials(name: string) {
   return name
     .split(' ')
@@ -1540,6 +1601,7 @@ function initials(name: string) {
     .join('') || 'U'
 }
 
+// Extracts the invitation token from a `/invite/{token}` URL path, or '' if not on that route.
 function inviteTokenFromPath() {
   const match = window.location.pathname.match(/^\/invite\/([^/]+)$/i)
   return match ? decodeURIComponent(match[1]) : ''
@@ -1584,6 +1646,11 @@ const onboardingSlides = [
   },
 ]
 
+/**
+ * First-run onboarding modal that walks the user through `onboardingSlides` one at a time.
+ * `step` is controlled by the parent; skipping, completing, or closing all mark onboarding
+ * as seen (persisted in localStorage by the caller) so it won't show again for this user.
+ */
 function OnboardingDialog({
   step,
   onStepChange,
@@ -1641,6 +1708,10 @@ function OnboardingDialog({
   </div>
 }
 
+/**
+ * Unauthenticated entry point: shows the marketing landing page by default, or hands off
+ * to `AuthPage` in login/register mode once the user picks an action from the nav/hero.
+ */
 function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
   const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing')
 
@@ -1714,6 +1785,11 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
   </main>
 }
 
+/**
+ * Combined login/register/forgot-password/reset-password form. `mode` drives which fields
+ * render and which API call `submit` makes; `initialMode` lets the parent deep-link into
+ * login or register (re-synced via effect if the parent changes it after mount).
+ */
 function AuthPage({
   initialMode = 'login',
   onBack,
@@ -1729,10 +1805,13 @@ function AuthPage({
   const [notice, setNotice] = useState('')
   const [resetEmail, setResetEmail] = useState('')
 
+  // Keeps internal mode in sync if the parent switches initialMode (e.g. landing page
+  // nav buttons re-rendering AuthPage with a different initial tab).
   useEffect(() => {
     setMode(initialMode)
   }, [initialMode])
 
+  // Handles all four auth form submissions (login, register, forgot, reset) based on `mode`.
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setBusy(true)
@@ -1814,6 +1893,10 @@ function AuthPage({
   </main>
 }
 
+/**
+ * Landing page for a `/invite/{token}` link. Loads the invitation details on mount, then
+ * lets the visitor accept (signing them in/up and joining the workspace) or decline.
+ */
 function InvitationPage({
   token,
   onAuthenticated,
@@ -1826,6 +1909,7 @@ function InvitationPage({
   const [error, setError] = useState('')
   const [declined, setDeclined] = useState(false)
 
+  // Loads the invitation details for display whenever the token in the URL changes.
   useEffect(() => {
     api.invitation(token)
       .then(setInvitation)
@@ -1897,6 +1981,11 @@ function InvitationPage({
   </main>
 }
 
+/**
+ * Topbar dropdown for switching between the user's workspaces, with inline create/rename/
+ * delete forms swapped in for the select control depending on `creating`/`editing` state.
+ * Rename/delete are only available to Owners (or a super admin).
+ */
 function WorkspaceSwitcher({
   workspaces,
   selectedWorkspaceId,
@@ -1993,6 +2082,7 @@ function WorkspaceSwitcher({
   </div>
 }
 
+/** Sidebar list of up to 4 pinned projects (with a delivery-status dot), with a count of any extra pinned projects. */
 function PinnedProjects({
   projects,
   pinnedProjectIds,
@@ -2025,6 +2115,11 @@ function PinnedProjects({
   </section>
 }
 
+/**
+ * Header bar shown on the Tasks/Board pages for picking the active project and sprint,
+ * with inline create/edit project forms, pin toggling, and archive/delete actions gated
+ * by `canCreateProject` (Owner/Manager only for creation; parent gates archive/delete similarly).
+ */
 function ProjectBar({
   projects,
   selectedProjectId,
@@ -2187,6 +2282,8 @@ function ProjectBar({
   </section>
 }
 
+// Computes a human label and severity tone (healthy/warning/critical) for how close/overdue
+// a delivery date is relative to today, or null if there's no delivery date.
 function deliveryStatus(deliveryDate: string | null) {
   if (!deliveryDate) return null
   const today = new Date()
@@ -2200,6 +2297,7 @@ function deliveryStatus(deliveryDate: string | null) {
   return { label: `${days} days left`, tone: 'healthy' }
 }
 
+// Formats a date-only or ISO datetime string as a localized date, or a fallback label if missing/invalid.
 function formatDate(value?: string | null) {
   if (!value) return 'Not recorded'
   const date = value.includes('T')
@@ -2208,16 +2306,20 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString()
 }
 
+// Formats a byte count as a human-readable B/KB/MB string.
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / 1024 / 1024).toFixed(1)} MB`
 }
 
+// Escapes a single CSV field, quoting and doubling internal quotes when it contains
+// a comma, quote, or newline.
 function csvField(value: string) {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
 }
 
+// Serializes a list of report tasks into CSV text (with header row) for export/download.
 function tasksToCsv(tasks: WorkspaceReportTask[]) {
   const header = ['Task', 'Project', 'Status', 'Due date', 'Completed at', 'Priority band', 'Priority score', 'Tags']
   const rows = tasks.map((task) => [
@@ -2235,6 +2337,8 @@ function tasksToCsv(tasks: WorkspaceReportTask[]) {
     .join('\r\n')
 }
 
+// Triggers a browser download of text content by creating a temporary Blob URL and
+// programmatically clicking a hidden anchor; adds a UTF-8 BOM for spreadsheet compatibility.
 function downloadTextFile(filename: string, content: string, mimeType: string) {
   const blob = new Blob(['\ufeff' + content], { type: mimeType })
   const url = URL.createObjectURL(blob)
@@ -2247,6 +2351,7 @@ function downloadTextFile(filename: string, content: string, mimeType: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Confirmation dialog for permanently deleting a task; disables actions while `busy`. */
 function TaskDeleteDialog({
   task,
   busy,
@@ -2287,6 +2392,7 @@ function TaskDeleteDialog({
   </div>
 }
 
+/** Confirmation dialog for permanently deleting a personal todo; disables actions while `busy`. */
 function TodoDeleteDialog({
   todo,
   busy,
@@ -2324,6 +2430,10 @@ function TodoDeleteDialog({
   </div>
 }
 
+/**
+ * Confirmation dialog for permanently deleting a project. Requires the user to type the
+ * project's exact name into a confirmation field before the delete button is enabled.
+ */
 function ProjectDeleteDialog({
   project,
   busy,
@@ -2376,6 +2486,10 @@ function ProjectDeleteDialog({
   </div>
 }
 
+/**
+ * Confirmation dialog for permanently deleting a workspace. Requires the user to type the
+ * workspace's exact name into a confirmation field before the delete button is enabled.
+ */
 function WorkspaceDeleteDialog({
   workspace,
   busy,
@@ -2428,6 +2542,10 @@ function WorkspaceDeleteDialog({
   </div>
 }
 
+/**
+ * Grid view of all projects in the workspace with pagination, pin toggling, and a
+ * details dialog (`ProjectDetailsDialog`) opened by clicking a card via `selectedProject`.
+ */
 function ProjectsPage({
   workspaceId,
   projects,
@@ -2474,11 +2592,13 @@ function ProjectsPage({
     (projectPage - 1) * projectPageSize,
     projectPage * projectPageSize)
 
+  // Clamps the current page back within range if the project list shrinks (e.g. after a delete).
   useEffect(() => {
     if (projectPage > totalProjectPages) {
       setProjectPage(totalProjectPages)
     }
   }, [projectPage, totalProjectPages])
+  // Closes the details dialog if its project was removed from the list (e.g. deleted elsewhere).
   useEffect(() => {
     if (selectedProject && !projects.some((project) => project.id === selectedProject.id)) {
       setSelectedProject(null)
@@ -2583,6 +2703,11 @@ function ProjectsPage({
   </section>
 }
 
+/**
+ * Read-only drill-down dialog for one project: delivery date, task status counts, its
+ * sprints, and its full task list. Fetches all of the project's tasks itself on mount
+ * (independent of the parent's paginated/filtered task list).
+ */
 function ProjectDetailsDialog({
   workspaceId,
   project,
@@ -2596,6 +2721,7 @@ function ProjectDetailsDialog({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Loads every task for this project (across all statuses/sprints) when the dialog opens.
   useEffect(() => {
     let mounted = true
     setLoading(true)
@@ -2711,6 +2837,10 @@ function ProjectDetailsDialog({
   </div>
 }
 
+/**
+ * Sprint planning page: project selector/bar plus a `SprintPanel` for the active project's
+ * sprints, letting users create, edit, change status, or delete sprints.
+ */
 function SprintsPage({
   workspaceId,
   projects,
@@ -2831,6 +2961,11 @@ function SprintsPage({
   </section>
 }
 
+/**
+ * Manages the list of sprints for one project: create/edit form, status transitions
+ * (start/complete/cancel), deletion, and a details dialog per sprint. `composerToken`
+ * is bumped by the parent to force-open the create form (e.g. from a toolbar button).
+ */
 function SprintPanel({
   workspaceId,
   project,
@@ -2880,6 +3015,8 @@ function SprintPanel({
   const activeSprint = project.sprints.find((sprint) => sprint.status === 'Active')
   const plannedCount = project.sprints.filter((sprint) => sprint.status === 'Planned').length
 
+  // Opens the create-sprint form whenever the parent bumps composerToken (e.g. "New sprint" button
+  // in ProjectBar), regardless of what value it changes to.
   useEffect(() => {
     if (composerToken) {
       setCreating(true)
@@ -3012,6 +3149,7 @@ function SprintPanel({
   </section>
 }
 
+/** Confirmation dialog for permanently deleting a sprint (its tasks are unassigned, not deleted). */
 function SprintDeleteDialog({
   sprint,
   busy,
@@ -3053,6 +3191,10 @@ function SprintDeleteDialog({
   </div>
 }
 
+/**
+ * Read-only drill-down dialog for one sprint: window/status, task status counts, and the
+ * full list of tasks assigned to it. Fetches the sprint's tasks itself on mount.
+ */
 function SprintDetailsDialog({
   workspaceId,
   project,
@@ -3070,6 +3212,7 @@ function SprintDetailsDialog({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Loads the tasks assigned to this specific sprint when the dialog opens.
   useEffect(() => {
     let mounted = true
     setLoading(true)
@@ -3157,6 +3300,7 @@ function SprintDetailsDialog({
   </div>
 }
 
+// Returns today's date plus 7 days as a yyyy-mm-dd input value, used as a default sprint end date.
 function nextWeekInput() {
   return new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 }
@@ -3189,6 +3333,7 @@ const calendarSourceMeta: Record<CalendarSource, CalendarSourceMeta> = {
   myday: { label: 'My Day to-dos', singular: 'to-do', plural: 'to-dos', dot: '#c78911', fg: '#94620b', bg: '#fff1d7' },
 }
 
+// Formats a Date as a local yyyy-mm-dd string (avoids UTC-shift bugs from toISOString()).
 function toIsoDate(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -3204,6 +3349,11 @@ interface CalendarComposerState {
   projectId?: string
 }
 
+/**
+ * Month-grid calendar combining project delivery dates, task due dates, sprint start/end
+ * dates, and My Day to-dos as togglable overlay layers (`sources`). Clicking a day shows
+ * its entries and offers a composer to quickly create a to-do or task on that date.
+ */
 function CalendarPage({
   workspaceId,
   projects,
@@ -3256,6 +3406,8 @@ function CalendarPage({
     // fetch before its response can ever clear the loading flag.
   }, [sources.tasks, tasksLoaded, workspaceId])
 
+  // Loads My Day todos for the visible month when that layer is enabled, re-fetching only
+  // when the computed date range actually changes (tracked via myDayRangeKey).
   useEffect(() => {
     if (!sources.myday) return
     const from = toIsoDate(new Date(year, month, 1))
@@ -3277,6 +3429,7 @@ function CalendarPage({
     return () => { cancelled = true }
   }, [sources.myday, year, month, myDayRangeKey])
 
+  // Builds the flat list of calendar entries from whichever sources are currently enabled.
   const entries = useMemo(() => {
     const list: CalendarEntry[] = []
     if (sources.projects) {
@@ -3343,6 +3496,7 @@ function CalendarPage({
     return list
   }, [sources, projects, workspaceTasks, myDayTodos])
 
+  // Indexes entries by ISO date for O(1) lookup per calendar cell.
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>()
     for (const entry of entries) {
@@ -3353,6 +3507,8 @@ function CalendarPage({
     return map
   }, [entries])
 
+  // Builds the 42-cell (6-week) grid of dates for the visible month, padded with the
+  // trailing days of the previous month so the grid always starts on a Sunday.
   const days = useMemo(() => {
     const firstOfMonth = new Date(year, month, 1)
     const gridStart = new Date(year, month, 1 - firstOfMonth.getDay())
@@ -3637,6 +3793,7 @@ const drilldownLabels: Record<TaskDrilldown, string> = {
   overdue: 'Overdue',
 }
 
+// Filters a task list down to the subset matching a dashboard drilldown filter (active/critical/blocked/overdue).
 function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
   if (drilldown === 'active') return tasks.filter((task) => task.status !== 'Completed')
   if (drilldown === 'critical') return tasks.filter((task) => task.priorityBand === 'Critical')
@@ -3645,6 +3802,8 @@ function filterTasksByDrilldown(tasks: TaskItem[], drilldown: TaskDrilldown) {
   return tasks
 }
 
+// Recomputes dashboard counts/breakdowns locally to reflect a task's status change, so the
+// dashboard updates instantly (optimistically) without waiting for a full reload.
 function applyTaskMoveToDashboard(
   current: Dashboard,
   task: TaskItem,
@@ -3718,6 +3877,7 @@ function applyTaskMoveToDashboard(
   }
 }
 
+// Shifts one count from the `from` status bucket to the `to` bucket in a breakdown list.
 function moveBreakdownCount(
   items: DashboardBreakdownItem[],
   from: TaskStatus,
@@ -3736,6 +3896,7 @@ function moveBreakdownCount(
   })
 }
 
+// Adjusts a single labeled breakdown bucket's count by `delta`, clamped to zero.
 function adjustBreakdownCount(
   items: DashboardBreakdownItem[],
   label: string,
@@ -3746,6 +3907,7 @@ function adjustBreakdownCount(
     : item)
 }
 
+/** A single dashboard stat card; renders as a clickable button when `onClick` is provided, otherwise a static div. */
 function Metric({
   label,
   value,
@@ -3788,6 +3950,7 @@ const priorityChartColors: Record<string, string> = {
   Critical: '#c33f35',
 }
 
+/** Groups the home dashboard's three charts: status donut, weekly flow, and workload by member. */
 function DashboardAnalytics({
   dashboard,
   report,
@@ -3804,6 +3967,10 @@ function DashboardAnalytics({
   </section>
 }
 
+/**
+ * Topbar bell button that opens a dropdown panel of notifications, with unread/critical
+ * counts, mark-as-read actions, and a "view all" link. Closes on outside click or Escape.
+ */
 function NotificationBell({
   notifications,
   open,
@@ -3825,6 +3992,8 @@ function NotificationBell({
   const unreadCount = notifications.filter((notification) => !notification.read).length
   const criticalCount = notifications.filter((notification) => !notification.read && notification.severity === 'critical').length
 
+  // Wires up outside-click and Escape-key listeners only while the panel is open, so it
+  // behaves like a typical dropdown/popover.
   useEffect(() => {
     if (!open) return
 
@@ -3900,6 +4069,10 @@ function NotificationBell({
   </div>
 }
 
+/**
+ * My Day page: date-scoped list of personal todos with search, pagination, inline create
+ * form, inline edit, complete/reopen toggling, comments, and delete confirmation handoff.
+ */
 function TodoPage({
   todos,
   totalCount,
@@ -4144,6 +4317,10 @@ function TodoPage({
   </section>
 }
 
+/**
+ * Manages recurring daily routines (which auto-generate My Day todos): list, pagination,
+ * inline create form, inline edit (including active/inactive toggle), and delete.
+ */
 function DailyRoutinesPage({
   dailyRoutines,
   totalCount,
@@ -4332,12 +4509,17 @@ function DailyRoutinesPage({
   </section>
 }
 
+/** Small colored pill labeling a todo/routine's priority. */
 function PriorityBadge({ priority }: { priority: TodoPriority }) {
   return <span className={`priority-badge ${priority.toLowerCase()}`}>
     {priority}
   </span>
 }
 
+/**
+ * Date-range workspace report: summary metrics, governance section, charts, and a
+ * paginated task table with CSV export and print-to-PDF support.
+ */
 function ReportsPage({
   dashboard,
   report,
@@ -4357,6 +4539,7 @@ function ReportsPage({
 }) {
   const [pageNumber, setPageNumber] = useState(1)
   const pageSize = 8
+  // Resets to the first page whenever the report's date range changes.
   useEffect(() => setPageNumber(1), [from, to])
 
   const tasks = report?.tasks ?? []
@@ -4476,6 +4659,11 @@ function ReportsPage({
   </section>
 }
 
+/**
+ * Home-page governance panel: a derived health score, a risk register, suggested
+ * decisions, and a release-readiness checklist, all computed client-side from the
+ * current dashboard snapshot and visible tasks (see `buildRiskRegister`/`buildDecisionSuggestions`).
+ */
 function ProjectGovernance({
   dashboard,
   project,
@@ -4559,6 +4747,8 @@ function ProjectGovernance({
   </section>
 }
 
+// Derives a list of risk entries (title/detail/tone) from overdue/blocked/critical counts,
+// delivery-date proximity, and unassigned tasks; falls back to a single "no risks" entry.
 function buildRiskRegister(
   dashboard: Dashboard,
   deliveryLabel: string | undefined,
@@ -4611,6 +4801,7 @@ function buildRiskRegister(
   return risks
 }
 
+// Suggests a short list of next decisions based on active risk count, completion percentage, and open task count.
 function buildDecisionSuggestions(riskCount: number, completion: number, openTasks: number) {
   if (riskCount === 0 && openTasks === 0) return ['Approve release closure and archive completed work.']
   const decisions = ['Confirm the next delivery checkpoint with the workspace team.']
@@ -4620,6 +4811,7 @@ function buildDecisionSuggestions(riskCount: number, completion: number, openTas
   return decisions
 }
 
+/** SVG donut chart for a breakdown (e.g. task status), with hover/focus tooltips per segment. */
 function DonutChart({
   title,
   items,
@@ -4675,6 +4867,7 @@ function DonutChart({
   </article>
 }
 
+/** Horizontal bar chart for a breakdown (e.g. report status/priority), with per-row hover tooltips. */
 function BarChart({
   title,
   items,
@@ -4706,6 +4899,7 @@ function BarChart({
   </article>
 }
 
+/** Grouped bar chart of tasks created vs. completed per week over the last 6 weeks. */
 function WeeklyFlowChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
   const weeks = buildWeeklyFlowPoints(tasks)
   const max = Math.max(1, ...weeks.flatMap((week) => [week.created, week.completed]))
@@ -4758,6 +4952,7 @@ function WeeklyFlowChart({ tasks }: { tasks: WorkspaceReport['tasks'] }) {
   </article>
 }
 
+/** Bar chart of assigned task counts per workspace member (including 0-count members), top 8. */
 function WorkloadChart({
   tasks,
   members,
@@ -4785,6 +4980,7 @@ function WorkloadChart({
   </article>
 }
 
+/** Color-key legend row for a breakdown chart; optionally shows each item's percent of the total. */
 function ChartLegend({
   items,
   colors,
@@ -4804,14 +5000,18 @@ function ChartLegend({
   </div>
 }
 
+// Converts a raw breakdown label (e.g. the enum value 'InProgress') into a display-friendly string.
 function friendlyChartLabel(label: string) {
   return label === 'InProgress' ? 'In progress' : label
 }
 
+// Rounds count/total to a whole-number percentage, guarding against divide-by-zero.
 function chartPercentage(count: number, total: number) {
   return total > 0 ? Math.round(count * 100 / total) : 0
 }
 
+// Buckets tasks into 6 trailing 7-day windows and counts how many were created/completed in each,
+// for the Weekly Flow chart.
 function buildWeeklyFlowPoints(tasks: WorkspaceReport['tasks']) {
   const today = new Date()
   return Array.from({ length: 6 }, (_, index) => {
@@ -4830,16 +5030,22 @@ function buildWeeklyFlowPoints(tasks: WorkspaceReport['tasks']) {
   })
 }
 
+// Converts a flow bar's value into a percentage bar height, with a small nonzero floor so
+// zero-value bars are still visible and nonzero bars are never too short to read.
 function flowBarHeight(value: number, max: number) {
   return value === 0 ? 4 : Math.max(18, value / max * 100)
 }
 
+// Picks 5 evenly-spaced y-axis tick values (top to 0) for the Weekly Flow chart, rounding
+// the step up to a whole number so the axis reads cleanly.
 function buildFlowYAxis(max: number) {
   const step = max <= 4 ? 1 : Math.ceil(max / 4)
   const top = Math.max(step * 4, max)
   return [top, top - step, top - step * 2, top - step * 3, 0]
 }
 
+// Groups tasks by assignee (including an "Unassigned" bucket) into workload chart rows,
+// ensuring every workspace member appears even with zero assigned tasks, sorted by count.
 function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceMember[]) {
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]))
   const grouped = new Map<string, { key: string; name: string; count: number; completed: number }>()
@@ -4865,6 +5071,10 @@ function buildWorkloadItems(tasks: WorkspaceReport['tasks'], members: WorkspaceM
     .slice(0, 8)
 }
 
+/**
+ * Workspace activity feed with a type filter, a notification digest, "load more" pagination,
+ * and a couple of early-return empty states depending on whether activity/notifications exist.
+ */
 function ActivityPage({
   activity,
   tasks,
@@ -4966,6 +5176,7 @@ function ActivityPage({
   </section>
 }
 
+/** Header row for the Activity page with a title and the activity-type filter dropdown. */
 function ActivityControls({
   selectedType,
   onTypeChange,
@@ -4992,6 +5203,7 @@ function ActivityControls({
   </div>
 }
 
+/** Full list of notifications shown inline on the Activity page; renders nothing if there are none. */
 function NotificationDigest({
   notifications,
   onMarkRead,
@@ -5029,6 +5241,10 @@ function NotificationDigest({
   </section>
 }
 
+/**
+ * Super-admin-only operations dashboard: health checks, runtime configuration, the
+ * background reminder scheduler's status, and recent application logs.
+ */
 function OperationsPage({ summary }: { summary: OperationsSummary }) {
   const check = (name: string) =>
     summary.healthChecks.find((item) =>
@@ -5144,11 +5360,16 @@ function OperationsPage({ summary }: { summary: OperationsSummary }) {
   </section>
 }
 
+/**
+ * Super-admin-only page for triggering and downloading database backups; loads the
+ * existing backup file list on mount.
+ */
 function DatabaseBackupsPage({ summary }: { summary: OperationsSummary }) {
   const [backups, setBackups] = useState<DatabaseBackupFile[]>([])
   const [backupBusy, setBackupBusy] = useState(false)
   const [backupError, setBackupError] = useState('')
 
+  // Loads the current list of database backup files when the page mounts.
   useEffect(() => {
     let mounted = true
     api.operationBackups()
@@ -5265,6 +5486,7 @@ function DatabaseBackupsPage({ summary }: { summary: OperationsSummary }) {
   </section>
 }
 
+/** Super-admin dialog for suspending a workspace (revocable), with an optional reason note. */
 function SuspendWorkspaceDialog({
   workspaceName,
   busy,
@@ -5309,6 +5531,10 @@ function SuspendWorkspaceDialog({
   </div>
 }
 
+/**
+ * Super-admin platform console: lists every workspace on the instance with the ability
+ * to drill into a workspace's detail, suspend/reactivate it, or delete a workspace/project.
+ */
 function PlatformPage() {
   const [summaries, setSummaries] = useState<PlatformWorkspaceSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -5334,6 +5560,7 @@ function PlatformPage() {
     }
   }
 
+  // Loads the platform-wide workspace list once on mount.
   useEffect(() => { void load() }, [])
 
   const openDetail = async (workspaceId: string) => {
@@ -5552,6 +5779,7 @@ function PlatformPage() {
   </section>
 }
 
+/** Small status card used on the Operations page (health checks, backup status, etc.). */
 function OperationCard({ title, value, detail, icon }: { title: string; value: string; detail: string; icon: ReactNode }) {
   return <article className={`operation-card ${value.toLowerCase()}`}>
     <span className="metric-icon">{icon}</span>
@@ -5559,6 +5787,7 @@ function OperationCard({ title, value, detail, icon }: { title: string; value: s
   </article>
 }
 
+// Builds a human-readable sentence describing one activity log entry, based on its action type.
 function activityMessage(item: WorkspaceActivity, members: WorkspaceMember[] = [], currentUserId = '') {
   const actor = displayActor(item.actor, members, currentUserId)
   const previous = item.previousValue || 'none'
@@ -5589,6 +5818,7 @@ function activityMessage(item: WorkspaceActivity, members: WorkspaceMember[] = [
   }
 }
 
+// Resolves an activity log actor id into a display name ('You', 'System', a member's name, or the raw value).
 function displayActor(value: string, members: WorkspaceMember[], currentUserId: string) {
   if (!value || value === 'none') return 'none'
   if (value === 'system') return 'System'
@@ -5596,6 +5826,7 @@ function displayActor(value: string, members: WorkspaceMember[], currentUserId: 
   return members.find((member) => member.userId === value)?.displayName ?? value
 }
 
+// Picks a representative icon for an activity log entry based on its action type.
 function activityIcon(action: string) {
   switch (action) {
     case 'TaskCreated':
@@ -5614,18 +5845,21 @@ function activityIcon(action: string) {
   }
 }
 
+// Converts a PascalCase activity type into a spaced display label for the filter dropdown.
 function activityTypeLabel(type: string) {
   return type === 'All'
     ? 'All activity'
     : type.replace(/([A-Z])/g, ' $1').trim()
 }
 
+// Formats an activity value as a localized date if it parses as one, otherwise returns it as-is.
 function formatActivityValue(value: string) {
   if (!value) return 'none'
   const date = new Date(`${value}T00:00:00`)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
 }
 
+// Converts a PascalCase activity action into a lowercase spaced label for generic messages.
 function activityLabel(item: Pick<WorkspaceActivity, 'action'>) {
   return item.action
     .replace(/([A-Z])/g, ' $1')
@@ -5633,6 +5867,7 @@ function activityLabel(item: Pick<WorkspaceActivity, 'action'>) {
     .toLowerCase()
 }
 
+/** Generic pagination footer; collapses to a plain item count when everything fits on one page. */
 function Pagination({
   pageNumber,
   pageSize,
@@ -5665,6 +5900,10 @@ function Pagination({
   </footer>
 }
 
+/**
+ * Team management page: member list with role changes/removal, and (Owner-only) an
+ * invitation form plus pending invitation list with cancel support.
+ */
 function TeamPage({
   workspace,
   members,
@@ -5776,6 +6015,7 @@ function TeamPage({
   </section>
 }
 
+/** Account settings page: profile (display name/email) form and a separate change-password form. */
 function ProfilePage({
   profile,
   account,
@@ -5800,6 +6040,7 @@ function ProfilePage({
   const [profileError, setProfileError] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+  // Resyncs the editable draft whenever the saved profile changes (e.g. after a successful save).
   useEffect(() => setDraft(profile), [profile])
 
   return <section className="profile-grid">
@@ -5848,6 +6089,7 @@ function ProfilePage({
   </section>
 }
 
+/** Flat table view of tasks (used on the Tasks page) with status, deadline, and priority score columns. */
 function TaskList({ tasks, categories, sprints, members, currentUserId, onEdit, onDelete }: { tasks: TaskItem[]; categories: ProjectCategory[]; sprints: Sprint[]; members: WorkspaceMember[]; currentUserId: string; onEdit: (task: TaskItem) => void; onDelete: (task: TaskItem) => void }) {
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
   const sprintNames = new Map(sprints.map((sprint) => [sprint.id, sprint.name]))
@@ -5866,6 +6108,7 @@ function TaskList({ tasks, categories, sprints, members, currentUserId, onEdit, 
   </div>
 }
 
+/** Row of small pills (assignee, sprint, category, up to 3 tags) shown under a task's title. */
 function TaskMetadataLine({ task, categoryName, sprintName, assigneeName, currentUserId }: { task: TaskItem; categoryName?: string; sprintName?: string; assigneeName?: string; currentUserId?: string }) {
   const assigneeLabel = task.assignedUserId
     ? task.assignedUserId === currentUserId
@@ -5881,6 +6124,12 @@ function TaskMetadataLine({ task, categoryName, sprintName, assigneeName, curren
   </span>
 }
 
+/**
+ * Kanban board: renders one `BoardColumn` per status and wires up dnd-kit drag-and-drop
+ * so cards can be dragged between columns, calling `onMove` (which itself enforces the
+ * allowed-transition/permission rules) on drop. Includes a `DragOverlay` clone of the
+ * dragged card and a manual-recovery effect for a known dnd-kit pointerup timing issue.
+ */
 function Board({
   tasks,
   categories,
@@ -6002,6 +6251,11 @@ function Board({
   </DndContext>
 }
 
+/**
+ * One droppable column of the Kanban board for a single status. Orders its cards (Backlog
+ * sorts by due date first, then pinned-first, then newest-first) and reflects drag state
+ * (drag-active/valid-target/drag-over) via CSS classes driven by dnd-kit's `useDroppable`.
+ */
 function BoardColumn({
   status,
   tasks,
@@ -6063,10 +6317,13 @@ function BoardColumn({
   </section>
 }
 
+// Sorts Backlog cards by due date ascending, with tasks having no due date sorted last.
 function compareBacklogDueDates(left: TaskItem, right: TaskItem) {
   return taskDueDateKey(left.dueDate) - taskDueDateKey(right.dueDate)
 }
 
+// Parses a due date string (ISO yyyy-mm-dd, d/m/yyyy, or any Date-parseable format) into a
+// sortable timestamp; missing/unparseable dates sort to +Infinity (last).
 function taskDueDateKey(dueDate: string | null) {
   if (!dueDate) return Number.POSITIVE_INFINITY
 
@@ -6086,6 +6343,7 @@ function taskDueDateKey(dueDate: string | null) {
   return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
 }
 
+// Sorts tasks newest-created-first, breaking ties alphabetically by title.
 function compareCreatedAtDesc(left: TaskItem, right: TaskItem) {
   const createdOrder = right.createdAt.localeCompare(left.createdAt)
   if (createdOrder !== 0) return createdOrder
@@ -6093,6 +6351,10 @@ function compareCreatedAtDesc(left: TaskItem, right: TaskItem) {
   return left.title.localeCompare(right.title)
 }
 
+/**
+ * A single draggable task card on the Kanban board (or its `DragOverlay` clone when `overlay`
+ * is true, which disables dragging on the clone itself).
+ */
 function BoardCard({
   task,
   categories,
@@ -6230,6 +6492,7 @@ const actionTargets: Record<string, TaskStatus> = {
 
 const effortOptions = [1, 2, 3, 5, 8]
 
+/** Inline help text explaining the 1-5 priority input scale, with notes for unscored/read-only cases. */
 function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?: boolean; unscored?: boolean }) {
   return <p className="field-help">
     Use 1-5 scores: 1 is low impact or urgency, 3 is normal delivery value, and 5 is high business impact, urgent deadline pressure, or major risk reduction.
@@ -6238,6 +6501,7 @@ function PriorityInputGuide({ readOnly = false, unscored = false }: { readOnly?:
   </p>
 }
 
+/** Lightweight dialog for adding a note to a task and reviewing its existing notes, without opening the full task editor. */
 function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { task: TaskItem; members: WorkspaceMember[]; currentUserId: string; onClose: () => void; onSaved: (taskId: string) => void }) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
@@ -6281,6 +6545,12 @@ function QuickNoteDialog({ task, members, currentUserId, onClose, onSaved }: { t
   </div>
 }
 
+/**
+ * Full task-edit dialog: title/due date/effort/sprint/assignee, category and tags,
+ * notes, priority planning inputs, and available status transition buttons. Plain
+ * Members get a read-only view of most fields (`isMember`); planning inputs are only
+ * editable by the task creator (`canEditPlanning`).
+ */
 function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, members, categories, sprints, onCategoryCreated, onClose, onSaved }: { projectId: string; task: TaskItem; currentUserId: string; workspaceRole: Workspace['role'] | null; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [categoryDraft, setCategoryDraft] = useState('')
@@ -6377,6 +6647,12 @@ function TaskEditor({ projectId, task, currentUserId, workspaceRole, isMember, m
   </dialog></div>
 }
 
+/**
+ * Task creation dialog: title/due date/effort/assignee/sprint plus initial priority
+ * planning inputs, with optional initial tag/note/category set in the same submit and an
+ * inline "create category" shortcut. `initialDueDate` lets callers (e.g. the calendar
+ * composer) pre-fill the due date.
+ */
 function TaskDialog({ projectId, isMember, members, categories, sprints, initialDueDate, onCategoryCreated, onClose, onCreated }: { projectId: string; isMember: boolean; members: WorkspaceMember[]; categories: ProjectCategory[]; sprints: Sprint[]; initialDueDate?: string; onCategoryCreated: (category: ProjectCategory) => void; onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')

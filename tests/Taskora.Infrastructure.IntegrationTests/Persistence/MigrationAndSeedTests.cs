@@ -5,6 +5,8 @@ using TodoApp.Infrastructure.Persistence.Seeding;
 
 namespace TodoApp.Infrastructure.IntegrationTests.Persistence;
 
+// Verifies EF Core migrations apply cleanly and that development seed data
+// is written and re-applied correctly against a real SQLite database.
 public sealed class MigrationAndSeedTests
 {
     [Fact]
@@ -18,9 +20,11 @@ public sealed class MigrationAndSeedTests
             .Options;
         await using var context = new TodoAppDbContext(options);
 
+        // Migrating twice confirms MigrateAsync is idempotent/safe to re-run.
         await context.Database.MigrateAsync();
         await context.Database.MigrateAsync();
 
+        // Confirms the initial migration (by name suffix) was applied.
         Assert.Contains(
             await context.Database.GetAppliedMigrationsAsync(),
             migration => migration.EndsWith(
@@ -52,6 +56,7 @@ public sealed class MigrationAndSeedTests
             }
 
             await using var readContext = new TodoAppDbContext(options);
+            // Expected counts come from the fixed DevelopmentDataSeeder dataset.
             Assert.Equal(3, await readContext.Projects.CountAsync());
             Assert.Equal(8, await readContext.Tasks.CountAsync());
             Assert.Equal(2, await readContext.ProjectCategories.CountAsync());

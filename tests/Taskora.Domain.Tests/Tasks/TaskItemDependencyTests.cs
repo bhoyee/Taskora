@@ -3,6 +3,7 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Tests.Tasks;
 
+// Tests for TaskItem dependency management: adding/removing dependencies, cycle detection, and start blocking.
 public sealed class TaskItemDependencyTests
 {
     [Fact]
@@ -55,6 +56,7 @@ public sealed class TaskItemDependencyTests
         Assert.Equal("A circular task dependency is not allowed.", exception.Message);
     }
 
+    // Cycle detection must walk the dependency chain, not just check direct dependencies: first -> second -> third -> first.
     [Fact]
     public void AddDependency_WhenItCreatesTransitiveCycle_ThrowsDomainRuleException()
     {

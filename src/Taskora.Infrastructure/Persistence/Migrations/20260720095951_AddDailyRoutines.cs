@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // Adds a DailyRoutines table plus DailyRoutineId/Priority columns on
+    // PersonalTodos, supporting recurring daily routines that auto-generate
+    // personal todos.
     /// <inheritdoc />
     public partial class AddDailyRoutines : Migration
     {

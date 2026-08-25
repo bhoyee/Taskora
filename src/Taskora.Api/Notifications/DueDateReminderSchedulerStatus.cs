@@ -1,10 +1,17 @@
 namespace TodoApp.Api.Notifications;
 
+/// <summary>
+/// Thread-safe, in-memory holder for the due-date reminder scheduler's
+/// latest state, exposed to the Operations dashboard/API. Each mutator
+/// swaps the immutable <see cref="SchedulerSnapshot"/> under a lock so
+/// readers never observe a partially updated snapshot.
+/// </summary>
 public sealed class DueDateReminderSchedulerStatus
 {
     private readonly object _sync = new();
     private SchedulerSnapshot _snapshot = SchedulerSnapshot.NotStarted();
 
+    /// <summary>The current point-in-time snapshot of the reminder scheduler's status.</summary>
     public SchedulerSnapshot Snapshot
     {
         get
@@ -16,6 +23,7 @@ public sealed class DueDateReminderSchedulerStatus
         }
     }
 
+    /// <summary>Records the scheduler's enabled/disabled state, its run interval, and when it will next run.</summary>
     public void Configure(
         bool enabled,
         TimeSpan interval,
@@ -33,6 +41,7 @@ public sealed class DueDateReminderSchedulerStatus
         }
     }
 
+    /// <summary>Records that a reminder run has just started, clearing any prior error.</summary>
     public void MarkRunning(DateTimeOffset startedAt)
     {
         lock (_sync)
@@ -46,6 +55,7 @@ public sealed class DueDateReminderSchedulerStatus
         }
     }
 
+    /// <summary>Records a successful reminder run's counts (task/project reminders, todo carry-overs, emails sent) and reschedules the next run.</summary>
     public void MarkSucceeded(
         DateTimeOffset completedAt,
         DateTimeOffset nextRunAt,
@@ -70,6 +80,7 @@ public sealed class DueDateReminderSchedulerStatus
         }
     }
 
+    /// <summary>Records a failed reminder run and its error message, and reschedules the next attempt.</summary>
     public void MarkFailed(
         DateTimeOffset failedAt,
         DateTimeOffset nextRunAt,
@@ -88,6 +99,7 @@ public sealed class DueDateReminderSchedulerStatus
     }
 }
 
+/// <summary>Immutable point-in-time view of the due-date reminder scheduler's configuration, last run, and outcome.</summary>
 public sealed record SchedulerSnapshot(
     bool Enabled,
     string Status,
@@ -101,6 +113,7 @@ public sealed record SchedulerSnapshot(
     int LastEmailCount,
     string? LastError)
 {
+    // Default snapshot before the scheduler has run for the first time.
     public static SchedulerSnapshot NotStarted() =>
         new(
             Enabled: false,

@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // EF Core design-time model snapshot paired with the RemovePersonalTodoPriorityDefault migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260720121042_RemovePersonalTodoPriorityDefault")]
     partial class RemovePersonalTodoPriorityDefault

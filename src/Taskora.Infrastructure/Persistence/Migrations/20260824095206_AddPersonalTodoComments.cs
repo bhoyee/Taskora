@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // Adds a PersonalTodoComments table (FK to PersonalTodos), supporting
+    // threaded comments on personal todos.
     /// <inheritdoc />
     public partial class AddPersonalTodoComments : Migration
     {

@@ -5,12 +5,17 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Tasks.Queries;
 
+// Covers the read-side task query handlers (search and get-by-id), including
+// mapping of priority scoring and deadline health onto the result DTOs.
 public sealed class TaskQueryHandlerTests
 {
     private static readonly Guid ProjectId = Guid.NewGuid();
     private static readonly DateTimeOffset Now =
         new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
 
+    // Verifies pagination metadata and per-item mapping, including priority
+    // band/explanation for a task with planning factors and null priority
+    // fields for one without.
     [Fact]
     public async Task Search_WhenCriteriaAreValid_ReturnsMappedPage()
     {
@@ -63,6 +68,8 @@ public sealed class TaskQueryHandlerTests
         Assert.Equal(cancellation.Token, repository.ReceivedCancellationToken);
     }
 
+    // Boundary cases: page number below 1, page size below 1, and page size
+    // above the maximum of 100.
     [Theory]
     [InlineData(0, 20)]
     [InlineData(1, 0)]
@@ -128,11 +135,14 @@ public sealed class TaskQueryHandlerTests
         Assert.Equal("task.not_found", result.Error.Code);
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
     }
 
+    // Builds a task and advances it through as many status transitions as
+    // needed to reach the requested status.
     private static TaskItem CreateTask(string title, TaskItemStatus status)
     {
         var task = TaskItem.Create(Guid.NewGuid(), ProjectId, title);
@@ -150,6 +160,8 @@ public sealed class TaskQueryHandlerTests
         return task;
     }
 
+    // ITaskReadRepository fake that serves seeded items and records the
+    // criteria/cancellation token it was called with for assertions.
     private sealed class RecordingTaskReadRepository(
         IReadOnlyList<TaskItem> items,
         int totalCount)

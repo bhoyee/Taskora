@@ -2,12 +2,21 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Domain.Tasks;
 
+/// <summary>
+/// A timestamped, authored comment attached to a <see cref="TaskItem"/>. Created and
+/// owned exclusively through the <see cref="TaskItem"/> aggregate.
+/// </summary>
 public sealed class TaskNote
 {
+    // Reserved for ORM materialization; domain code must use the parameterized constructor.
     private TaskNote()
     {
     }
 
+    /// <summary>
+    /// Creates a note. Internal because notes are only ever created via the owning
+    /// <see cref="TaskItem"/> aggregate, which validates identifiers and body content.
+    /// </summary>
     internal TaskNote(
         Guid id,
         Guid taskId,

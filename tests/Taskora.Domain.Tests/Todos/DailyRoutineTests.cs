@@ -3,6 +3,7 @@ using TodoApp.Domain.Todos;
 
 namespace TodoApp.Domain.Tests.Todos;
 
+// Tests for DailyRoutine: generating a PersonalTodo instance for a given date and validating routine date ranges.
 public sealed class DailyRoutineTests
 {
     private static readonly DateTimeOffset Now =
@@ -34,6 +35,7 @@ public sealed class DailyRoutineTests
         Assert.Equal(new DateOnly(2026, 7, 20), routine.LastGeneratedDate);
     }
 
+    // A routine can only generate one todo per date; a second attempt for the same date is rejected as not eligible.
     [Fact]
     public void GenerateTodo_WhenAlreadyGeneratedForDate_ThrowsValidationError()
     {

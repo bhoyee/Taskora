@@ -2,6 +2,10 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Domain.Tasks;
 
+/// <summary>
+/// Value object bundling the inputs used to compute a task's <see cref="PriorityScore"/>:
+/// business value, urgency, and risk reduction (each rated 1-5), plus effort.
+/// </summary>
 public sealed record PlanningFactors
 {
     private PlanningFactors(
@@ -26,6 +30,11 @@ public sealed record PlanningFactors
 
     public int Effort => EffortEstimate.Value;
 
+    /// <summary>
+    /// Creates <see cref="PlanningFactors"/>, enforcing that business value, urgency,
+    /// and risk reduction each fall within the 1-5 rating scale and that effort is a
+    /// supported <see cref="EffortEstimate"/> value.
+    /// </summary>
     public static PlanningFactors Create(
         int businessValue,
         int urgency,
@@ -54,6 +63,7 @@ public sealed record PlanningFactors
             EffortEstimate.Create(effort));
     }
 
+    // Shared range check used to validate each 1-5 rating input with a tailored error message.
     private static void EnsureInRange(
         int value,
         int minimum,

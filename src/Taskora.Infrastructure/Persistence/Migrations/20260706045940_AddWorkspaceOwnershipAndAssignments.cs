@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Links Projects to a Workspace (backfilling existing rows to a default workspace)
+    // and adds an AssignedUserId to Tasks, supporting per-workspace task assignment.
     /// <inheritdoc />
     public partial class AddWorkspaceOwnershipAndAssignments : Migration
     {

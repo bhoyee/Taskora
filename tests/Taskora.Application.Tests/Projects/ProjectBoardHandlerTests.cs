@@ -6,6 +6,8 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tests.Projects;
 
+// Covers GetProjectBoardHandler, which aggregates a project's task counts
+// and high-priority blocked tasks into a delivery board summary.
 public sealed class ProjectBoardHandlerTests
 {
     [Fact]
@@ -71,6 +73,7 @@ public sealed class ProjectBoardHandlerTests
         Assert.False(reader.WasCalled);
     }
 
+    // IProjectRepository stub backed by a single optional project.
     private sealed class StubProjectRepository(Project? project)
         : IProjectRepository
     {
@@ -96,6 +99,8 @@ public sealed class ProjectBoardHandlerTests
                 project is null ? [] : [project]);
     }
 
+    // IProjectBoardReadRepository stub returning a fixed snapshot and
+    // recording whether/how it was called.
     private sealed class StubProjectBoardReader(ProjectBoardSnapshot snapshot)
         : IProjectBoardReadRepository
     {

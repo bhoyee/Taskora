@@ -7,6 +7,7 @@ using static TodoApp.Application.Todos.PersonalTodoHandlerHelpers;
 
 namespace TodoApp.Application.Todos;
 
+/// <summary>Lists the current user's personal todos for a date, applying daily carry-over first when viewing today.</summary>
 public sealed class ListPersonalTodosHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
@@ -16,6 +17,14 @@ public sealed class ListPersonalTodosHandler(
     GenerateDailyRoutineTodosHandler dailyRoutines,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and validates paging parameters. When the
+    /// requested date is today, first generates today's daily-routine todos
+    /// and carries over any of the user's incomplete todos from earlier
+    /// dates into today (persisting the change and emailing a carry-over
+    /// summary if any were moved), then returns the paged, optionally
+    /// search-filtered list of todos for the target date.
+    /// </summary>
     public async Task<Result<PagedResult<PersonalTodoDto>>> HandleAsync(
         ListPersonalTodosQuery query,
         CancellationToken cancellationToken)
@@ -89,6 +98,7 @@ public sealed class ListPersonalTodosHandler(
                 query.PageSize));
     }
 
+    // Emails the current user a summary of the todos just carried over into today, if they have a known email.
     private async Task SendCarryOverEmailAsync(
         IReadOnlyCollection<PersonalTodoCarryOverEmailItem> items,
         DateOnly today,
@@ -112,10 +122,16 @@ public sealed class ListPersonalTodosHandler(
     }
 }
 
+/// <summary>Lists the current user's personal todos across an inclusive date range.</summary>
 public sealed class ListPersonalTodosForRangeHandler(
     IPersonalTodoRepository todos,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and that the range is not inverted (end date
+    /// on or after the start date), then returns all matching todos for the
+    /// current user.
+    /// </summary>
     public async Task<Result<IReadOnlyList<PersonalTodoDto>>> HandleAsync(
         ListPersonalTodosForRangeQuery query,
         CancellationToken cancellationToken)
@@ -144,6 +160,7 @@ public sealed class ListPersonalTodosForRangeHandler(
     }
 }
 
+/// <summary>Creates a new personal todo for the current user.</summary>
 public sealed class CreatePersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
@@ -151,6 +168,11 @@ public sealed class CreatePersonalTodoHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication, then creates and persists a new todo owned
+    /// by the current user, translating domain validation failures into a
+    /// validation error.
+    /// </summary>
     public async Task<Result<PersonalTodoDto>> HandleAsync(
         CreatePersonalTodoCommand command,
         CancellationToken cancellationToken)
@@ -184,12 +206,19 @@ public sealed class CreatePersonalTodoHandler(
     }
 }
 
+/// <summary>Updates an existing personal todo owned by the current user.</summary>
 public sealed class UpdatePersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and that the todo exists and belongs to the
+    /// current user (via <see cref="GetOwnedTodoAsync"/>), then applies the
+    /// update, translating domain validation failures into a validation
+    /// error.
+    /// </summary>
     public async Task<Result<PersonalTodoDto>> HandleAsync(
         UpdatePersonalTodoCommand command,
         CancellationToken cancellationToken)
@@ -223,12 +252,17 @@ public sealed class UpdatePersonalTodoHandler(
     }
 }
 
+/// <summary>Marks a personal todo as completed.</summary>
 public sealed class CompletePersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and ownership of the todo, then marks it
+    /// completed with the current timestamp and persists the change.
+    /// </summary>
     public Task<Result<PersonalTodoDto>> HandleAsync(
         CompletePersonalTodoCommand command,
         CancellationToken cancellationToken) =>
@@ -241,12 +275,17 @@ public sealed class CompletePersonalTodoHandler(
             cancellationToken);
 }
 
+/// <summary>Reopens a previously completed personal todo.</summary>
 public sealed class ReopenPersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and ownership of the todo, then clears its
+    /// completed state with the current timestamp and persists the change.
+    /// </summary>
     public Task<Result<PersonalTodoDto>> HandleAsync(
         ReopenPersonalTodoCommand command,
         CancellationToken cancellationToken) =>
@@ -259,11 +298,15 @@ public sealed class ReopenPersonalTodoHandler(
             cancellationToken);
 }
 
+/// <summary>Deletes a personal todo owned by the current user.</summary>
 public sealed class DeletePersonalTodoHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and ownership of the todo, then removes it.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         DeletePersonalTodoCommand command,
         CancellationToken cancellationToken)
@@ -285,6 +328,7 @@ public sealed class DeletePersonalTodoHandler(
     }
 }
 
+/// <summary>Adds a comment to a personal todo.</summary>
 public sealed class AddPersonalTodoCommentHandler(
     IPersonalTodoRepository todos,
     IUnitOfWork unitOfWork,
@@ -292,6 +336,11 @@ public sealed class AddPersonalTodoCommentHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and ownership of the todo, and that the
+    /// comment body is non-empty, then appends the comment and persists it,
+    /// translating domain validation failures into a validation error.
+    /// </summary>
     public async Task<Result<PersonalTodoDto>> HandleAsync(
         AddPersonalTodoCommentCommand command,
         CancellationToken cancellationToken)
@@ -328,8 +377,10 @@ public sealed class AddPersonalTodoCommentHandler(
     }
 }
 
+/// <summary>Maps personal todo entities to their DTO representation.</summary>
 internal static class PersonalTodoMapping
 {
+    // Maps a personal todo, including its ordered comments, to its DTO.
     public static PersonalTodoDto ToDto(PersonalTodo todo) =>
         new(
             todo.Id,
@@ -355,10 +406,15 @@ internal static class PersonalTodoMapping
                 .ToArray());
 }
 
+/// <summary>Lists the current user's daily routines, with paging.</summary>
 public sealed class ListDailyRoutinesHandler(
     IDailyRoutineRepository routines,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and validates paging parameters, then returns
+    /// the current user's daily routines as a paged result.
+    /// </summary>
     public async Task<Result<PagedResult<DailyRoutineDto>>> HandleAsync(
         ListDailyRoutinesQuery query,
         CancellationToken cancellationToken)
@@ -397,6 +453,7 @@ public sealed class ListDailyRoutinesHandler(
     }
 }
 
+/// <summary>Creates a new daily routine for the current user.</summary>
 public sealed class CreateDailyRoutineHandler(
     IDailyRoutineRepository routines,
     IUnitOfWork unitOfWork,
@@ -404,6 +461,11 @@ public sealed class CreateDailyRoutineHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication, then creates and persists a new daily
+    /// routine owned by the current user, translating domain validation
+    /// failures into a validation error.
+    /// </summary>
     public async Task<Result<DailyRoutineDto>> HandleAsync(
         CreateDailyRoutineCommand command,
         CancellationToken cancellationToken)
@@ -437,12 +499,19 @@ public sealed class CreateDailyRoutineHandler(
     }
 }
 
+/// <summary>Updates an existing daily routine owned by the current user.</summary>
 public sealed class UpdateDailyRoutineHandler(
     IDailyRoutineRepository routines,
     IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and that the routine exists and belongs to
+    /// the current user (via <see cref="GetOwnedRoutineAsync"/>), then
+    /// applies the update, translating domain validation failures into a
+    /// validation error.
+    /// </summary>
     public async Task<Result<DailyRoutineDto>> HandleAsync(
         UpdateDailyRoutineCommand command,
         CancellationToken cancellationToken)
@@ -478,11 +547,16 @@ public sealed class UpdateDailyRoutineHandler(
     }
 }
 
+/// <summary>Deletes a daily routine owned by the current user.</summary>
 public sealed class DeleteDailyRoutineHandler(
     IDailyRoutineRepository routines,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires authentication and ownership of the routine, then removes
+    /// it.
+    /// </summary>
     public async Task<Result<bool>> HandleAsync(
         DeleteDailyRoutineCommand command,
         CancellationToken cancellationToken)
@@ -504,6 +578,7 @@ public sealed class DeleteDailyRoutineHandler(
     }
 }
 
+/// <summary>Generates personal todos from daily routines that are due for a given business date, idempotently.</summary>
 public sealed class GenerateDailyRoutineTodosHandler(
     IDailyRoutineRepository routines,
     IPersonalTodoRepository todos,
@@ -512,6 +587,14 @@ public sealed class GenerateDailyRoutineTodosHandler(
     IClock clock,
     IBusinessDateProvider dates)
 {
+    /// <summary>
+    /// For the given business date (defaulting to today), finds all active
+    /// daily routines due for generation and, for each one that has not
+    /// already produced a todo for that date (checked to keep this
+    /// idempotent when called multiple times per day), generates and adds a
+    /// new todo. Persists changes only if any todos were generated or
+    /// skipped, and returns counts of each plus the business date used.
+    /// </summary>
     public async Task<Result<GenerateDailyRoutineTodosResult>> HandleAsync(
         GenerateDailyRoutineTodosCommand command,
         CancellationToken cancellationToken)
@@ -556,11 +639,14 @@ public sealed class GenerateDailyRoutineTodosHandler(
     }
 }
 
+/// <summary>Shared mapping, authorization, and mutation helpers local to the personal-todo handlers in this file.</summary>
 file static class PersonalTodoHandlerHelpers
 {
+    // Delegates to the shared personal-todo DTO mapping.
     public static PersonalTodoDto ToDto(PersonalTodo todo) =>
         PersonalTodoMapping.ToDto(todo);
 
+    // Maps a daily routine entity to its DTO.
     public static DailyRoutineDto ToDto(DailyRoutine routine) =>
         new(
             routine.Id,
@@ -574,6 +660,7 @@ file static class PersonalTodoHandlerHelpers
             routine.CreatedAt,
             routine.UpdatedAt);
 
+    // Requires the caller to be authenticated before managing personal todos/routines.
     public static Result<bool> RequireAuthenticatedUser(
         ICurrentUser currentUser) =>
         currentUser.IsAuthenticated
@@ -583,6 +670,7 @@ file static class PersonalTodoHandlerHelpers
                 "Sign in before managing personal todos.",
                 ErrorType.Unauthorized));
 
+    // Requires authentication and that the todo exists and is owned by the current user.
     public static async Task<Result<PersonalTodo>> GetOwnedTodoAsync(
         IPersonalTodoRepository todos,
         ICurrentUser currentUser,
@@ -607,6 +695,7 @@ file static class PersonalTodoHandlerHelpers
         return Result<PersonalTodo>.Success(todo);
     }
 
+    // Requires authentication and that the daily routine exists and is owned by the current user.
     public static async Task<Result<DailyRoutine>> GetOwnedRoutineAsync(
         IDailyRoutineRepository routines,
         ICurrentUser currentUser,
@@ -631,6 +720,7 @@ file static class PersonalTodoHandlerHelpers
         return Result<DailyRoutine>.Success(routine);
     }
 
+    // Loads an owned todo, applies the given in-place mutation, persists it, and returns its updated DTO.
     public static async Task<Result<PersonalTodoDto>> MutateTodoAsync(
         IPersonalTodoRepository todos,
         IUnitOfWork unitOfWork,
@@ -655,6 +745,7 @@ file static class PersonalTodoHandlerHelpers
         return Result<PersonalTodoDto>.Success(ToDto(todo.Value));
     }
 
+    // Builds a validation-typed failure result, shared by the personal-todo handlers.
     public static Result<T> Validation<T>(string message) =>
         Result<T>.Failure(new ApplicationError(
             "todo.validation",

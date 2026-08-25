@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Taskora.Infrastructure.Persistence.Migrations
 {
+    // Adds a Sprints table (scoped to a Project) and a nullable SprintId FK
+    // on Tasks, letting tasks be grouped into sprints for agile sprint
+    // planning.
     /// <inheritdoc />
     public partial class AddSprints : Migration
     {

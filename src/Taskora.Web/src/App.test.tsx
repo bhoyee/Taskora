@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import type { TaskItem, TaskPage } from './api'
 
+// End-to-end style tests for the whole App component tree: each test mocks
+// `fetch` (via the helpers below) to stand in for the real API, then drives
+// the UI with Testing Library/user-event and asserts on rendered output.
+// Fixture data below (dashboard, tasks, workspaces, etc.) is shared across
+// tests and shaped to match the API's actual response DTOs.
+
+// Dashboard breakdown fixture with a nonzero mix of statuses/priorities/deadlines,
+// used to exercise chart rendering and drill-down filtering.
 const dashboardAnalytics = {
   statusBreakdown: [
     { label: 'Backlog', count: 0 },
@@ -31,6 +39,7 @@ const dashboardAnalytics = {
   },
 }
 
+// All-zero counterpart to dashboardAnalytics, for workspaces/tests with no data yet.
 const emptyDashboardAnalytics = {
   statusBreakdown: [
     { label: 'Backlog', count: 0 },
@@ -58,6 +67,7 @@ const emptyDashboardAnalytics = {
   },
 }
 
+// Fixture factories for the three sections of the Operations/health-check response.
 function operationsRuntime() {
   return {
     environment: 'Testing',
@@ -105,6 +115,7 @@ function operationsDatabaseBackups() {
   }
 }
 
+// Main dashboard fixture: one project with a warning (used to test notification badges/panel).
 const dashboard = {
   projectCount: 1,
   activeTaskCount: 3,
@@ -122,6 +133,7 @@ const dashboard = {
     dueDate: '2026-07-10',
   }],
 }
+// Reports-page fixture: a full WorkspaceReport DTO for one project/task in range.
 const workspaceReport = {
   workspaceId: 'workspace-1',
   from: '2026-07-01',
@@ -173,6 +185,7 @@ const workspaceReport = {
     deadlineHealth: 'AtRisk',
   }],
 }
+// Default single-task page fixture returned by mockApi() for the tasks list.
 const taskPage: TaskPage = {
   totalCount: 1,
   items: [{
@@ -208,12 +221,16 @@ const taskPage: TaskPage = {
     },
   }],
 }
+// Second-page task fixture, used to test pagination.
 const secondTask: TaskItem = {
   ...taskPage.items[0],
   id: 'task-2',
   title: 'Review deployment runbook',
   status: 'Ready',
 }
+// The next three fixtures share a Backlog status but differ in due date (including
+// no due date at all), used to verify the "earliest due date first, unscheduled last"
+// backlog ordering rule.
 const earlyBacklogTask = {
   ...taskPage.items[0],
   id: 'task-early',
@@ -238,16 +255,19 @@ const unscheduledBacklogTask = {
   dueDate: null,
   createdAt: '2026-07-03T09:00:00Z',
 }
+// Default single-workspace fixture the signed-in user owns.
 const workspaces = [{
   id: 'workspace-1',
   name: 'Portfolio team',
   role: 'Owner',
 }]
+// A workspace created mid-test (e.g. via the "new workspace" flow) to verify switching.
 const secondWorkspace = {
   id: 'workspace-2',
   name: 'Client delivery',
   role: 'Owner',
 }
+// Pending team invitation fixture used by the team-page invite flow tests.
 const invitation = {
   id: 'invite-1',
   workspaceId: 'workspace-1',
@@ -260,6 +280,8 @@ const invitation = {
   expiresAt: '2026-07-16T09:00:00Z',
   inviteLink: '/invite/token-1',
 }
+// Default project fixture; the variants below (second/created/updated) reuse it via
+// spread to model create/update flows without repeating every field.
 const projectDetails = {
   id: '10000000-0000-0000-0000-000000000001',
   name: 'Portfolio launch',
@@ -293,12 +315,14 @@ const updatedProjectDetails = {
   description: 'Updated delivery scope.',
   targetDate: '2026-09-20',
 }
+// Default single-member (owner) fixture for the team page.
 const members = [{
   userId: 'user-1',
   displayName: 'Salisu Adeboye',
   email: 'salisu.adeboye@gmail.com',
   role: 'Owner',
 }]
+// Single activity-log entry (a status change) for the Activity timeline page.
 const activity = [{
   sequence: 1,
   taskId: 'task-1',
@@ -311,6 +335,7 @@ const activity = [{
   currentValue: 'InProgress',
   occurredAt: '2026-07-06T10:00:00Z',
 }]
+// Single-item My Day todo page fixture, generated from a daily routine.
 const todoPage = {
   totalCount: 1,
   items: [{
@@ -330,6 +355,7 @@ const todoPage = {
     comments: [],
   }],
 }
+// Single daily-routine fixture that todoPage's generated todo is linked back to.
 const dailyRoutinePage = {
   totalCount: 1,
   items: [{
@@ -351,6 +377,8 @@ const accountProfile = {
   email: 'salisu.adeboye@gmail.com',
 }
 
+// Mocks `fetch` to route every request through mockResponseFor with a single
+// task page as the fallback response; the common case for most tests below.
 function mockApi(page: TaskPage = taskPage) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
@@ -363,6 +391,8 @@ function mockApi(page: TaskPage = taskPage) {
     })
 }
 
+// Mocks `fetch` with an 11-task total split across two pages (second page has
+// just secondTask), for testing the tasks list's pagination controls.
 function mockPagedApi() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
@@ -379,6 +409,8 @@ function mockPagedApi() {
     })
 }
 
+// Mocks `fetch` for a Member (non-owner) whose workspace has zero projects,
+// used to verify project-creation UI and task creation are hidden/disabled for them.
 function mockMemberWorkspaceWithoutProjectsApi() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) => {
@@ -418,6 +450,9 @@ function mockMemberWorkspaceWithoutProjectsApi() {
     })
 }
 
+// Central URL-to-fixture router shared by the mock functions above: matches the
+// request URL against known API routes (most specific first) and returns the
+// matching fixture, falling back to `page` for anything unmatched (typically tasks).
 function mockResponseFor(url: string, page: TaskPage = taskPage, activityItems = activity) {
   if (url.includes('/account/me')) return accountProfile
   if (url.includes('/operations/summary')) return {
@@ -458,6 +493,9 @@ function mockResponseFor(url: string, page: TaskPage = taskPage, activityItems =
   return page
 }
 
+// Stateful mock (unlike the others, which are pure lookups): tracks workspaces,
+// invitations, and projects in closures so POST/PUT requests during a test actually
+// mutate what subsequent GETs return, enabling create/update/archive flow tests.
 function mockWorkspaceManagementApi() {
   let currentWorkspaces = [...workspaces]
   let currentInvitations: typeof invitation[] = []
@@ -552,6 +590,7 @@ function mockWorkspaceManagementApi() {
     })
 }
 
+// Wraps a fixture value in a 200 JSON Response, the shape `fetch` mocks need to return.
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), {
     status: 200,
@@ -559,6 +598,7 @@ function jsonResponse(value: unknown) {
   })
 }
 
+// Empty paged-activity response, for workspaces/tests with no activity history.
 function emptyActivityPage() {
   return {
     items: [],
@@ -569,6 +609,9 @@ function emptyActivityPage() {
   }
 }
 
+// Resets all per-test state so tests don't leak into each other: unmounts rendered
+// components, clears persisted pinned-tasks/pinned-projects localStorage, resets the
+// URL hash-based routing back to '/', and restores real (unmocked) fetch/timers.
 afterEach(() => {
   cleanup()
   localStorage.clear()

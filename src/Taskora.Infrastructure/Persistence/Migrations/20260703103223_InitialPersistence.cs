@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Establishes the initial schema: Projects, Tasks (with prioritization scoring fields),
+    // TaskActivities (audit trail), and TaskDependencies (task-to-task blocking relations).
     /// <inheritdoc />
     public partial class InitialPersistence : Migration
     {

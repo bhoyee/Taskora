@@ -3,10 +3,16 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Application.Projects.Board;
 
+/// <summary>Builds the Kanban-style board view for a project.</summary>
 public sealed class GetProjectBoardHandler(
     IProjectRepository projects,
     IProjectBoardReadRepository boardReader)
 {
+    /// <summary>
+    /// Requires the project to exist, then reads its board snapshot (task
+    /// counts by status plus high-priority blocked tasks) and maps it into a
+    /// <see cref="ProjectBoardDto"/>.
+    /// </summary>
     public async Task<Result<ProjectBoardDto>> HandleAsync(
         GetProjectBoardQuery query,
         CancellationToken cancellationToken)

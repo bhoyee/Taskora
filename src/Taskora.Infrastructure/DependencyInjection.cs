@@ -9,8 +9,23 @@ using TodoApp.Infrastructure.Services;
 
 namespace TodoApp.Infrastructure;
 
+/// <summary>
+/// Composition root for the Infrastructure layer: registers the EF Core
+/// <see cref="TodoAppDbContext"/> (switching between SQL Server, Postgres,
+/// and SQLite based on configuration), all repository implementations, and
+/// the small cross-cutting services (email, clock, business date, id
+/// generation, link building) that the Application layer depends on via
+/// abstractions.
+/// </summary>
 public static class DependencyInjection
 {
+    /// <summary>
+    /// Registers all Infrastructure-layer services into <paramref name="services"/>.
+    /// The database provider is chosen from the "Database:Provider"
+    /// configuration key (defaulting to SQLite for local development), with
+    /// its connection string normalized to handle both classic and URL-style
+    /// Postgres formats.
+    /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -28,6 +43,9 @@ public static class DependencyInjection
         {
             ConfigureMigrationWarnings(options);
 
+            // Provider selection: SQL Server and Postgres both enable
+            // connection retry-on-failure for resilience against transient
+            // cloud database blips; SQLite (local/dev) needs no such retry.
             if (provider.Equals(
                     "SqlServer",
                     StringComparison.OrdinalIgnoreCase))
@@ -48,6 +66,10 @@ public static class DependencyInjection
             }
         });
 
+        // Repository registrations. Several read-only/read-model interfaces
+        // are resolved to the same concrete repository instance (registered
+        // once as itself, then exposed under each interface) so a single
+        // scoped instance serves both write and read-side abstractions.
         services.AddScoped<ProjectRepository>();
         services.AddScoped<IProjectRepository>(
             provider => provider.GetRequiredService<ProjectRepository>());
@@ -72,6 +94,11 @@ public static class DependencyInjection
             PlatformReadRepository>();
         services.AddScoped<IDueDateNotificationReadRepository,
             DueDateNotificationReadRepository>();
+
+        // Email options are read up front (outside the AddDbContext-style
+        // deferred configuration) so the same values can both populate
+        // SmtpEmailOptions via Configure(...) and decide, below, which
+        // INotificationEmailSender implementation to register.
         var smtpOptions = ReadSmtpOptions(configuration);
         services.Configure<SmtpEmailOptions>(options =>
         {
@@ -90,6 +117,9 @@ public static class DependencyInjection
             options.PublicBaseUrl = applicationUrlOptions.PublicBaseUrl;
         });
         services.AddSingleton<IApplicationLinkBuilder, ApplicationLinkBuilder>();
+        // Swap the notification email implementation based on configuration:
+        // real SMTP delivery when enabled, otherwise a logging stub so
+        // notification flows still work (without sending mail) locally.
         if (smtpOptions.Enabled)
         {
             services.AddScoped<INotificationEmailSender,
@@ -123,6 +153,9 @@ public static class DependencyInjection
         return services;
     }
 
+    // Suppresses EF Core's "pending model changes" warning, which can be a
+    // false positive here since one migration history is shared across two
+    // providers (SQLite and Postgres) with differing type metadata.
     private static void ConfigureMigrationWarnings(
         DbContextOptionsBuilder options)
     {
@@ -133,6 +166,8 @@ public static class DependencyInjection
             warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
+    // Reads SMTP settings from configuration into a plain options object,
+    // applying the same defaults as the SmtpEmailOptions property initializers.
     private static SmtpEmailOptions ReadSmtpOptions(
         IConfiguration configuration) =>
         new()
@@ -150,6 +185,8 @@ public static class DependencyInjection
                 : configuration["Email:Smtp:FromName"]!
         };
 
+    // Reads the public base URL from configuration, falling back to the
+    // local dev default when unset or blank.
     private static ApplicationUrlOptions ReadApplicationUrlOptions(
         IConfiguration configuration) =>
         new()
@@ -160,6 +197,7 @@ public static class DependencyInjection
                 : configuration["App:PublicBaseUrl"]!
         };
 
+    // Simple configuration-value parsing helpers with a fallback default.
     private static bool ReadBool(string? value, bool defaultValue = false) =>
         bool.TryParse(value, out var result) ? result : defaultValue;
 

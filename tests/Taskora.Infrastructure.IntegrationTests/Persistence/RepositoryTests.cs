@@ -10,6 +10,8 @@ using TodoApp.Infrastructure.Persistence.Repositories;
 
 namespace TodoApp.Infrastructure.IntegrationTests.Persistence;
 
+// Verifies repository CRUD and query behavior (search, filtering, sorting,
+// concurrency, transactions) against a real SQLite-backed DbContext.
 public sealed class RepositoryTests
 {
     [Fact]
@@ -93,6 +95,8 @@ public sealed class RepositoryTests
 
         await using var queryContext = database.CreateContext();
         var repository = new TaskRepository(queryContext);
+        // Filters to Ready, non-blocked tasks matching "release", sorted by
+        // priority descending, and pages down to a single result.
         var result = await repository.SearchAsync(
             new TaskSearchCriteria(
                 project.Id,
@@ -334,6 +338,8 @@ public sealed class RepositoryTests
         Assert.Single(result.HighPriorityBlockedTasks);
     }
 
+    // Builds a task that has been assigned planning factors and moved past
+    // Backlog into Ready, for tests that need query-ready fixture tasks.
     private static TaskItem CreateReadyTask(
         Guid projectId,
         string title,
@@ -345,11 +351,15 @@ public sealed class RepositoryTests
         return task;
     }
 
+    // Test fixture wrapping an in-memory SQLite connection so multiple
+    // DbContext instances can share the same database within a single test.
     private sealed class TestDatabase(
         SqliteConnection connection,
         DbContextOptions<TodoAppDbContext> options)
         : IAsyncDisposable
     {
+        // Opens the in-memory connection and creates the schema so
+        // subsequent contexts can read/write immediately.
         public static async Task<TestDatabase> CreateAsync()
         {
             var connection = new SqliteConnection("Data Source=:memory:");
@@ -368,6 +378,8 @@ public sealed class RepositoryTests
         public ValueTask DisposeAsync() => connection.DisposeAsync();
     }
 
+    // Test double for IClock returning a fixed instant, so time-dependent
+    // reads (e.g. overdue calculations) are deterministic.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;

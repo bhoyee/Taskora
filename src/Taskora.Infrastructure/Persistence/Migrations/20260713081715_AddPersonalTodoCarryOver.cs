@@ -5,6 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds CarriedOverFromDate/OriginalTodoDate to PersonalTodos and backfills
+    // OriginalTodoDate from the existing TodoDate. Supports carrying an
+    // incomplete personal todo forward to a new date while still tracking
+    // which date it originally belonged to.
     /// <inheritdoc />
     public partial class AddPersonalTodoCarryOver : Migration
     {

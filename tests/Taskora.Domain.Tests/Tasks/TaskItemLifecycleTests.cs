@@ -3,6 +3,8 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Tests.Tasks;
 
+// Tests for TaskItem status lifecycle: creation, guarded transitions (MoveToReady/Start/Block/Unblock/Complete/Reopen),
+// and the unrestricted MoveToStatus API that can jump directly between any two statuses.
 public sealed class TaskItemLifecycleTests
 {
     private static readonly Guid TaskId = Guid.Parse("6fc11d29-d884-4dd6-ab06-4f205dcae65d");
@@ -146,6 +148,7 @@ public sealed class TaskItemLifecycleTests
         Assert.Null(task.CompletedAt);
     }
 
+    // Unlike Start/Complete/Block, MoveToStatus allows any status-to-status jump without going through the normal guarded workflow.
     [Fact]
     public void MoveToStatus_WhenJumpingBlockedToCompleted_BypassesGuardedWorkflow()
     {
@@ -183,6 +186,7 @@ public sealed class TaskItemLifecycleTests
         Assert.Equal("Backend outage", task.BlockedReason);
     }
 
+    // Moving away from Completed to any other status must reset CompletedAt, even outside the guarded Reopen path.
     [Fact]
     public void MoveToStatus_WhenLeavingCompletedForAnUnrelatedStatus_ClearsCompletionTime()
     {
@@ -195,6 +199,7 @@ public sealed class TaskItemLifecycleTests
         Assert.Null(task.CompletedAt);
     }
 
+    // These three helpers build a task at progressively later lifecycle stages (backlog, ready, in-progress) for test setup.
     private static TaskItem CreateTask() =>
         TaskItem.Create(TaskId, ProjectId, "Prepare release notes");
 

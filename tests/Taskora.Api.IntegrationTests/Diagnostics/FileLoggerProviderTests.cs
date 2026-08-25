@@ -5,6 +5,8 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests.Diagnostics;
 
+// Verifies FileLoggerProvider writes each log entry as a single structured JSON line
+// (.jsonl) to disk, including scoped values such as CorrelationId.
 public sealed class FileLoggerProviderTests
 {
     [Fact]

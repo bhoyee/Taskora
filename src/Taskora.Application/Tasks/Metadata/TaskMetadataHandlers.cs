@@ -4,11 +4,19 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Application.Tasks.Metadata;
 
+/// <summary>
+/// Handles creation of a new category on a project.
+/// </summary>
 public sealed class CreateCategoryHandler(
     IProjectRepository projects,
     IUnitOfWork unitOfWork,
     IIdentifierGenerator identifiers)
 {
+    /// <summary>
+    /// Loads the target project, adds a new category with a generated identifier and
+    /// the requested name, persists the change, and returns the created category as a
+    /// <see cref="ProjectCategoryDto"/>. Fails with not-found if the project does not exist.
+    /// </summary>
     public async Task<Result<ProjectCategoryDto>> HandleAsync(
         CreateCategoryCommand command,
         CancellationToken cancellationToken)
@@ -33,9 +41,13 @@ public sealed class CreateCategoryHandler(
         }, unitOfWork, cancellationToken);
     }
 
+    // Builds a standard not-found ApplicationError for the named resource, shared by
+    // all metadata handlers below.
     internal static ApplicationError NotFound(string resource) =>
         new($"{resource}.not_found", $"The {resource} was not found.", ErrorType.NotFound);
 
+    // Runs a domain mutation, persists via the unit of work, and translates any domain
+    // validation/rule exceptions into a failed Result. Shared by all metadata handlers.
     internal static async Task<Result<T>> ExecuteAsync<T>(
         Func<T> operation,
         IUnitOfWork unitOfWork,
@@ -66,11 +78,20 @@ public sealed class CreateCategoryHandler(
     }
 }
 
+/// <summary>
+/// Handles assigning or clearing a task's category.
+/// </summary>
 public sealed class UpdateTaskCategoryHandler(
     ITaskRepository tasks,
     IProjectRepository projects,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Loads the task and its owning project, validates that the requested category
+    /// (if any) actually belongs to that project, then assigns the category and
+    /// persists the change. Fails with not-found if the task, project, or category
+    /// cannot be resolved. Returns the resulting category id (or null if cleared).
+    /// </summary>
     public async Task<Result<Guid?>> HandleAsync(
         UpdateTaskCategoryCommand command,
         CancellationToken cancellationToken)
@@ -106,10 +127,17 @@ public sealed class UpdateTaskCategoryHandler(
     }
 }
 
+/// <summary>
+/// Handles adding a tag to a task.
+/// </summary>
 public sealed class AddTaskTagHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Loads the task, adds the requested tag, persists the change, and returns the
+    /// task's full updated tag list. Fails with not-found if the task does not exist.
+    /// </summary>
     public async Task<Result<IReadOnlyCollection<string>>> HandleAsync(
         AddTaskTagCommand command,
         CancellationToken cancellationToken)
@@ -134,10 +162,17 @@ public sealed class AddTaskTagHandler(
     }
 }
 
+/// <summary>
+/// Handles removing a tag from a task.
+/// </summary>
 public sealed class RemoveTaskTagHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Loads the task, removes the requested tag, persists the change, and returns
+    /// the task's full updated tag list. Fails with not-found if the task does not exist.
+    /// </summary>
     public async Task<Result<IReadOnlyCollection<string>>> HandleAsync(
         RemoveTaskTagCommand command,
         CancellationToken cancellationToken)
@@ -162,6 +197,9 @@ public sealed class RemoveTaskTagHandler(
     }
 }
 
+/// <summary>
+/// Handles adding a note to a task on behalf of the current user.
+/// </summary>
 public sealed class AddTaskNoteHandler(
     ITaskRepository tasks,
     IUnitOfWork unitOfWork,
@@ -169,6 +207,13 @@ public sealed class AddTaskNoteHandler(
     IClock clock,
     ICurrentUser currentUser)
 {
+    /// <summary>
+    /// Requires an authenticated current user, loads the target task, appends a new
+    /// note authored by that user (with a generated id and the current UTC timestamp),
+    /// persists the change, and returns the created note as a <see cref="TaskNoteDto"/>.
+    /// Fails with unauthorized if no user is authenticated, or not-found if the task
+    /// does not exist.
+    /// </summary>
     public async Task<Result<TaskNoteDto>> HandleAsync(
         AddTaskNoteCommand command,
         CancellationToken cancellationToken)

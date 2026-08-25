@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the AddWorkspaceOwnershipAndAssignments migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260706045940_AddWorkspaceOwnershipAndAssignments")]
     partial class AddWorkspaceOwnershipAndAssignments

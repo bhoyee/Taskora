@@ -3,8 +3,10 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Tests.Tasks;
 
+// Tests for PriorityScore.Calculate's weighted formula and PriorityBand thresholds, plus PlanningFactors range validation.
 public sealed class PriorityScoreTests
 {
+    // Score = (businessValue*3 + urgency*2 + riskReduction*2) / effort; here (15+8+6)/2 = 14.5, which lands in the Critical band (>= 10).
     [Fact]
     public void Calculate_WhenPlanningFactorsAreValid_ReturnsWeightedScore()
     {
@@ -23,6 +25,7 @@ public sealed class PriorityScoreTests
         Assert.Equal(PriorityBand.Critical, score.Band);
     }
 
+    // High effort relative to value drives the score below 3, which falls into the Low band.
     [Fact]
     public void Calculate_WhenValueToEffortRatioIsLow_ReturnsLowBand()
     {
@@ -65,6 +68,7 @@ public sealed class PriorityScoreTests
         Assert.Equal(expectedMessage, exception.Message);
     }
 
+    // Confirms the task's Priority is recalculated (via PriorityScore.Calculate) as soon as planning factors are set.
     [Fact]
     public void SetPlanningFactors_WhenFactorsAreProvided_UpdatesTaskPriority()
     {

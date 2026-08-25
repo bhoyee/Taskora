@@ -5,6 +5,9 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Verifies the personal to-do endpoints: per-user CRUD, date-scoped listing (including that
+// incomplete items don't silently roll forward to a later date), and daily routines that
+// auto-generate a high-priority to-do on their scheduled dates.
 public sealed class PersonalTodoEndpointTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {

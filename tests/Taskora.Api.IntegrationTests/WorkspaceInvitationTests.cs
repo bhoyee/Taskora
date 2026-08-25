@@ -7,6 +7,9 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Verifies the workspace invitation lifecycle end-to-end against the in-memory test host:
+// an owner inviting an external email, the invitee accepting and logging in, member
+// removal revoking access, and pending invitations being declined or cancelled.
 public sealed class WorkspaceInvitationTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
@@ -180,6 +183,7 @@ public sealed class WorkspaceInvitationTests(ApiFactory factory)
         return client;
     }
 
+    // Invite links are of the form ".../invitations/{token}"; the token is the last segment.
     private static string ExtractToken(string? inviteLink)
     {
         Assert.False(string.IsNullOrWhiteSpace(inviteLink));

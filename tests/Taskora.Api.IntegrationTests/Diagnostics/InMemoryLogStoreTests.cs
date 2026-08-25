@@ -3,6 +3,8 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests.Diagnostics;
 
+// Unit tests for InMemoryLogStore's pruning behavior: entries older than the retention
+// window are dropped, and the store never grows past its configured max entry count.
 public sealed class InMemoryLogStoreTests
 {
     [Fact]

@@ -4,9 +4,18 @@ using TodoApp.Application.Common;
 
 namespace TodoApp.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Read-only repository over the <c>TaskActivities</c> audit log, exposing
+/// per-task activity history and paged workspace-wide activity feeds.
+/// </summary>
 public sealed class TaskActivityReadRepository(TodoAppDbContext context)
     : ITaskActivityReadRepository
 {
+    /// <summary>
+    /// Returns the full activity history for a single task, newest first,
+    /// projected directly into <see cref="TaskActivityRecord"/> with
+    /// <c>AsNoTracking()</c> since the result is read-only.
+    /// </summary>
     public async Task<IReadOnlyList<TaskActivityRecord>> GetForTaskAsync(
         Guid taskId,
         CancellationToken cancellationToken) =>
@@ -24,6 +33,17 @@ public sealed class TaskActivityReadRepository(TodoAppDbContext context)
                 activity.OccurredAt))
             .ToArrayAsync(cancellationToken);
 
+    /// <summary>
+    /// Returns a paged, optionally type-filtered activity feed for an entire
+    /// workspace. Uses LINQ query-comprehension syntax to explicitly join
+    /// <c>TaskActivities</c> to <c>Tasks</c> and then to <c>Projects</c> (all
+    /// <c>AsNoTracking()</c>) since there is no direct navigation from an
+    /// activity record to its workspace; the join lets the query filter by
+    /// <paramref name="workspaceId"/> and pull the task/project titles used
+    /// for display without a second round trip. The total count is computed
+    /// before paging (<c>Skip</c>/<c>Take</c>) so the caller gets an accurate
+    /// count independent of the requested page.
+    /// </summary>
     public async Task<PagedResult<WorkspaceActivityRecord>> GetForWorkspaceAsync(
         Guid workspaceId,
         string? type,

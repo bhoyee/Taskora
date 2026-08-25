@@ -5,6 +5,10 @@ using TodoApp.Domain.Collaboration;
 
 namespace TodoApp.Application.Tests.Collaboration;
 
+// Covers workspace management handlers: rename, delete (including the
+// "can't delete your last workspace" rule and owner-only authorization),
+// suspend/reactivate, and member listing with suspension enforcement,
+// plus the administrative bypass flag that overrides these checks.
 public sealed class WorkspaceManagementHandlerTests
 {
     private static readonly Guid OwnerId =
@@ -113,6 +117,9 @@ public sealed class WorkspaceManagementHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    // The administrative bypass flag lets the deletion proceed even though
+    // the caller isn't a member and it's the workspace's only remaining one,
+    // both of which would otherwise block the deletion.
     [Fact]
     public async Task DeleteWorkspace_WhenBypassAndOnlyWorkspace_RemovesWorkspace()
     {
@@ -192,6 +199,8 @@ public sealed class WorkspaceManagementHandlerTests
         Assert.Equal(ErrorType.NotFound, result.Error.Type);
     }
 
+    // The administrative bypass flag lets a non-member read members of a
+    // suspended workspace, which would otherwise return NotFound.
     [Fact]
     public async Task GetWorkspaceMembers_WhenSuspendedButBypassed_Succeeds()
     {
@@ -211,11 +220,14 @@ public sealed class WorkspaceManagementHandlerTests
         Assert.Single(result.Value);
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset now) : IClock
     {
         public DateTimeOffset UtcNow => now;
     }
 
+    // IUserProfileRepository stub that synthesizes a placeholder profile
+    // for every requested user id.
     private sealed class StubUserProfileRepository : IUserProfileRepository
     {
         public Task<UserProfile?> GetByEmailAsync(
@@ -232,6 +244,8 @@ public sealed class WorkspaceManagementHandlerTests
                     .ToArray());
     }
 
+    // In-memory IWorkspaceRepository fake that also records the last
+    // removed workspace for assertions.
     private sealed class InMemoryWorkspaceRepository(params Workspace[] workspaces)
         : IWorkspaceRepository
     {
@@ -274,6 +288,7 @@ public sealed class WorkspaceManagementHandlerTests
                     .ToArray());
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -285,6 +300,7 @@ public sealed class WorkspaceManagementHandlerTests
         }
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;

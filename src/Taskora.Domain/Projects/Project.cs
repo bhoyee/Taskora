@@ -3,6 +3,10 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Domain.Projects;
 
+/// <summary>
+/// Aggregate root for a project: owns its categories and sprints, and once archived
+/// becomes immutable and stops accepting new tasks, categories, or sprints.
+/// </summary>
 public sealed class Project
 {
     private readonly List<ProjectCategory> _categories = [];
@@ -46,6 +50,7 @@ public sealed class Project
     public IReadOnlyCollection<Sprint> Sprints =>
         _sprints.AsReadOnly();
 
+    /// <summary>Creates a new, active (unarchived) project.</summary>
     public static Project Create(
         Guid id,
         string name,
@@ -53,30 +58,38 @@ public sealed class Project
         Guid? workspaceId = null) =>
         new(id, name, description, workspaceId ?? Guid.Empty);
 
+    /// <summary>Renames the project. Not permitted once archived.</summary>
     public void Rename(string name)
     {
         EnsureActive();
         Name = NormalizeName(name);
     }
 
+    /// <summary>Updates the project description. Not permitted once archived.</summary>
     public void UpdateDescription(string? description)
     {
         EnsureActive();
         Description = NormalizeDescription(description);
     }
 
+    /// <summary>Archives the project, after which it becomes read-only and stops accepting new tasks.</summary>
     public void Archive(DateTimeOffset archivedAt)
     {
         EnsureActive();
         ArchivedAt = archivedAt;
     }
 
+    /// <summary>Sets the project's target completion date. Not permitted once archived.</summary>
     public void SetTargetDate(DueDate targetDate)
     {
         EnsureActive();
         TargetDate = targetDate;
     }
 
+    /// <summary>
+    /// Adds a new category to the project, rejecting a duplicate name
+    /// (case-insensitive) among existing categories.
+    /// </summary>
     public ProjectCategory AddCategory(Guid id, string name)
     {
         EnsureActive();
@@ -94,6 +107,7 @@ public sealed class Project
         return category;
     }
 
+    /// <summary>Renames an existing category. Not permitted once the project is archived.</summary>
     public void RenameCategory(Guid categoryId, string name)
     {
         EnsureActive();
@@ -103,6 +117,10 @@ public sealed class Project
     public bool HasCategory(Guid categoryId) =>
         _categories.Any(category => category.Id == categoryId);
 
+    /// <summary>
+    /// Adds a new sprint to the project, rejecting a duplicate name (case-insensitive)
+    /// among sprints that are not cancelled (a cancelled sprint's name can be reused).
+    /// </summary>
     public Sprint AddSprint(
         Guid id,
         string name,
@@ -126,10 +144,12 @@ public sealed class Project
         return sprint;
     }
 
+    /// <summary>Looks up a sprint belonging to this project by id, throwing if not found.</summary>
     public Sprint GetSprint(Guid sprintId) =>
         _sprints.SingleOrDefault(sprint => sprint.Id == sprintId) ??
         throw new DomainRuleException("The sprint was not found.");
 
+    /// <summary>Removes a sprint from the project.</summary>
     public void RemoveSprint(Guid sprintId)
     {
         var sprint = GetSprint(sprintId);
@@ -139,10 +159,15 @@ public sealed class Project
     public bool HasSprint(Guid sprintId) =>
         _sprints.Any(sprint => sprint.Id == sprintId);
 
+    // Looks up a category belonging to this project by id, throwing if not found.
     private ProjectCategory GetCategory(Guid categoryId) =>
         _categories.SingleOrDefault(category => category.Id == categoryId) ??
         throw new DomainRuleException("The project category was not found.");
 
+    /// <summary>
+    /// Guard used by other aggregates (e.g. when creating a task under this project)
+    /// to enforce that archived projects cannot receive new work.
+    /// </summary>
     public void EnsureCanAcceptTasks()
     {
         if (IsArchived)
@@ -165,6 +190,7 @@ public sealed class Project
     private static string? NormalizeDescription(string? description) =>
         string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 
+    // Central guard: most mutations are disallowed once the project is archived.
     private void EnsureActive()
     {
         if (IsArchived)

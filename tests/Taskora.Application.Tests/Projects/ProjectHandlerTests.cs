@@ -6,6 +6,9 @@ using TodoApp.Domain.Projects;
 
 namespace TodoApp.Application.Tests.Projects;
 
+// Covers project CRUD handlers (create, update, archive, delete, get-by-id)
+// including workspace-scoped project creation and role-based authorization
+// for managers vs. members.
 public sealed class ProjectHandlerTests
 {
     private static readonly Guid ProjectId =
@@ -288,6 +291,8 @@ public sealed class ProjectHandlerTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    // In-memory IProjectRepository fake that also records the last added
+    // and removed project for assertions.
     private sealed class InMemoryProjectRepository(params Project[] projects)
         : IProjectRepository
     {
@@ -333,6 +338,7 @@ public sealed class ProjectHandlerTests
                     .ToArray());
     }
 
+    // IUnitOfWork fake that counts how many times changes were saved.
     private sealed class RecordingUnitOfWork : IUnitOfWork
     {
         public int SaveCount { get; private set; }
@@ -344,12 +350,14 @@ public sealed class ProjectHandlerTests
         }
     }
 
+    // IIdentifierGenerator stub returning a fixed, known identifier.
     private sealed class StubIdentifierGenerator(Guid identifier)
         : IIdentifierGenerator
     {
         public Guid NewId() => identifier;
     }
 
+    // ICurrentUser stub representing a fixed, always-authenticated user.
     private sealed class StubCurrentUser(Guid userId) : ICurrentUser
     {
         public bool IsAuthenticated => true;
@@ -357,6 +365,7 @@ public sealed class ProjectHandlerTests
         public Guid UserId { get; } = userId;
     }
 
+    // IWorkspaceRepository stub backed by a single optional workspace.
     private sealed class StubWorkspaceRepository(Workspace? workspace)
         : IWorkspaceRepository
     {
@@ -384,6 +393,7 @@ public sealed class ProjectHandlerTests
                     : []);
     }
 
+    // IClock stub returning a fixed point in time for deterministic tests.
     private sealed class StubClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;

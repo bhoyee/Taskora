@@ -2,12 +2,21 @@ using TodoApp.Domain.Common;
 
 namespace TodoApp.Domain.Todos;
 
+/// <summary>
+/// A timestamped comment attached to a <see cref="PersonalTodo"/>. Created and owned
+/// exclusively through the owning <see cref="PersonalTodo"/> aggregate.
+/// </summary>
 public sealed class PersonalTodoComment
 {
+    // Reserved for ORM materialization; domain code must use the parameterized constructor.
     private PersonalTodoComment()
     {
     }
 
+    /// <summary>
+    /// Creates a comment. Internal because comments are only ever created via the
+    /// owning <see cref="PersonalTodo"/> aggregate, which validates the body length.
+    /// </summary>
     internal PersonalTodoComment(
         Guid id,
         Guid todoId,

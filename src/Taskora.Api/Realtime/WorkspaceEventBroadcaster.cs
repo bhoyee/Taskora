@@ -3,10 +3,22 @@ using System.Threading.Channels;
 
 namespace TodoApp.Api.Realtime;
 
+/// <summary>
+/// In-memory pub/sub hub for workspace realtime events (e.g. task/project
+/// changes) used to fan out updates to connected clients (such as SSE/long-poll
+/// subscribers) without any external message broker. Subscribers are keyed
+/// per workspace, and each gets its own bounded channel.
+/// </summary>
 public sealed class WorkspaceEventBroadcaster
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Channel<WorkspaceRealtimeEvent>>> _subscribers = new();
 
+    /// <summary>
+    /// Registers a new subscriber for the given workspace and returns a
+    /// subscription exposing a bounded channel reader (capacity 50, drops
+    /// the oldest event on overflow) plus an unsubscribe callback that is
+    /// invoked when the returned subscription is disposed.
+    /// </summary>
     public WorkspaceEventSubscription Subscribe(Guid workspaceId)
     {
         var subscriberId = Guid.NewGuid();
@@ -29,6 +41,13 @@ public sealed class WorkspaceEventBroadcaster
             Unsubscribe);
     }
 
+    /// <summary>
+    /// Publishes an event to every current subscriber of the given
+    /// workspace. A no-op if the workspace has no subscribers. Writes are
+    /// best-effort (<c>TryWrite</c>) against each subscriber's bounded
+    /// channel, so a slow/full subscriber loses its oldest queued event
+    /// rather than blocking the publisher.
+    /// </summary>
     public ValueTask PublishAsync(
         Guid workspaceId,
         string eventType,
@@ -58,6 +77,8 @@ public sealed class WorkspaceEventBroadcaster
         return ValueTask.CompletedTask;
     }
 
+    // Completes and removes the given subscriber's channel, and drops the
+    // workspace entry entirely once it has no remaining subscribers.
     private void Unsubscribe(Guid workspaceId, Guid subscriberId)
     {
         if (!_subscribers.TryGetValue(workspaceId, out var subscribers))
@@ -77,6 +98,7 @@ public sealed class WorkspaceEventBroadcaster
     }
 }
 
+/// <summary>A single realtime event broadcast to workspace subscribers (e.g. an entity created/updated/deleted).</summary>
 public sealed record WorkspaceRealtimeEvent(
     string EventType,
     Guid WorkspaceId,
@@ -85,6 +107,11 @@ public sealed record WorkspaceRealtimeEvent(
     Guid? ActorId,
     DateTimeOffset OccurredAt);
 
+/// <summary>
+/// A live handle to one subscriber's event stream from
+/// <see cref="WorkspaceEventBroadcaster.Subscribe"/>. Disposing it
+/// unregisters the subscriber and completes its channel.
+/// </summary>
 public sealed class WorkspaceEventSubscription(
     Guid workspaceId,
     Guid subscriberId,
@@ -92,8 +119,10 @@ public sealed class WorkspaceEventSubscription(
     Action<Guid, Guid> unsubscribe)
     : IAsyncDisposable
 {
+    /// <summary>The channel reader consumers should await for incoming events.</summary>
     public ChannelReader<WorkspaceRealtimeEvent> Reader { get; } = reader;
 
+    /// <summary>Unsubscribes from the broadcaster, releasing this subscriber's channel.</summary>
     public ValueTask DisposeAsync()
     {
         unsubscribe(workspaceId, subscriberId);

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace TodoApp.Domain.Tests.Collaboration;
 
+// Tests for Workspace aggregate: membership/role management, owner protections, and suspension/reactivation.
 public sealed class WorkspaceTests
 {
     private static readonly Guid OwnerId = Guid.NewGuid();

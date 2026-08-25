@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // EF Core design-time model snapshot paired with the AddPersonalTodoCarryOver migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260713081715_AddPersonalTodoCarryOver")]
     partial class AddPersonalTodoCarryOver

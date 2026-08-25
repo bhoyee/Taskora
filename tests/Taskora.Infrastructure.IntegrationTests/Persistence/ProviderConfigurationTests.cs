@@ -5,6 +5,9 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.IntegrationTests.Persistence;
 
+// Verifies that AddInfrastructure selects the correct EF Core database
+// provider (Sqlite/SqlServer/Postgres) from configuration and correctly
+// normalizes real-world connection string formats (e.g. Neon/Render pastes).
 public sealed class ProviderConfigurationTests
 {
     [Theory]
@@ -43,6 +46,9 @@ public sealed class ProviderConfigurationTests
             "postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require&channel_binding=require");
     }
 
+    // Covers connection strings pasted with surrounding quotes, or still
+    // prefixed with their env-var name (as commonly copied from Render),
+    // both of which must be cleaned before reaching Npgsql.
     [Theory]
     [InlineData("\"postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require\"")]
     [InlineData("ConnectionStrings__TodoApp=postgresql://taskora_user:taskora_password@example.neon.tech/neondb?sslmode=require")]
@@ -52,6 +58,8 @@ public sealed class ProviderConfigurationTests
         AssertPostgresProvider(connectionString);
     }
 
+    // Builds the DI container for the given connection string and asserts
+    // the resolved DbContext resolves to the Npgsql provider.
     private static void AssertPostgresProvider(
         string connectionString)
     {
@@ -76,6 +84,8 @@ public sealed class ProviderConfigurationTests
             context.Database.ProviderName);
     }
 
+    // Builds a provider-appropriate connection string for the
+    // AddInfrastructure_SelectsConfiguredProvider theory cases.
     private static string ConnectionStringFor(string provider)
     {
         if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))

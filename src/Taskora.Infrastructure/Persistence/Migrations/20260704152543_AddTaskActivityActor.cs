@@ -4,6 +4,8 @@
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Adds an Actor column to TaskActivities, likely to record who performed
+    // each logged activity rather than just what changed.
     /// <inheritdoc />
     public partial class AddTaskActivityActor : Migration
     {

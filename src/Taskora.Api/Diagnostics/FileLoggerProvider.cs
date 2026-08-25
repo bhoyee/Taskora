@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace TodoApp.Api.Diagnostics;
 
+/// <summary>Configuration for <see cref="FileLoggerProvider"/>.</summary>
 public sealed class FileLoggerOptions
 {
     public bool Enabled { get; set; } = true;
@@ -12,6 +13,12 @@ public sealed class FileLoggerOptions
     public int RetentionDays { get; set; } = 30;
 }
 
+/// <summary>
+/// A dependency-free <see cref="ILoggerProvider"/> that appends structured
+/// (JSON Lines) log entries to a daily rolling file under
+/// <see cref="FileLoggerOptions.Directory"/> and prunes files older than
+/// <see cref="FileLoggerOptions.RetentionDays"/> on every write.
+/// </summary>
 public sealed class FileLoggerProvider(FileLoggerOptions options)
     : ILoggerProvider, ISupportExternalScope
 {
@@ -23,18 +30,24 @@ public sealed class FileLoggerProvider(FileLoggerOptions options)
     private IExternalScopeProvider _scopeProvider =
         new LoggerExternalScopeProvider();
 
+    /// <summary>Creates a logger that funnels entries back through this provider's <see cref="Write"/>.</summary>
     public ILogger CreateLogger(string categoryName) =>
         new FileLogger(categoryName, this);
 
+    /// <summary>No unmanaged resources are held; file handles are opened and closed per write.</summary>
     public void Dispose()
     {
     }
 
+    /// <summary>Receives the external scope provider (e.g. for correlation IDs) from the logging infrastructure.</summary>
     public void SetScopeProvider(IExternalScopeProvider scopeProvider)
     {
         _scopeProvider = scopeProvider;
     }
 
+    // Serializes one log entry as a JSON line and appends it to today's log
+    // file, then prunes expired files. Skipped entirely when logging is
+    // disabled or the level is below Information.
     private void Write(
         string category,
         LogLevel level,
@@ -72,6 +85,8 @@ public sealed class FileLoggerProvider(FileLoggerOptions options)
         }
     }
 
+    // Deletes any "taskora-*.jsonl" file whose last write time is older than
+    // the configured retention window, based on the given "current" time.
     private void PruneOldFiles(DateTimeOffset now)
     {
         var retentionDays = Math.Max(1, options.RetentionDays);
@@ -88,6 +103,9 @@ public sealed class FileLoggerProvider(FileLoggerOptions options)
         }
     }
 
+    // ILogger implementation returned per category; delegates the actual
+    // file write back to the owning provider so all categories share one
+    // lock and one rolling file.
     private sealed class FileLogger(
         string categoryName,
         FileLoggerProvider provider) : ILogger
@@ -96,6 +114,7 @@ public sealed class FileLoggerProvider(FileLoggerOptions options)
             where TState : notnull =>
             provider._scopeProvider.Push(state);
 
+        // File logging only records Information and above.
         public bool IsEnabled(LogLevel logLevel) =>
             logLevel >= LogLevel.Information;
 

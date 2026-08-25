@@ -6,6 +6,10 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Covers operational/cross-cutting API concerns rather than domain behavior: the generated
+// OpenAPI document, the SPA fallback at the web root, health check endpoints, correlation-id
+// propagation, and error-shape consistency (problem+json) for malformed input and invalid
+// state transitions.
 public sealed class OperationalContractTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
@@ -85,6 +89,8 @@ public sealed class OperationalContractTests(ApiFactory factory)
             response.Content.Headers.ContentType?.MediaType);
     }
 
+    // A newly created task starts in the Backlog status, which cannot transition
+    // directly to Completed without first going through Ready/InProgress.
     [Fact]
     public async Task Invalid_lifecycle_transition_returns_conflict()
     {

@@ -10,6 +10,7 @@ using TodoApp.Infrastructure.Persistence;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Design-time model snapshot paired with the InitialPersistence migration.
     [DbContext(typeof(TodoAppDbContext))]
     [Migration("20260703103223_InitialPersistence")]
     partial class InitialPersistence

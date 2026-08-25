@@ -13,11 +13,24 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Api.Endpoints;
 
+/// <summary>
+/// Registers all HTTP endpoints for creating, querying and mutating tasks
+/// (status transitions, assignment, dependencies, tags, notes, etc.).
+/// </summary>
 internal static class TaskEndpoints
 {
+    /// <summary>
+    /// Wires up the task endpoint group on the given route builder. All endpoints
+    /// registered here require an authenticated caller (see the group-level
+    /// <c>RequireAuthorization</c> below), except for standalone endpoints that
+    /// opt in explicitly.
+    /// </summary>
     public static IEndpointRouteBuilder MapTaskEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
+        // POST: creates a task under a project. Requires authentication.
+        // Returns 201 Created with the new TaskDto, or 400/404/409 on failure
+        // (invalid input, project not found, or a conflicting state respectively).
         endpoints.MapPost(
                 "/api/v1/projects/{projectId:guid}/tasks",
                 CreateTaskAsync)
@@ -29,65 +42,95 @@ internal static class TaskEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        // All routes below share the "/api/v1/tasks" prefix and require an
+        // authenticated caller.
         var group = endpoints.MapGroup("/api/v1/tasks")
             .WithTags("Tasks")
             .RequireAuthorization();
 
+        // GET: searches/filters/paginates tasks. Returns the matching page of tasks.
         group.MapGet("/", SearchTasksAsync)
             .WithName("SearchTasks");
+        // GET: fetches full details for a single task. Returns TaskDetailsDto, or 404 if not found.
         group.MapGet("/{taskId:guid}", GetTaskAsync)
             .WithName("GetTask")
             .Produces<TaskDetailsDto>()
             .ProducesProblem(StatusCodes.Status404NotFound);
+        // GET: returns the activity/audit log entries for a task, or 404 if the task doesn't exist.
         group.MapGet("/{taskId:guid}/activity", GetActivityAsync)
             .WithName("GetTaskActivity")
             .ProducesProblem(StatusCodes.Status404NotFound);
+        // PUT: updates core task fields (title, due date, effort, sprint).
         group.MapPut("/{taskId:guid}", UpdateTaskAsync)
             .WithName("UpdateTask");
+        // PUT: updates prioritization/planning factors (business value, urgency, risk reduction, effort).
         group.MapPut("/{taskId:guid}/planning", UpdatePlanningAsync)
             .WithName("UpdateTaskPlanning");
+        // POST: transitions a task into the "ready" status.
         group.MapPost("/{taskId:guid}/ready", MoveToReadyAsync)
             .WithName("MoveTaskToReady");
+        // POST: transitions a task into "in progress".
         group.MapPost("/{taskId:guid}/start", StartTaskAsync)
             .WithName("StartTask");
+        // POST: marks a task as completed.
         group.MapPost("/{taskId:guid}/complete", CompleteTaskAsync)
             .WithName("CompleteTask");
+        // POST: reopens a previously completed/closed task.
         group.MapPost("/{taskId:guid}/reopen", ReopenTaskAsync)
             .WithName("ReopenTask");
+        // POST: sets the task status directly (used for arbitrary status transitions, e.g. from the board).
         group.MapPost("/{taskId:guid}/status", SetStatusAsync)
             .WithName("SetTaskStatus");
+        // DELETE: permanently removes a task.
         group.MapDelete("/{taskId:guid}", DeleteTaskAsync)
             .WithName("DeleteTask");
+        // POST: marks a task as blocked with a reason.
         group.MapPost("/{taskId:guid}/block", BlockTaskAsync)
             .WithName("BlockTask");
+        // POST: clears a task's blocked state.
         group.MapPost("/{taskId:guid}/unblock", UnblockTaskAsync)
             .WithName("UnblockTask");
+        // POST: resumes a task after being blocked/paused.
         group.MapPost("/{taskId:guid}/resume", ResumeTaskAsync)
             .WithName("ResumeTask");
+        // POST: adds a dependency link from this task to another task.
         group.MapPost("/{taskId:guid}/dependencies", AddDependencyAsync)
             .WithName("AddTaskDependency");
+        // DELETE: removes an existing dependency link between two tasks.
         group.MapDelete(
                 "/{taskId:guid}/dependencies/{dependencyId:guid}",
                 RemoveDependencyAsync)
             .WithName("RemoveTaskDependency");
+        // PUT: assigns the task to a user. Explicitly re-asserts authorization (redundant with the group policy).
         group.MapPut("/{taskId:guid}/assignment", AssignTaskAsync)
             .WithName("AssignTask")
             .RequireAuthorization();
+        // DELETE: clears the task's current assignee. Explicitly re-asserts authorization (redundant with the group policy).
         group.MapDelete("/{taskId:guid}/assignment", UnassignTaskAsync)
             .WithName("UnassignTask")
             .RequireAuthorization();
+        // PUT: changes the task's category.
         group.MapPut("/{taskId:guid}/category", UpdateCategoryAsync)
             .WithName("UpdateTaskCategory");
+        // POST: adds a tag to the task.
         group.MapPost("/{taskId:guid}/tags", AddTagAsync)
             .WithName("AddTaskTag");
+        // DELETE: removes a tag from the task.
         group.MapDelete("/{taskId:guid}/tags/{tag}", RemoveTagAsync)
             .WithName("RemoveTaskTag");
+        // POST: appends a note/comment to the task.
         group.MapPost("/{taskId:guid}/notes", AddNoteAsync)
             .WithName("AddTaskNote");
 
         return endpoints;
     }
 
+    /// <summary>
+    /// Handles POST /api/v1/projects/{projectId}/tasks. Requires authentication.
+    /// Creates a task under the given project, broadcasts a "task.created" workspace
+    /// event on success, and returns 201 Created with the new task, or the
+    /// underlying failure result (400/404/409) otherwise.
+    /// </summary>
     private static async Task<IResult> CreateTaskAsync(
         Guid projectId,
         CreateTaskRequest request,
@@ -127,6 +170,8 @@ internal static class TaskEndpoints
             result.Value);
     }
 
+    // Handles GET /api/v1/tasks/{taskId}. Requires authentication. Returns
+    // TaskDetailsDto on success, or 404 if the task doesn't exist.
     private static async Task<IResult> GetTaskAsync(
         Guid taskId,
         GetTaskByIdHandler handler,
@@ -135,6 +180,8 @@ internal static class TaskEndpoints
             new GetTaskByIdQuery(taskId),
             cancellationToken));
 
+    // Handles GET /api/v1/tasks/{taskId}/activity. Requires authentication.
+    // Returns the task's activity log, or 404 if the task doesn't exist.
     private static async Task<IResult> GetActivityAsync(
         Guid taskId,
         GetTaskActivityHandler handler,
@@ -143,6 +190,8 @@ internal static class TaskEndpoints
             new GetTaskActivityQuery(taskId),
             cancellationToken));
 
+    // Handles GET /api/v1/tasks. Requires authentication. Applies default
+    // sort/paging when the caller omits them, and returns the matching page of tasks.
     private static async Task<IResult> SearchTasksAsync(
         Guid? projectId,
         Guid? workspaceId,
@@ -172,6 +221,9 @@ internal static class TaskEndpoints
                 sprintId),
             cancellationToken));
 
+    // Handles PUT /api/v1/tasks/{taskId}. Requires authentication. Updates core
+    // task fields, broadcasts a "task.updated" workspace event on success, and
+    // returns the handler's result.
     private static async Task<IResult> UpdateTaskAsync(
         Guid taskId,
         UpdateTaskRequest request,
@@ -202,6 +254,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles PUT /api/v1/tasks/{taskId}/planning. Requires authentication.
+    // Updates prioritization factors, broadcasts a "task.planning-updated"
+    // workspace event on success, and returns the handler's result.
     private static async Task<IResult> UpdatePlanningAsync(
         Guid taskId,
         UpdatePlanningFactorsRequest request,
@@ -232,6 +287,8 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles POST /api/v1/tasks/{taskId}/ready. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.ready" on success.
     private static async Task<IResult> MoveToReadyAsync(
         Guid taskId,
         MoveTaskToReadyHandler handler,
@@ -252,6 +309,8 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/start. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.started" on success.
     private static async Task<IResult> StartTaskAsync(
         Guid taskId,
         StartTaskHandler handler,
@@ -272,6 +331,8 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/complete. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.completed" on success.
     private static async Task<IResult> CompleteTaskAsync(
         Guid taskId,
         CompleteTaskHandler handler,
@@ -292,6 +353,8 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/reopen. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.reopened" on success.
     private static async Task<IResult> ReopenTaskAsync(
         Guid taskId,
         ReopenTaskHandler handler,
@@ -312,6 +375,10 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/status. Requires authentication. Sets
+    // the task to an arbitrary status (with an optional blocked reason) — used
+    // for free-form status transitions (e.g. drag-and-drop on the board).
+    // Delegates to HandleStatusAsync, which broadcasts "task.status-changed" on success.
     private static async Task<IResult> SetStatusAsync(
         Guid taskId,
         SetTaskStatusRequest request,
@@ -333,6 +400,10 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles DELETE /api/v1/tasks/{taskId}. Requires authentication. Looks up
+    // the task's project before deleting it (since the project id is needed to
+    // broadcast the workspace event), then broadcasts "task.deleted" on success
+    // and returns the handler's result.
     private static async Task<IResult> DeleteTaskAsync(
         Guid taskId,
         DeleteTaskHandler handler,
@@ -361,6 +432,8 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles POST /api/v1/tasks/{taskId}/block. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.blocked" on success.
     private static async Task<IResult> BlockTaskAsync(
         Guid taskId,
         BlockTaskRequest request,
@@ -382,6 +455,8 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/unblock. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.unblocked" on success.
     private static async Task<IResult> UnblockTaskAsync(
         Guid taskId,
         UnblockTaskHandler handler,
@@ -402,6 +477,8 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/resume. Requires authentication.
+    // Delegates to HandleStatusAsync, which broadcasts "task.resumed" on success.
     private static async Task<IResult> ResumeTaskAsync(
         Guid taskId,
         ResumeTaskHandler handler,
@@ -422,6 +499,9 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles POST /api/v1/tasks/{taskId}/dependencies. Requires authentication.
+    // Adds a dependency link, broadcasts "task.dependency-added" on success, and
+    // returns the handler's result.
     private static async Task<IResult> AddDependencyAsync(
         Guid taskId,
         AddDependencyRequest request,
@@ -447,6 +527,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles DELETE /api/v1/tasks/{taskId}/dependencies/{dependencyId}.
+    // Requires authentication. Delegates to HandleStatusAsync, which broadcasts
+    // "task.dependency-removed" on success.
     private static async Task<IResult> RemoveDependencyAsync(
         Guid taskId,
         Guid dependencyId,
@@ -468,6 +551,9 @@ internal static class TaskEndpoints
             currentUser,
             cancellationToken);
 
+    // Handles PUT /api/v1/tasks/{taskId}/assignment. Requires authentication
+    // (also re-asserted at the route registration). Assigns the task to a user,
+    // broadcasts "task.assigned" on success, and returns the handler's result.
     private static async Task<IResult> AssignTaskAsync(
         Guid taskId,
         AssignTaskRequest request,
@@ -493,6 +579,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles DELETE /api/v1/tasks/{taskId}/assignment. Requires authentication
+    // (also re-asserted at the route registration). Clears the task's assignee,
+    // broadcasts "task.unassigned" on success, and returns the handler's result.
     private static async Task<IResult> UnassignTaskAsync(
         Guid taskId,
         UnassignTaskHandler handler,
@@ -517,6 +606,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles PUT /api/v1/tasks/{taskId}/category. Requires authentication.
+    // Updates the task's category, broadcasts "task.category-updated" on
+    // success, and returns the handler's result.
     private static async Task<IResult> UpdateCategoryAsync(
         Guid taskId,
         UpdateTaskCategoryRequest request,
@@ -542,6 +634,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles POST /api/v1/tasks/{taskId}/tags. Requires authentication. Adds a
+    // tag (accepting either the "Name" or legacy "Tag" request field),
+    // broadcasts "task.tag-added" on success, and returns the handler's result.
     private static async Task<IResult> AddTagAsync(
         Guid taskId,
         AddTaskTagRequest request,
@@ -567,6 +662,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles DELETE /api/v1/tasks/{taskId}/tags/{tag}. Requires authentication.
+    // Removes a tag, broadcasts "task.tag-removed" on success, and returns the
+    // handler's result.
     private static async Task<IResult> RemoveTagAsync(
         Guid taskId,
         string tag,
@@ -592,6 +690,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Handles POST /api/v1/tasks/{taskId}/notes. Requires authentication. Adds a
+    // note/comment to the task, broadcasts "task.note-added" on success, and
+    // returns the handler's result.
     private static async Task<IResult> AddNoteAsync(
         Guid taskId,
         AddTaskNoteRequest request,
@@ -617,6 +718,9 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Shared helper for status-transition endpoints: awaits the in-flight
+    // operation, publishes the workspace event for the task's project only if
+    // the operation succeeded, and converts the result to an IResult.
     private static async Task<IResult> HandleStatusAsync(
         Guid taskId,
         string eventType,
@@ -640,6 +744,8 @@ internal static class TaskEndpoints
         return ApiResult.From(result);
     }
 
+    // Looks up the task's project and broadcasts a workspace event for it, but
+    // only when the preceding operation succeeded and the task still exists.
     private static async Task PublishTaskChangeAsync(
         bool succeeded,
         Guid taskId,
@@ -671,6 +777,9 @@ internal static class TaskEndpoints
             cancellationToken);
     }
 
+    // Resolves the project's workspace and publishes the event through the
+    // realtime broadcaster; no-ops if the project is missing or not assigned to
+    // a workspace.
     private static async Task PublishProjectChangeAsync(
         Guid projectId,
         string eventType,
@@ -696,10 +805,14 @@ internal static class TaskEndpoints
     }
 }
 
+/// <summary>Request body for changing a task's category.</summary>
 public sealed record UpdateTaskCategoryRequest(Guid? CategoryId);
 
+/// <summary>Request body for adding a tag to a task (accepts either the "Name" or legacy "Tag" field).</summary>
 public sealed record AddTaskTagRequest(string? Name = null, string? Tag = null);
 
+/// <summary>Request body for adding a note to a task.</summary>
 public sealed record AddTaskNoteRequest(string Body);
 
+/// <summary>Request body for setting a task's status directly, with an optional reason when blocking.</summary>
 public sealed record SetTaskStatusRequest(TaskItemStatus Status, string? BlockedReason = null);

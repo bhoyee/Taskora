@@ -5,9 +5,23 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Maps <see cref="TaskItem"/> — the central aggregate root of the domain — to the "Tasks"
+/// table. Configures value-object conversions (<see cref="DueDate"/>, <see cref="EffortEstimate"/>),
+/// two owned sub-objects (<see cref="PlanningFactors"/> and <see cref="PriorityScore"/>) stored
+/// inline in the same table, a self-referencing many-to-many "depends on" relationship via an
+/// explicit join table, and owned collections of tags/notes exposed only through private
+/// backing fields. Numerous computed properties (dependency lookups, blocked status, domain
+/// events, etc.) are excluded from mapping.
+/// </summary>
 internal sealed class TaskItemConfiguration
     : IEntityTypeConfiguration<TaskItem>
 {
+    /// <summary>
+    /// Configures the Tasks table: keys, value-object conversions, owned planning/priority
+    /// sub-objects, project/sprint relationships, the task-dependency join table, and the
+    /// owned tags/notes collections.
+    /// </summary>
     public void Configure(EntityTypeBuilder<TaskItem> builder)
     {
         builder.ToTable("Tasks");
@@ -16,11 +30,14 @@ internal sealed class TaskItemConfiguration
         builder.Property(task => task.Title)
             .HasMaxLength(240)
             .IsRequired();
+        // Store DateTimeOffset as raw UTC ticks (long) for portability across SQLite/Postgres,
+        // rather than relying on each provider's native DateTimeOffset support.
         builder.Property(task => task.CreatedAt)
             .HasConversion(
                 value => value.UtcTicks,
                 value => new DateTimeOffset(value, TimeSpan.Zero))
             .IsRequired();
+        // Store the enum as its underlying int rather than a string for compactness/stability.
         builder.Property(task => task.Status)
             .HasConversion<int>()
             .IsRequired();
@@ -31,8 +48,11 @@ internal sealed class TaskItemConfiguration
         builder.Property(task => task.CreatedByUserId);
         builder.Property(task => task.CategoryId);
         builder.Property(task => task.SprintId);
+        // A shadow property (not exposed on the entity) used for optimistic concurrency checks.
         builder.Property<Guid>("ConcurrencyToken")
             .IsConcurrencyToken();
+        // Unwrap the DueDate value object to a plain nullable DateOnly for storage, and
+        // reconstruct it via DueDate.Create on read (re-applying any value-object invariants).
         builder.Property(task => task.DueDate)
             .HasConversion(
                 dueDate => dueDate == null
@@ -41,6 +61,7 @@ internal sealed class TaskItemConfiguration
                 value => value == null
                     ? null
                     : DueDate.Create(value.Value));
+        // Same unwrap/reconstruct pattern for the EffortEstimate value object, stored as a plain int.
         builder.Property(task => task.EffortEstimate)
             .HasConversion(
                 effort => effort == null
@@ -50,6 +71,8 @@ internal sealed class TaskItemConfiguration
                     ? null
                     : EffortEstimate.Create(value.Value));
 
+        // PlanningFactors is an owned type stored inline in the Tasks table (not a separate
+        // table), accessed via the private "_planningFactors" field. It is optional per task.
         builder.OwnsOne<PlanningFactors>(
             "_planningFactors",
             planning =>
@@ -60,14 +83,18 @@ internal sealed class TaskItemConfiguration
                     .HasColumnName("Urgency");
                 planning.Property(factors => factors.RiskReduction)
                     .HasColumnName("RiskReduction");
+                // Nested value-object conversion, same pattern as EffortEstimate above.
                 planning.Property(factors => factors.EffortEstimate)
                     .HasConversion(
                         effort => effort.Value,
                         value => EffortEstimate.Create(value))
                     .HasColumnName("PlanningEffort");
             });
+        // A task may not have planning factors set yet.
         builder.Navigation("_planningFactors").IsRequired(false);
 
+        // PriorityScore is likewise an owned type stored inline, computed from the planning
+        // factors above; also optional and accessed via a private field.
         builder.OwnsOne<PriorityScore>(
             "_priority",
             priority =>
@@ -87,10 +114,12 @@ internal sealed class TaskItemConfiguration
             });
         builder.Navigation("_priority").IsRequired(false);
 
+        // Restrict rather than cascade: a project with tasks cannot be deleted outright.
         builder.HasOne<Project>()
             .WithMany()
             .HasForeignKey(task => task.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
+        // If the sprint is deleted, unassign the task from it rather than deleting the task.
         builder.HasOne<Sprint>()
             .WithMany()
             .HasForeignKey(task => task.SprintId)
@@ -102,15 +131,21 @@ internal sealed class TaskItemConfiguration
         builder.HasIndex(task => task.CategoryId);
         builder.HasIndex(task => task.SprintId);
 
+        // Self-referencing many-to-many "task depends on task" relationship, backed by an
+        // explicit join table (rather than a skip-navigation shared type) so we can name the
+        // table/columns and set differing delete behaviors on each side.
         builder.HasMany<TaskItem>("_dependencies")
             .WithMany()
             .UsingEntity<Dictionary<string, object>>(
                 "TaskDependencies",
+                // Deleting the depended-upon task is restricted so dangling dependency
+                // references can't silently appear.
                 right => right
                     .HasOne<TaskItem>()
                     .WithMany()
                     .HasForeignKey("DependencyId")
                     .OnDelete(DeleteBehavior.Restrict),
+                // Deleting the dependent task cascades to remove its dependency rows.
                 left => left
                     .HasOne<TaskItem>()
                     .WithMany()
@@ -122,9 +157,12 @@ internal sealed class TaskItemConfiguration
                     join.HasKey("TaskId", "DependencyId");
                     join.HasIndex("DependencyId");
                 });
+        // Access the collection through the private field instead of a public property,
+        // preserving encapsulation of the aggregate.
         builder.Navigation("_dependencies")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // Tags are owned by the task; cascade delete removes them with their parent.
         builder.HasMany<TaskTag>("_tags")
             .WithOne()
             .HasForeignKey(tag => tag.TaskId)
@@ -132,6 +170,7 @@ internal sealed class TaskItemConfiguration
         builder.Navigation("_tags")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // Notes are likewise owned by the task; cascade delete removes them with their parent.
         builder.HasMany<TaskNote>("_notes")
             .WithOne()
             .HasForeignKey(note => note.TaskId)
@@ -139,6 +178,8 @@ internal sealed class TaskItemConfiguration
         builder.Navigation("_notes")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // These are all computed in-memory (from dependencies, owned sub-objects, or domain
+        // event tracking) rather than persisted columns, so they must be excluded from mapping.
         builder.Ignore(task => task.DependencyIds);
         builder.Ignore(task => task.IncompleteDependencyChainIds);
         builder.Ignore(task => task.HasIncompleteDependencies);

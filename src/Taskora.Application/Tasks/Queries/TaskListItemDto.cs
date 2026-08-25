@@ -2,6 +2,10 @@ using TodoApp.Domain.Tasks;
 
 namespace TodoApp.Application.Tasks.Queries;
 
+/// <summary>
+/// DTO representing a single task row returned by search/list endpoints, with just
+/// enough data to render a task in a list or board view.
+/// </summary>
 public sealed record TaskListItemDto(
     Guid Id,
     Guid ProjectId,

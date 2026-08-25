@@ -7,8 +7,20 @@ using TodoApp.Api.Operations;
 
 namespace TodoApp.Api.Endpoints;
 
+/// <summary>
+/// Registers the operations diagnostics and database backup routes under
+/// "/api/v1/operations". Every route requires an authenticated caller, and
+/// the handlers additionally gate access to super-admins (as determined by
+/// <see cref="SuperAdminAuthorization.IsSuperAdminAsync"/>, which checks the
+/// caller's account email against the configured super-admin email list).
+/// </summary>
 internal static class OperationsEndpoints
 {
+    /// <summary>
+    /// Maps the operations endpoint group. All routes require authentication
+    /// via <c>RequireAuthorization()</c>; the individual handlers perform the
+    /// stricter super-admin check before returning any data.
+    /// </summary>
     public static IEndpointRouteBuilder MapOperationsEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
@@ -16,18 +28,33 @@ internal static class OperationsEndpoints
             .WithTags("Operations")
             .RequireAuthorization();
 
+        // GET /api/v1/operations/summary
+        // Super-admin only. Returns a snapshot of app health, runtime
+        // configuration, scheduler status, and recent logs
+        // (200 OperationsSummaryResponse, 403 for non super-admins).
         group.MapGet("/summary", GetSummaryAsync)
             .WithName("GetOperationsSummary")
             .Produces<OperationsSummaryResponse>()
             .Produces(StatusCodes.Status403Forbidden);
+        // GET /api/v1/operations/backups
+        // Super-admin only. Lists the database backup files on disk
+        // (200 collection of DatabaseBackupFile, 403 for non super-admins).
         group.MapGet("/backups", ListBackupsAsync)
             .WithName("ListDatabaseBackups")
             .Produces<IReadOnlyCollection<DatabaseBackupFile>>()
             .Produces(StatusCodes.Status403Forbidden);
+        // POST /api/v1/operations/backups
+        // Super-admin only. Triggers an on-demand database backup
+        // (200 DatabaseBackupFile describing the new backup, 403 for non
+        // super-admins).
         group.MapPost("/backups", CreateBackupAsync)
             .WithName("CreateDatabaseBackup")
             .Produces<DatabaseBackupFile>()
             .Produces(StatusCodes.Status403Forbidden);
+        // GET /api/v1/operations/backups/{fileName}
+        // Super-admin only. Streams a previously created backup file
+        // (200 file download, 404 if the file does not exist, 403 for non
+        // super-admins).
         group.MapGet("/backups/{fileName}", DownloadBackupAsync)
             .WithName("DownloadDatabaseBackup")
             .Produces(StatusCodes.Status200OK)
@@ -37,6 +64,10 @@ internal static class OperationsEndpoints
         return endpoints;
     }
 
+    // Handler for GET /api/v1/operations/summary. Gated to super-admins;
+    // assembles health check results, runtime/config info, both background
+    // scheduler snapshots, and the most recent in-memory log entries into a
+    // single response for the operations dashboard.
     private static async Task<IResult> GetSummaryAsync(
         ICurrentUser currentUser,
         IAccountRepository accounts,
@@ -127,6 +158,8 @@ internal static class OperationsEndpoints
                 .ToArray()));
     }
 
+    // Handler for GET /api/v1/operations/backups. Gated to super-admins;
+    // delegates to DatabaseBackupService to enumerate backup files on disk.
     private static async Task<IResult> ListBackupsAsync(
         ICurrentUser currentUser,
         IAccountRepository accounts,
@@ -146,6 +179,8 @@ internal static class OperationsEndpoints
         return Results.Ok(await backups.ListBackupsAsync(cancellationToken));
     }
 
+    // Handler for POST /api/v1/operations/backups. Gated to super-admins;
+    // triggers an immediate on-demand backup via DatabaseBackupService.
     private static async Task<IResult> CreateBackupAsync(
         ICurrentUser currentUser,
         IAccountRepository accounts,
@@ -165,6 +200,9 @@ internal static class OperationsEndpoints
         return Results.Ok(await backups.CreateBackupAsync(cancellationToken));
     }
 
+    // Handler for GET /api/v1/operations/backups/{fileName}. Gated to
+    // super-admins; streams the requested backup file back as a download, or
+    // 404 if no such file exists in the configured backup directory.
     private static async Task<IResult> DownloadBackupAsync(
         string fileName,
         ICurrentUser currentUser,
@@ -192,10 +230,12 @@ internal static class OperationsEndpoints
                 enableRangeProcessing: true);
     }
 
+    // Parses a boolean configuration value, falling back when missing/invalid.
     private static bool ReadBool(string? value, bool defaultValue = false) =>
         bool.TryParse(value, out var result) ? result : defaultValue;
 }
 
+/// <summary>Full operations dashboard payload returned to super-admins.</summary>
 public sealed record OperationsSummaryResponse(
     bool IsSuperAdmin,
     DateTimeOffset GeneratedAt,
@@ -206,12 +246,14 @@ public sealed record OperationsSummaryResponse(
     DatabaseBackupSchedulerResponse DatabaseBackups,
     IReadOnlyCollection<OperationLogRecord> RecentLogs);
 
+/// <summary>Result of a single ASP.NET Core health check entry.</summary>
 public sealed record OperationHealthCheck(
     string Name,
     string Status,
     string? Description,
     double DurationMilliseconds);
 
+/// <summary>Snapshot of the running app's environment and configuration.</summary>
 public sealed record OperationsRuntime(
     string Environment,
     string DatabaseProvider,
@@ -226,6 +268,7 @@ public sealed record OperationsRuntime(
     bool LogFileEnabled,
     string LogDirectory);
 
+/// <summary>Status snapshot of the due-date reminder background scheduler.</summary>
 public sealed record ReminderSchedulerResponse(
     bool Enabled,
     string Status,
@@ -239,6 +282,7 @@ public sealed record ReminderSchedulerResponse(
     int LastEmailCount,
     string? LastError);
 
+/// <summary>Status snapshot of the automatic database backup scheduler.</summary>
 public sealed record DatabaseBackupSchedulerResponse(
     bool Enabled,
     string Status,
@@ -250,6 +294,7 @@ public sealed record DatabaseBackupSchedulerResponse(
     long LastBackupSizeBytes,
     string? LastError);
 
+/// <summary>A single recent log entry surfaced on the operations dashboard.</summary>
 public sealed record OperationLogRecord(
     DateTimeOffset Timestamp,
     string Level,

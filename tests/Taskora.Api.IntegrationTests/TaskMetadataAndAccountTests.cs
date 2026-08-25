@@ -7,11 +7,16 @@ using Xunit;
 
 namespace TodoApp.Api.IntegrationTests;
 
+// Covers account lifecycle endpoints (login, registration, bearer-token auth, profile and
+// password updates, password reset via emailed code) alongside task metadata management
+// (categories, tags, notes) and the corresponding search/filter query params.
 public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
     : IClassFixture<ApiFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
+    // For the seeded development owner, the "access token" is just their fixed user id
+    // (Development-environment header auth), not a real bearer/JWT token.
     [Fact]
     public async Task Seeded_development_owner_can_login()
     {
@@ -276,6 +281,8 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
             .GetGuid();
     }
 
+    // Scrapes the fake outbox (RecordingEmailSender) for the most recent password-reset
+    // email sent to this address and extracts the 6-digit code from its body.
     private string ReadLatestResetToken(string email)
     {
         var resetEmail = factory.EmailSender.Messages.Last(message =>

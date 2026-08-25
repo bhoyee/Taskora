@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace TodoApp.Infrastructure.Persistence.Migrations
 {
+    // Introduces user identity and multi-user collaboration: UserProfiles, Workspaces
+    // (owned by a user), and WorkspaceMemberships linking users to workspaces with a role.
     /// <inheritdoc />
     public partial class AddIdentityCollaboration : Migration
     {
