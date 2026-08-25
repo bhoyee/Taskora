@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Api;
+using TodoApp.Api.Demo;
 using TodoApp.Api.Diagnostics;
 using TodoApp.Api.Endpoints;
 using TodoApp.Api.Notifications;
@@ -61,6 +62,7 @@ if (fileLogOptions.Enabled)
 // Operations UI so callers can observe scheduler/backup progress.
 builder.Services.AddSingleton<DueDateReminderSchedulerStatus>();
 builder.Services.AddSingleton<DatabaseBackupSchedulerStatus>();
+builder.Services.AddSingleton<DemoDataResetSchedulerStatus>();
 builder.Services.AddSingleton<DatabaseBackupService>();
 builder.Services.AddSingleton<WorkspaceEventBroadcaster>();
 
@@ -193,6 +195,7 @@ builder.Services.AddTodoSecurity(
 // Background hosted services: due-date reminder emails and scheduled DB backups.
 builder.Services.AddHostedService<DueDateReminderScheduler>();
 builder.Services.AddHostedService<DatabaseBackupScheduler>();
+builder.Services.AddHostedService<DemoDataResetScheduler>();
 
 var app = builder.Build();
 

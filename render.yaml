@@ -17,6 +17,10 @@ services:
         value: true
       - key: DemoData__SeedOnStartup
         value: false
+      - key: DemoData__ResetScheduler__Enabled
+        value: false
+      - key: DemoData__ResetScheduler__IntervalHours
+        value: 24
       - key: ConnectionStrings__TodoApp
         sync: false
       - key: App__PublicBaseUrl
@@ -28,6 +32,11 @@ services:
       - key: Authentication__Audience
         value: taskora-api
       - key: Administration__SuperAdminEmails__0
+        sync: false
+      # Set this to the demo Super Admin persona's email (superadmin@example.com,
+      # see DevelopmentDataSeeder.DemoSuperAdminEmail) once the "View demo" login
+      # is ready to go live, so that seeded account can reach Platform/Operations.
+      - key: Administration__SuperAdminEmails__1
         sync: false
       - key: Email__Smtp__Enabled
         value: true

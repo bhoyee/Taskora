@@ -55,6 +55,16 @@ main { min-width: 0; min-height: 100vh; padding: 30px 38px 24px; display: flex; 
 .auth-panel { width: min(440px, 100%); display: grid; gap: 18px; background: white; border: 1px solid #d7dce2; border-radius: 8px; padding: 24px; box-shadow: 0 14px 36px #18202b18; }
 .auth-panel .brand { padding: 0; color: #18202b; }
 .auth-form { display: grid; gap: 14px; }
+.demo-panel { width: min(640px, 100%); }
+.demo-intro { color: #52606d; font-size: 14px; line-height: 1.5; margin-top: 4px; }
+.demo-role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.demo-role-card { display: grid; gap: 6px; justify-items: start; text-align: left; background: #f7f9fa; border: 1px solid #d7dce2; border-radius: 8px; padding: 16px; cursor: pointer; transition: border-color .15s, background .15s; }
+.demo-role-card:hover:not(:disabled) { border-color: #147d68; background: #eef7f4; }
+.demo-role-card:disabled { opacity: .6; cursor: default; }
+.demo-role-card svg { color: #147d68; }
+.demo-role-card strong { font-size: 15px; color: #18202b; }
+.demo-role-card span { font-size: 13px; color: #667281; line-height: 1.4; }
+.demo-role-card em { font-style: normal; font-size: 12px; font-weight: 700; color: #147d68; margin-top: 4px; }
 .topbar { display: flex; align-items: center; gap: 14px; margin: -6px -38px 22px; padding: 16px 38px; border-bottom: 1px solid #dfe4e9; background: #fbfcfd; }
 .topbar-title { flex: 0 0 auto; }
 .topbar-title h1 { font-size: 18px; font-weight: 850; }

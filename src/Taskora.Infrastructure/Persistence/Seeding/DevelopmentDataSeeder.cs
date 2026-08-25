@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
+using TodoApp.Application.Projects;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
+using TodoApp.Domain.Todos;
 
 namespace TodoApp.Infrastructure.Persistence.Seeding;
 
@@ -27,12 +29,28 @@ public static class DevelopmentDataSeeder
         Guid.Parse("30000000-0000-0000-0000-000000000002");
     public static readonly Guid MemberId =
         Guid.Parse("30000000-0000-0000-0000-000000000003");
+    public static readonly Guid SuperAdminId =
+        Guid.Parse("30000000-0000-0000-0000-000000000004");
     public static readonly Guid WorkspaceId =
         Guid.Parse("40000000-0000-0000-0000-000000000001");
-    public const string DemoOwnerEmail = "salisu.adeboye@gmail.com";
+    public const string DemoOwnerEmail = "owner@example.com";
     public const string DemoManagerEmail = "manager@example.com";
     public const string DemoMemberEmail = "member@example.com";
+    public const string DemoSuperAdminEmail = "superadmin@example.com";
     public const string DemoPassword = "Portfolio123!";
+
+    private static readonly Guid OwnerTodoId =
+        Guid.Parse("80000000-0000-0000-0000-000000000001");
+    private static readonly Guid ManagerTodoId =
+        Guid.Parse("80000000-0000-0000-0000-000000000002");
+    private static readonly Guid MemberTodoId =
+        Guid.Parse("80000000-0000-0000-0000-000000000003");
+    private static readonly Guid MemberTodoCommentId =
+        Guid.Parse("90000000-0000-0000-0000-000000000001");
+    private static readonly Guid DailyRoutineId =
+        Guid.Parse("a0000000-0000-0000-0000-000000000001");
+    private static readonly Guid PendingInvitationId =
+        Guid.Parse("b0000000-0000-0000-0000-000000000001");
 
     private static readonly Guid ProjectId =
         Guid.Parse("10000000-0000-0000-0000-000000000001");
@@ -60,66 +78,74 @@ public static class DevelopmentDataSeeder
         TodoAppDbContext context,
         CancellationToken cancellationToken)
     {
-        // Step 1: create the demo workspace and its three users (owner,
-        // manager, member) the first time the database is empty.
-        if (!await context.UserProfiles.AnyAsync(cancellationToken))
-        {
-            var owner = UserProfile.Create(
-                OwnerId,
-                "Salisu Adeboye",
-                DemoOwnerEmail);
-            var manager = UserProfile.Create(
-                ManagerId,
-                "Delivery Manager",
-                DemoManagerEmail);
-            var member = UserProfile.Create(
-                MemberId,
-                "Team Member",
-                DemoMemberEmail);
-            var workspace = Workspace.Create(
-                WorkspaceId,
-                "Portfolio team",
-                OwnerId);
-            workspace.AddMember(
-                OwnerId,
-                ManagerId,
-                WorkspaceRole.Manager);
-            workspace.AddMember(
-                OwnerId,
-                MemberId,
-                WorkspaceRole.Member);
-            context.AddRange(owner, manager, member, workspace);
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        else
-        {
-            // Users already exist (e.g. from a previous seed run) — just
-            // keep the demo owner's email address in sync with the constant
-            // above in case it was changed between deployments.
-            var owner = await context.UserProfiles
-                .SingleOrDefaultAsync(
-                    user => user.Id == OwnerId,
-                    cancellationToken);
-            owner?.UpdateEmail(DemoOwnerEmail);
-        }
+        // Step 1: ensure each demo persona exists, checked individually (rather
+        // than an all-or-nothing "no users at all" gate) so a persona added in a
+        // later release — e.g. SuperAdminId below — still gets created against a
+        // database that was already seeded by an earlier version of this method.
+        await EnsureUserAsync(context, OwnerId, "Salisu Adeboye", DemoOwnerEmail, cancellationToken);
+        await EnsureUserAsync(context, ManagerId, "Delivery Manager", DemoManagerEmail, cancellationToken);
+        await EnsureUserAsync(context, MemberId, "Team Member", DemoMemberEmail, cancellationToken);
+        await EnsureUserAsync(context, SuperAdminId, "Platform Admin", DemoSuperAdminEmail, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
-        // Step 2: ensure each demo user has a login credential, even if the
+        // Step 2: ensure the demo workspace exists and every persona above is a
+        // member of it (loading "_memberships" explicitly since it's a non-owned
+        // navigation EF won't eager-load without an Include).
+        var workspace = await context.Workspaces
+            .Include("_memberships")
+            .SingleOrDefaultAsync(w => w.Id == WorkspaceId, cancellationToken);
+        if (workspace is null)
+        {
+            workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+            context.Workspaces.Add(workspace);
+        }
+        EnsureMember(workspace, ManagerId, WorkspaceRole.Manager);
+        EnsureMember(workspace, MemberId, WorkspaceRole.Member);
+        // Super Admin gets the same baseline Member role here — their extra
+        // access to Platform/Operations/Backups comes purely from their email
+        // being on the SuperAdminEmails allowlist, not from anything workspace-
+        // specific, so the demo should not special-case them at this layer.
+        EnsureMember(workspace, SuperAdminId, WorkspaceRole.Member);
+        await context.SaveChangesAsync(cancellationToken);
+
+        // Step 3: ensure each demo user has a login credential, even if the
         // user rows themselves were seeded in an earlier run.
         await AddMissingCredentialAsync(context, OwnerId, cancellationToken);
         await AddMissingCredentialAsync(context, ManagerId, cancellationToken);
         await AddMissingCredentialAsync(context, MemberId, cancellationToken);
+        await AddMissingCredentialAsync(context, SuperAdminId, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
-        // Step 3: only seed demo projects/tasks once — if any project
-        // already exists, assume the rest of the demo data is in place too.
-        if (await context.Projects.AnyAsync(cancellationToken))
+        // Step 4: only seed demo projects/tasks once — if any project already
+        // exists, assume this section already ran (the sections below it each
+        // have their own independent existence checks, so they still run even
+        // when this one is skipped against an already-seeded database).
+        if (!await context.Projects.AnyAsync(cancellationToken))
         {
-            return;
+            await SeedProjectsAndTasksAsync(context, cancellationToken);
         }
 
-        // Step 4: build the primary "Portfolio launch" project with two
-        // sprints and a spread of tasks across backlog/ready/blocked/
-        // in-progress/completed states, to exercise the board and reports.
+        // Step 5 (new): a couple of My Day todos across personas, including
+        // one with a comment, so the My Day page isn't empty for the demo.
+        await SeedPersonalTodosAsync(context, cancellationToken);
+
+        // Step 6 (new): a recurring daily routine, so the Routines page has
+        // something to show.
+        await SeedDailyRoutineAsync(context, cancellationToken);
+
+        // Step 7 (new): a pending team invitation, so the Team page's
+        // "Pending invitations" section has an example when viewed as
+        // Owner/Manager.
+        await SeedPendingInvitationAsync(context, cancellationToken);
+    }
+
+    // Builds the primary "Portfolio launch" project with two sprints and a
+    // spread of tasks across backlog/ready/blocked/in-progress/completed
+    // states, plus two supporting projects, to exercise the board and reports.
+    private static async Task SeedProjectsAndTasksAsync(
+        TodoAppDbContext context,
+        CancellationToken cancellationToken)
+    {
         var project = Project.Create(
             ProjectId,
             "Portfolio launch",
@@ -331,6 +357,56 @@ public static class DevelopmentDataSeeder
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Deletes the mutable "content" tier of the demo data (projects/sprints/
+    /// tasks, My Day todos, the daily routine, and the pending invitation) for
+    /// the fixed demo ids, then re-seeds it via <see cref="SeedAsync"/> —
+    /// restoring a pristine demo without touching the identity tier (the four
+    /// user accounts, their credentials, the workspace, or memberships), so
+    /// existing demo logins keep working across a reset. Project deletion goes
+    /// through the same <see cref="DeleteProjectHandler"/>/<c>HasAdministrativeBypass</c>
+    /// path the Platform page's hard-delete already uses, rather than
+    /// hand-rolling EF cascade deletes for entities with complex FK cleanup
+    /// (e.g. task dependencies).
+    /// </summary>
+    public static async Task ResetContentAsync(
+        TodoAppDbContext context,
+        DeleteProjectHandler deleteProjectHandler,
+        CancellationToken cancellationToken)
+    {
+        foreach (var projectId in new[] { ProjectId, SprintProjectId, ClosedProjectId })
+        {
+            await deleteProjectHandler.HandleAsync(
+                new DeleteProjectCommand(projectId, HasAdministrativeBypass: true),
+                cancellationToken);
+        }
+
+        var todos = await context.PersonalTodos
+            .Where(todo => todo.Id == OwnerTodoId
+                || todo.Id == ManagerTodoId
+                || todo.Id == MemberTodoId)
+            .ToListAsync(cancellationToken);
+        context.PersonalTodos.RemoveRange(todos);
+
+        var routine = await context.DailyRoutines
+            .SingleOrDefaultAsync(r => r.Id == DailyRoutineId, cancellationToken);
+        if (routine is not null)
+        {
+            context.DailyRoutines.Remove(routine);
+        }
+
+        var invitation = await context.WorkspaceInvitations
+            .SingleOrDefaultAsync(i => i.Id == PendingInvitationId, cancellationToken);
+        if (invitation is not null)
+        {
+            context.WorkspaceInvitations.Remove(invitation);
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        await SeedAsync(context, cancellationToken);
+    }
+
     // Inserts a demo credential (using the shared DemoPassword) for the
     // given user if one doesn't already exist.
     private static async Task AddMissingCredentialAsync(
@@ -350,6 +426,146 @@ public static class DevelopmentDataSeeder
                 userId,
                 DevelopmentPasswordHasher.Hash(DemoPassword)),
             cancellationToken);
+    }
+
+    // Creates the demo user if missing, or keeps its email in sync with the
+    // constant above if it already exists (e.g. after this seeder's own
+    // address rename between deployments).
+    private static async Task EnsureUserAsync(
+        TodoAppDbContext context,
+        Guid userId,
+        string displayName,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var user = await context.UserProfiles.SingleOrDefaultAsync(
+            u => u.Id == userId,
+            cancellationToken);
+        if (user is null)
+        {
+            context.UserProfiles.Add(UserProfile.Create(userId, displayName, email));
+            return;
+        }
+
+        user.UpdateEmail(email);
+    }
+
+    // Adds userId as a member of the demo workspace (acting as the demo
+    // owner) unless they already belong to it.
+    private static void EnsureMember(Workspace workspace, Guid userId, WorkspaceRole role)
+    {
+        if (!workspace.Memberships.Any(member => member.UserId == userId))
+        {
+            workspace.AddMember(OwnerId, userId, role);
+        }
+    }
+
+    // Seeds a couple of My Day todos across personas — one with a comment —
+    // so the My Day page has content to show off. Gated on the owner's todo
+    // existing so it still runs against a database seeded before this section
+    // was added.
+    private static async Task SeedPersonalTodosAsync(
+        TodoAppDbContext context,
+        CancellationToken cancellationToken)
+    {
+        if (await context.PersonalTodos.AnyAsync(
+                todo => todo.Id == OwnerTodoId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var ownerTodo = PersonalTodo.Create(
+            OwnerTodoId,
+            OwnerId,
+            "Review platform admin dashboard",
+            today,
+            "Check the Platform page's workspace list before the demo.",
+            TodoPriority.Medium,
+            now.AddDays(-1));
+
+        var managerTodo = PersonalTodo.Create(
+            ManagerTodoId,
+            ManagerId,
+            "Confirm sprint capacity for next week",
+            today,
+            null,
+            TodoPriority.High,
+            now.AddHours(-6));
+
+        var memberTodo = PersonalTodo.Create(
+            MemberTodoId,
+            MemberId,
+            "Write release notes draft",
+            today,
+            "Keep it short - bullet points only.",
+            TodoPriority.Critical,
+            now.AddDays(-2));
+        memberTodo.AddComment(
+            MemberTodoCommentId,
+            "Draft is in the shared doc, ready for review.",
+            now.AddDays(-1));
+
+        context.AddRange(ownerTodo, managerTodo, memberTodo);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    // Seeds one recurring daily routine so the Routines page has content.
+    private static async Task SeedDailyRoutineAsync(
+        TodoAppDbContext context,
+        CancellationToken cancellationToken)
+    {
+        if (await context.DailyRoutines.AnyAsync(
+                routine => routine.Id == DailyRoutineId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        var routine = DailyRoutine.Create(
+            DailyRoutineId,
+            MemberId,
+            "Daily standup notes",
+            "Summarise yesterday's progress and today's plan.",
+            TodoPriority.Medium,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-14)),
+            null,
+            DateTimeOffset.UtcNow.AddDays(-14));
+
+        context.DailyRoutines.Add(routine);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    // Seeds one pending team invitation so the Team page's "Pending
+    // invitations" section has an example when viewed as Owner/Manager.
+    private static async Task SeedPendingInvitationAsync(
+        TodoAppDbContext context,
+        CancellationToken cancellationToken)
+    {
+        if (await context.WorkspaceInvitations.AnyAsync(
+                invitation => invitation.Id == PendingInvitationId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var invitation = WorkspaceInvitation.Create(
+            PendingInvitationId,
+            WorkspaceId,
+            "New Hire",
+            "new.hire@example.com",
+            WorkspaceRole.Member,
+            OwnerId,
+            Guid.NewGuid().ToString("N"),
+            now.AddDays(-1),
+            now.AddDays(6));
+
+        context.WorkspaceInvitations.Add(invitation);
+        await context.SaveChangesAsync(cancellationToken);
     }
 }
 

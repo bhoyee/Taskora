@@ -60,7 +60,10 @@ public sealed class MigrationAndSeedTests
             Assert.Equal(3, await readContext.Projects.CountAsync());
             Assert.Equal(8, await readContext.Tasks.CountAsync());
             Assert.Equal(2, await readContext.ProjectCategories.CountAsync());
-            Assert.Equal(3, await readContext.UserCredentials.CountAsync());
+            Assert.Equal(4, await readContext.UserCredentials.CountAsync());
+            Assert.Equal(3, await readContext.PersonalTodos.CountAsync());
+            Assert.Equal(1, await readContext.DailyRoutines.CountAsync());
+            Assert.Equal(1, await readContext.WorkspaceInvitations.CountAsync());
         }
         finally
         {
@@ -90,6 +93,10 @@ public sealed class MigrationAndSeedTests
         Assert.Equal(3, await context.Projects.CountAsync());
         Assert.Equal(8, await context.Tasks.CountAsync());
         Assert.Equal(2, await context.ProjectCategories.CountAsync());
+        Assert.Equal(4, await context.UserCredentials.CountAsync());
+        Assert.Equal(3, await context.PersonalTodos.CountAsync());
+        Assert.Equal(1, await context.DailyRoutines.CountAsync());
+        Assert.Equal(1, await context.WorkspaceInvitations.CountAsync());
         Assert.True(await context.TaskActivities.AnyAsync());
     }
 }

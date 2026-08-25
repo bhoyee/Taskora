@@ -364,11 +364,16 @@ API: http://localhost:5080
 Web: http://localhost:5173
 ```
 
-Demo account when demo data is enabled:
+Demo accounts when demo data is enabled (also reachable from the landing
+page's "View demo" button, one per role):
 
 ```text
-salisu.adeboye@gmail.com
-Portfolio123!
+owner@example.com       (Owner)
+manager@example.com     (Manager)
+member@example.com      (Member)
+superadmin@example.com  (Super Admin — also requires adding this email to
+                          Administration:SuperAdminEmails)
+Portfolio123!            (shared password for all four)
 ```
 
 ## Environment Configuration

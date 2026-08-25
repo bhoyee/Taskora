@@ -7,7 +7,7 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleGauge,
-  Clock3, Columns3, Download, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, Crown, Download, Eye, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Printer, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
@@ -550,14 +550,19 @@ export default function App() {
     setActivityMore([])
     setActivityMorePage(1)
   }, [selectedWorkspaceId, activityType])
+  // currentUserId is included so a fresh login (transitioning from '' to a real id)
+  // re-triggers this fetch — without it, a brand-new session's first render fires this
+  // effect before the access token is attached to any request, and since none of the
+  // other dependencies change as a result of logging in, it would never retry and My
+  // Day would be stuck showing a stale "session is no longer valid" error.
   useEffect(() => {
     if (loggedOut) return
     void loadTodos(todoDate, todoSearch, todoPageNumber)
-  }, [todoDate, todoSearch, todoPageNumber, loggedOut])
+  }, [todoDate, todoSearch, todoPageNumber, loggedOut, currentUserId])
   useEffect(() => {
     if (loggedOut) return
     void loadDailyRoutines(dailyRoutinePageNumber)
-  }, [dailyRoutinePageNumber, loggedOut])
+  }, [dailyRoutinePageNumber, loggedOut, currentUserId])
   // Polls the workspace snapshot every 15s in the background (silent, no spinner) so the
   // dashboard/board stay reasonably fresh even without a live event arriving.
   useEffect(() => {
@@ -1713,7 +1718,14 @@ function OnboardingDialog({
  * to `AuthPage` in login/register mode once the user picks an action from the nav/hero.
  */
 function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
-  const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing')
+  const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'demo'>('landing')
+
+  if (mode === 'demo') {
+    return <DemoLoginPage
+      onBack={() => setMode('landing')}
+      onAuthenticated={onAuthenticated}
+    />
+  }
 
   if (mode !== 'landing') {
     return <AuthPage
@@ -1728,6 +1740,7 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
       <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       <nav aria-label="Public navigation">
         <button className="secondary" onClick={() => setMode('login')}><KeyRound size={16} /> Sign in</button>
+        <button className="secondary" onClick={() => setMode('demo')}><Eye size={16} /> View demo</button>
         <button className="primary" onClick={() => setMode('register')}><UserRound size={16} /> Create account</button>
       </nav>
     </header>
@@ -1889,6 +1902,105 @@ function AuthPage({
       {mode === 'login' && <button className="link-button" type="button" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
       {(mode === 'forgot' || mode === 'reset') && <button className="secondary" type="button" onClick={() => { setError(''); setMode('login') }}>Back to sign in</button>}
       {onBack && <button className="secondary" onClick={onBack}>Back to overview</button>}
+    </section>
+  </main>
+}
+
+// Fixed demo credentials for the four "View demo" personas — kept in sync
+// with DevelopmentDataSeeder.cs's DemoOwnerEmail/DemoManagerEmail/
+// DemoMemberEmail/DemoSuperAdminEmail/DemoPassword constants. Published
+// intentionally: this is a public, shared demo workspace, not a real account.
+const demoRoles = [
+  {
+    key: 'superadmin',
+    label: 'Super Admin',
+    email: 'superadmin@example.com',
+    description: 'Cross-workspace platform management, plus everything a Member sees.',
+    icon: ShieldCheck,
+  },
+  {
+    key: 'owner',
+    label: 'Owner',
+    email: 'owner@example.com',
+    description: 'Full control over the demo workspace: projects, sprints, team, and billing-level settings.',
+    icon: Crown,
+  },
+  {
+    key: 'manager',
+    label: 'Manager',
+    email: 'manager@example.com',
+    description: 'Manages projects, sprints, and task assignments across the workspace.',
+    icon: Settings2,
+  },
+  {
+    key: 'member',
+    label: 'Member',
+    email: 'member@example.com',
+    description: 'Standard contributor: works their own tasks, My Day list, and routines.',
+    icon: UserRound,
+  },
+] as const
+const demoPassword = 'Portfolio123!'
+
+/**
+ * Public "View demo" page: lets a visitor log straight into the shared, seeded
+ * demo workspace as one of four fixed personas (Super Admin/Owner/Manager/
+ * Member), using the same `api.login` call and session handoff a normal sign-in
+ * uses — no special auth path, just well-known published credentials.
+ */
+function DemoLoginPage({
+  onBack,
+  onAuthenticated,
+}: {
+  onBack: () => void
+  onAuthenticated: (session: AccountSession) => void
+}) {
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const loginAs = async (role: typeof demoRoles[number]) => {
+    setBusyKey(role.key)
+    setError('')
+    try {
+      const session = await api.login(role.email, demoPassword)
+      onAuthenticated(session)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Demo login failed.')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  return <main className="auth-shell">
+    <section className="auth-panel demo-panel">
+      <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
+      <div>
+        <p className="eyebrow">View demo</p>
+        <h1>Log in as a role</h1>
+        <p className="demo-intro">
+          This is a shared, populated demo workspace with real projects, boards, reports,
+          and comments. Pick a role below to see the app the way that role would.
+        </p>
+      </div>
+      {error && <p className="field-error">{error}</p>}
+      <div className="demo-role-grid">
+        {demoRoles.map((role) => {
+          const Icon = role.icon
+          return <button
+            key={role.key}
+            type="button"
+            className="demo-role-card"
+            disabled={busyKey !== null}
+            onClick={() => void loginAs(role)}
+          >
+            <Icon size={22} />
+            <strong>{role.label}</strong>
+            <span>{role.description}</span>
+            <em>{busyKey === role.key ? 'Signing in...' : `Log in as ${role.label}`}</em>
+          </button>
+        })}
+      </div>
+      <button className="secondary" onClick={onBack}>Back to overview</button>
     </section>
   </main>
 }
