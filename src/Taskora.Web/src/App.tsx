@@ -1740,7 +1740,7 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
       <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       <nav aria-label="Public navigation">
         <button className="secondary" onClick={() => setMode('login')}><KeyRound size={16} /> Sign in</button>
-        <button className="secondary" onClick={() => setMode('demo')}><Eye size={16} /> View demo</button>
+        <button className="demo-nav-button" onClick={() => setMode('demo')}><Eye size={16} /> View demo</button>
         <button className="primary" onClick={() => setMode('register')}><UserRound size={16} /> Create account</button>
       </nav>
     </header>
@@ -1907,40 +1907,41 @@ function AuthPage({
 }
 
 // Fixed demo credentials for the four "View demo" personas — kept in sync
-// with DevelopmentDataSeeder.cs's DemoOwnerEmail/DemoManagerEmail/
-// DemoMemberEmail/DemoSuperAdminEmail/DemoPassword constants. Published
-// intentionally: this is a public, shared demo workspace, not a real account.
+// with PublicDemoSeeder.cs's OwnerEmail/ManagerEmail/MemberEmail/
+// SuperAdminEmail/Password constants. This is a fully separate, isolated
+// demo workspace with its own "demo-" prefixed emails and id namespace —
+// it must never share an id or email with DevelopmentDataSeeder's data.
 const demoRoles = [
   {
     key: 'superadmin',
     label: 'Super Admin',
-    email: 'superadmin@example.com',
+    email: 'demo-superadmin@example.com',
     description: 'Cross-workspace platform management, plus everything a Member sees.',
     icon: ShieldCheck,
   },
   {
     key: 'owner',
     label: 'Owner',
-    email: 'owner@example.com',
+    email: 'demo-owner@example.com',
     description: 'Full control over the demo workspace: projects, sprints, team, and billing-level settings.',
     icon: Crown,
   },
   {
     key: 'manager',
     label: 'Manager',
-    email: 'manager@example.com',
+    email: 'demo-manager@example.com',
     description: 'Manages projects, sprints, and task assignments across the workspace.',
     icon: Settings2,
   },
   {
     key: 'member',
     label: 'Member',
-    email: 'member@example.com',
+    email: 'demo-member@example.com',
     description: 'Standard contributor: works their own tasks, My Day list, and routines.',
     icon: UserRound,
   },
 ] as const
-const demoPassword = 'Portfolio123!'
+const demoPassword = 'TaskoraDemo123!'
 
 /**
  * Public "View demo" page: lets a visitor log straight into the shared, seeded

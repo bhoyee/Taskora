@@ -364,16 +364,24 @@ API: http://localhost:5080
 Web: http://localhost:5173
 ```
 
-Demo accounts when demo data is enabled (also reachable from the landing
-page's "View demo" button, one per role):
+Demo account when demo data is enabled:
 
 ```text
-owner@example.com       (Owner)
-manager@example.com     (Manager)
-member@example.com      (Member)
-superadmin@example.com  (Super Admin — also requires adding this email to
-                          Administration:SuperAdminEmails)
-Portfolio123!            (shared password for all four)
+salisu.adeboye@gmail.com
+Portfolio123!
+```
+
+Separately, the landing page's public "View demo" button logs into its own,
+fully isolated demo workspace (`PublicDemo:SeedOnStartup`) that never shares
+any id or email with the account above:
+
+```text
+demo-owner@example.com       (Owner)
+demo-manager@example.com     (Manager)
+demo-member@example.com      (Member)
+demo-superadmin@example.com  (Super Admin — also requires adding this email
+                               to Administration:SuperAdminEmails)
+TaskoraDemo123!               (shared password for all four)
 ```
 
 ## Environment Configuration

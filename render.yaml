@@ -15,11 +15,20 @@ services:
         value: false
       - key: Database__ApplyMigrationsOnStartup
         value: true
+      # DemoData is for LOCAL DEVELOPMENT ONLY - it seeds a fixed-id workspace
+      # that, on this specific production database, corresponds to a real
+      # in-use account. NEVER set this to true here - use PublicDemo below
+      # instead, which is fully separate and safe for production.
       - key: DemoData__SeedOnStartup
         value: false
-      - key: DemoData__ResetScheduler__Enabled
+      # PublicDemo seeds a completely separate demo workspace/personas (all
+      # "demo-" prefixed emails, own id namespace) for the public "View demo"
+      # landing-page button. Safe to set to true here.
+      - key: PublicDemo__SeedOnStartup
         value: false
-      - key: DemoData__ResetScheduler__IntervalHours
+      - key: PublicDemo__ResetScheduler__Enabled
+        value: false
+      - key: PublicDemo__ResetScheduler__IntervalHours
         value: 24
       - key: ConnectionStrings__TodoApp
         sync: false
@@ -33,9 +42,10 @@ services:
         value: taskora-api
       - key: Administration__SuperAdminEmails__0
         sync: false
-      # Set this to the demo Super Admin persona's email (superadmin@example.com,
-      # see DevelopmentDataSeeder.DemoSuperAdminEmail) once the "View demo" login
-      # is ready to go live, so that seeded account can reach Platform/Operations.
+      # Set this to the public demo's Super Admin persona email
+      # (demo-superadmin@example.com, see PublicDemoSeeder.SuperAdminEmail)
+      # once the "View demo" login is ready to go live, so that seeded
+      # account can reach Platform/Operations.
       - key: Administration__SuperAdminEmails__1
         sync: false
       - key: Email__Smtp__Enabled

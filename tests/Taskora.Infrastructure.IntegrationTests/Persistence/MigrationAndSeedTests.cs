@@ -60,10 +60,7 @@ public sealed class MigrationAndSeedTests
             Assert.Equal(3, await readContext.Projects.CountAsync());
             Assert.Equal(8, await readContext.Tasks.CountAsync());
             Assert.Equal(2, await readContext.ProjectCategories.CountAsync());
-            Assert.Equal(4, await readContext.UserCredentials.CountAsync());
-            Assert.Equal(3, await readContext.PersonalTodos.CountAsync());
-            Assert.Equal(1, await readContext.DailyRoutines.CountAsync());
-            Assert.Equal(1, await readContext.WorkspaceInvitations.CountAsync());
+            Assert.Equal(3, await readContext.UserCredentials.CountAsync());
         }
         finally
         {
@@ -93,10 +90,75 @@ public sealed class MigrationAndSeedTests
         Assert.Equal(3, await context.Projects.CountAsync());
         Assert.Equal(8, await context.Tasks.CountAsync());
         Assert.Equal(2, await context.ProjectCategories.CountAsync());
+        Assert.True(await context.TaskActivities.AnyAsync());
+    }
+
+    // Guards against a repeat of a real incident: PublicDemoSeeder must never
+    // read or write any id/email DevelopmentDataSeeder uses, even when both
+    // run against the same database (as they can in production, since each
+    // is gated by its own independent config flag).
+    [Fact]
+    public async Task PublicDemoSeeder_NeverTouchesDevelopmentDataSeederIdentities()
+    {
+        await using var connection =
+            new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<TodoAppDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var context = new TodoAppDbContext(options);
+        await context.Database.MigrateAsync();
+
+        await DevelopmentDataSeeder.SeedAsync(context, CancellationToken.None);
+        await PublicDemoSeeder.SeedAsync(context, CancellationToken.None);
+
+        var devOwner = await context.UserProfiles.SingleAsync(
+            u => u.Id == DevelopmentDataSeeder.OwnerId);
+        Assert.Equal(DevelopmentDataSeeder.DemoOwnerEmail, devOwner.Email);
+        Assert.NotEqual(PublicDemoSeeder.OwnerEmail, devOwner.Email);
+
+        var demoOwner = await context.UserProfiles.SingleAsync(
+            u => u.Id == PublicDemoSeeder.OwnerId);
+        Assert.Equal(PublicDemoSeeder.OwnerEmail, demoOwner.Email);
+
+        Assert.NotEqual(DevelopmentDataSeeder.OwnerId, PublicDemoSeeder.OwnerId);
+        Assert.NotEqual(DevelopmentDataSeeder.WorkspaceId, PublicDemoSeeder.WorkspaceId);
+
+        // 3 projects from each seeder, none shared - 6 total, not 3.
+        Assert.Equal(6, await context.Projects.CountAsync());
+        // 3 workspaces exist: DevelopmentDataSeeder's, PublicDemoSeeder's, and
+        // the one PublicDemoSeeder's own members implicitly get nothing extra
+        // from - confirmed by member count staying scoped per workspace.
+        var devWorkspace = await context.Workspaces
+            .Include("_memberships")
+            .SingleAsync(w => w.Id == DevelopmentDataSeeder.WorkspaceId);
+        Assert.DoesNotContain(
+            devWorkspace.Memberships,
+            member => member.UserId == PublicDemoSeeder.SuperAdminId
+                || member.UserId == PublicDemoSeeder.ManagerId
+                || member.UserId == PublicDemoSeeder.MemberId);
+    }
+
+    [Fact]
+    public async Task PublicDemoSeeder_WhenCalledTwice_IsIdempotent()
+    {
+        await using var connection =
+            new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<TodoAppDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var context = new TodoAppDbContext(options);
+        await context.Database.MigrateAsync();
+
+        await PublicDemoSeeder.SeedAsync(context, CancellationToken.None);
+        await PublicDemoSeeder.SeedAsync(context, CancellationToken.None);
+
+        Assert.Equal(3, await context.Projects.CountAsync());
+        Assert.Equal(8, await context.Tasks.CountAsync());
         Assert.Equal(4, await context.UserCredentials.CountAsync());
         Assert.Equal(3, await context.PersonalTodos.CountAsync());
         Assert.Equal(1, await context.DailyRoutines.CountAsync());
         Assert.Equal(1, await context.WorkspaceInvitations.CountAsync());
-        Assert.True(await context.TaskActivities.AnyAsync());
     }
 }

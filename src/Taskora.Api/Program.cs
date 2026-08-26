@@ -278,6 +278,24 @@ if (ShouldSeedDemoData(app.Environment, app.Configuration))
         CancellationToken.None);
 }
 
+// Seeds the completely separate public "View demo" workspace/personas (only
+// when explicitly enabled via PublicDemo:SeedOnStartup - false by default
+// everywhere). This is deliberately independent from DemoData:SeedOnStartup
+// above and never touches any id DevelopmentDataSeeder creates.
+if (ReadBool(app.Configuration["PublicDemo:SeedOnStartup"], false))
+{
+    await using var seedScope = app.Services.CreateAsyncScope();
+    var logger = seedScope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup");
+    var database = seedScope.ServiceProvider
+        .GetRequiredService<TodoAppDbContext>();
+    logger.LogInformation("Seeding public demo workspace.");
+    await PublicDemoSeeder.SeedAsync(
+        database,
+        CancellationToken.None);
+}
+
 // --- Endpoint mapping ------------------------------------------------------
 app.MapStaticAssets();
 // Both /health and /health/ready expose the same "ready" checks; /health/live

@@ -24,7 +24,7 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
             "/api/v1/account/login",
             new
             {
-                email = "owner@example.com",
+                email = "salisu.adeboye@gmail.com",
                 password = "Portfolio123!"
             });
 
@@ -32,7 +32,7 @@ public sealed class TaskMetadataAndAccountTests(ApiFactory factory)
         var session = await login.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(
-            "owner@example.com",
+            "salisu.adeboye@gmail.com",
             session.GetProperty("email").GetString());
         Assert.Equal(
             "30000000-0000-0000-0000-000000000001",

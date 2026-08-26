@@ -6,12 +6,13 @@ namespace TodoApp.Api.Demo;
 
 /// <summary>
 /// Background hosted service that periodically restores the public demo
-/// workspace to its pristine seeded state, so visitors using the "View demo"
-/// role logins don't inherit clutter left behind by earlier visitors.
-/// Disabled by default — must be explicitly opted into via
-/// "DemoData:ResetScheduler:Enabled" since it destructively deletes and
-/// re-seeds fixed demo content on a timer. Progress is published to
-/// <see cref="DemoDataResetSchedulerStatus"/> for the Operations
+/// workspace (see <see cref="PublicDemoSeeder"/>, entirely separate from
+/// DevelopmentDataSeeder's real/local data) to its pristine seeded state, so
+/// visitors using the "View demo" role logins don't inherit clutter left
+/// behind by earlier visitors. Disabled by default — must be explicitly
+/// opted into via "PublicDemo:ResetScheduler:Enabled" since it destructively
+/// deletes and re-seeds fixed demo content on a timer. Progress is published
+/// to <see cref="DemoDataResetSchedulerStatus"/> for the Operations
 /// dashboard/API to surface.
 /// </summary>
 public sealed class DemoDataResetScheduler(
@@ -33,12 +34,12 @@ public sealed class DemoDataResetScheduler(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var enabled = ReadBool(
-            configuration["DemoData:ResetScheduler:Enabled"],
+            configuration["PublicDemo:ResetScheduler:Enabled"],
             false);
         var interval = TimeSpan.FromHours(Math.Max(
             1,
             ReadInt(
-                configuration["DemoData:ResetScheduler:IntervalHours"],
+                configuration["PublicDemo:ResetScheduler:IntervalHours"],
                 24)));
 
         if (!enabled)
@@ -77,7 +78,7 @@ public sealed class DemoDataResetScheduler(
             var deleteProjectHandler = scope.ServiceProvider
                 .GetRequiredService<DeleteProjectHandler>();
 
-            await DevelopmentDataSeeder.ResetContentAsync(
+            await PublicDemoSeeder.ResetContentAsync(
                 context,
                 deleteProjectHandler,
                 cancellationToken);
