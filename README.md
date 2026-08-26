@@ -6,6 +6,76 @@ project, but now demonstrates a portfolio-ready modular monolith with
 workspaces, projects, tasks, assignment, reporting, reminders, operations
 monitoring, sprint planning, and CI/CD.
 
+## Live Demo
+
+Try it without creating an account: **[taskoraz.vercel.app](https://taskoraz.vercel.app)**
+→ click **View demo** → pick a role.
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Super Admin | `demo-superadmin@example.com` | `TaskoraDemo123!` |
+| Owner | `demo-owner@example.com` | `TaskoraDemo123!` |
+| Manager | `demo-manager@example.com` | `TaskoraDemo123!` |
+| Member | `demo-member@example.com` | `TaskoraDemo123!` |
+
+This is a fully isolated demo workspace with fabricated data — it shares no
+id or email with any real account, and the Super Admin persona is restricted
+so it can only ever act on this demo workspace, never a real one.
+
+## Table of Contents
+
+- [Problem](#problem)
+- [Screenshots](#screenshots)
+- [What It Does](#what-it-does)
+- [Application Navigation](#application-navigation)
+- [Architecture](#architecture)
+- [Solution Structure](#solution-structure)
+- [Key Product Workflows](#key-product-workflows)
+- [Realtime and Notifications](#realtime-and-notifications)
+- [Background Jobs](#background-jobs)
+- [Operations](#operations)
+- [Testing](#testing)
+- [Local Setup](#local-setup)
+- [Environment Configuration](#environment-configuration)
+- [Vercel + Render + Neon Deployment](#vercel--render--neon-deployment)
+- [Database and Migrations](#database-and-migrations)
+- [CI/CD](#cicd)
+- [Azure Deployment Notes](#azure-deployment-notes)
+- [Security Checklist](#security-checklist)
+- [Portfolio Highlights](#portfolio-highlights)
+
+## Problem
+
+Small delivery teams tend to end up with their work spread across a task
+tracker, a spreadsheet for sprint planning, a separate personal to-do app,
+and status updates scattered across chat — with no single place to see
+what's overdue, what's blocked, or who owns what. Taskora puts project
+delivery, sprint planning, task assignment, personal daily work, and
+health/risk visibility into one workspace, with role-based access so owners,
+managers, and members each see exactly what they need without stitching
+together extra tools.
+
+## Screenshots
+
+**Landing page**
+![Taskora landing page](docs/screenshots/landing.png)
+
+**Workspace dashboard** — health cards, task progress, weekly flow, workload,
+project health, risk register, decision log, and release readiness.
+![Workspace dashboard](docs/screenshots/dashboard.png)
+
+**Delivery board** — drag-and-drop across Backlog, Ready, In Progress,
+Blocked, and Completed, with priority scores, assignees, and tags.
+![Delivery board](docs/screenshots/board.png)
+
+**Workspace reports** — date-range reporting, project delivery breakdown,
+executive summary, and CSV/PDF export.
+![Workspace reports](docs/screenshots/reports.png)
+
+**Delivery calendar** — project delivery dates, task due dates, and sprint
+dates layered on one month view.
+![Delivery calendar](docs/screenshots/calendar.png)
+
 ## What It Does
 
 - Workspace management with owner, manager, and member roles.
