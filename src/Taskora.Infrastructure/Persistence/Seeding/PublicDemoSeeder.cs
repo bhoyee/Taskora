@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Application.Projects;
+using TodoApp.Application.PublicDemo;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 using TodoApp.Domain.Tasks;
@@ -10,30 +11,27 @@ namespace TodoApp.Infrastructure.Persistence.Seeding;
 /// <summary>
 /// Populates a workspace and four role personas (Super Admin/Owner/Manager/
 /// Member) for the public "View demo" landing-page login, entirely separate
-/// from <see cref="DevelopmentDataSeeder"/>'s data. Every id and email here
-/// uses its own dedicated namespace (the "c" GUID prefix, "demo-" email
-/// prefix) that is guaranteed never to collide with a real account or
-/// workspace, including the ones DevelopmentDataSeeder creates — this class
-/// must never read or write any id defined there. Idempotent like
+/// from <see cref="DevelopmentDataSeeder"/>'s data. Identity ids/emails come
+/// from <see cref="PublicDemoIdentifiers"/> (the single source of truth
+/// shared with the destructive-action guard); only content-specific ids
+/// (projects/sprints/todos/etc.) are defined locally here. Every id/email
+/// used is guaranteed never to collide with a real account or workspace,
+/// including the ones DevelopmentDataSeeder creates — this class must never
+/// read or write any id defined there. Idempotent like
 /// DevelopmentDataSeeder: each stage checks existence before inserting.
 /// </summary>
 public static class PublicDemoSeeder
 {
-    public static readonly Guid OwnerId =
-        Guid.Parse("c1000000-0000-0000-0000-000000000001");
-    public static readonly Guid ManagerId =
-        Guid.Parse("c1000000-0000-0000-0000-000000000002");
-    public static readonly Guid MemberId =
-        Guid.Parse("c1000000-0000-0000-0000-000000000003");
-    public static readonly Guid SuperAdminId =
-        Guid.Parse("c1000000-0000-0000-0000-000000000004");
-    public static readonly Guid WorkspaceId =
-        Guid.Parse("c2000000-0000-0000-0000-000000000001");
-    public const string OwnerEmail = "demo-owner@example.com";
-    public const string ManagerEmail = "demo-manager@example.com";
-    public const string MemberEmail = "demo-member@example.com";
-    public const string SuperAdminEmail = "demo-superadmin@example.com";
-    public const string Password = "TaskoraDemo123!";
+    public static readonly Guid OwnerId = PublicDemoIdentifiers.OwnerId;
+    public static readonly Guid ManagerId = PublicDemoIdentifiers.ManagerId;
+    public static readonly Guid MemberId = PublicDemoIdentifiers.MemberId;
+    public static readonly Guid SuperAdminId = PublicDemoIdentifiers.SuperAdminId;
+    public static readonly Guid WorkspaceId = PublicDemoIdentifiers.WorkspaceId;
+    public const string OwnerEmail = PublicDemoIdentifiers.OwnerEmail;
+    public const string ManagerEmail = PublicDemoIdentifiers.ManagerEmail;
+    public const string MemberEmail = PublicDemoIdentifiers.MemberEmail;
+    public const string SuperAdminEmail = PublicDemoIdentifiers.SuperAdminEmail;
+    public const string Password = PublicDemoIdentifiers.Password;
 
     private static readonly Guid ProjectId =
         Guid.Parse("c3000000-0000-0000-0000-000000000001");

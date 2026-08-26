@@ -2,6 +2,7 @@ using TodoApp.Application.Abstractions;
 using TodoApp.Application.Accounts;
 using TodoApp.Application.Common;
 using TodoApp.Application.Notifications;
+using TodoApp.Application.PublicDemo;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Common;
 using TodoApp.Domain.Projects;
@@ -202,6 +203,12 @@ public sealed class DeleteWorkspaceHandler(
             return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
         }
 
+        if (command.HasAdministrativeBypass &&
+            !PublicDemoIdentifiers.AllowsDestructiveBypass(currentUser.UserId, workspace.Id))
+        {
+            return WorkspaceHandlerErrors.DemoAdministrativeActionRestricted<bool>();
+        }
+
         if (!command.HasAdministrativeBypass)
         {
             var userWorkspaces = await workspaces.ListForUserAsync(
@@ -258,6 +265,11 @@ public sealed class SuspendWorkspaceHandler(
             return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
         }
 
+        if (!PublicDemoIdentifiers.AllowsDestructiveBypass(currentUser.UserId, workspace.Id))
+        {
+            return WorkspaceHandlerErrors.DemoAdministrativeActionRestricted<bool>();
+        }
+
         workspace.Suspend(currentUser.UserId, command.Reason, clock.UtcNow);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return Result<bool>.Success(true);
@@ -267,7 +279,8 @@ public sealed class SuspendWorkspaceHandler(
 /// <summary>Lifts a suspension on a workspace, for administrative/moderation use.</summary>
 public sealed class ReactivateWorkspaceHandler(
     IWorkspaceRepository workspaces,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser)
 {
     /// <summary>
     /// Requires the workspace to exist, then reactivates it, clearing its
@@ -283,6 +296,11 @@ public sealed class ReactivateWorkspaceHandler(
         if (workspace is null)
         {
             return WorkspaceHandlerErrors.WorkspaceNotFound<bool>();
+        }
+
+        if (!PublicDemoIdentifiers.AllowsDestructiveBypass(currentUser.UserId, workspace.Id))
+        {
+            return WorkspaceHandlerErrors.DemoAdministrativeActionRestricted<bool>();
         }
 
         workspace.Reactivate();
@@ -393,6 +411,15 @@ file static class WorkspaceHandlerErrors
             "workspace.not_found",
             "The workspace was not found.",
             ErrorType.NotFound));
+
+    // Builds the failure returned when the public demo's Super Admin persona
+    // attempts a destructive administrative action against a workspace other
+    // than the demo's own.
+    public static Result<T> DemoAdministrativeActionRestricted<T>() =>
+        Result<T>.Failure(new ApplicationError(
+            "workspace.demo_restricted",
+            "The public demo's Super Admin account can't delete or suspend other workspaces.",
+            ErrorType.Forbidden));
 }
 
 /// <summary>Adds an existing user directly to a workspace by email, without going through an invitation.</summary>

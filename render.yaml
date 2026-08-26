@@ -40,13 +40,12 @@ services:
         value: AppToken
       - key: Authentication__Audience
         value: taskora-api
+      # Your real super admin email(s). The public demo's Super Admin persona
+      # (demo-superadmin@example.com) is always recognized automatically -
+      # it's hardcoded in SuperAdminAuthorization.cs, not configured here -
+      # and its actual admin powers are separately restricted so it can only
+      # ever act on the demo's own workspace, never a real one.
       - key: Administration__SuperAdminEmails__0
-        sync: false
-      # Set this to the public demo's Super Admin persona email
-      # (demo-superadmin@example.com, see PublicDemoSeeder.SuperAdminEmail)
-      # once the "View demo" login is ready to go live, so that seeded
-      # account can reach Platform/Operations.
-      - key: Administration__SuperAdminEmails__1
         sync: false
       - key: Email__Smtp__Enabled
         value: true

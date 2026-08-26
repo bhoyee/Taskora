@@ -379,10 +379,17 @@ any id or email with the account above:
 demo-owner@example.com       (Owner)
 demo-manager@example.com     (Manager)
 demo-member@example.com      (Member)
-demo-superadmin@example.com  (Super Admin — also requires adding this email
-                               to Administration:SuperAdminEmails)
+demo-superadmin@example.com  (Super Admin — no config needed, always recognized)
 TaskoraDemo123!               (shared password for all four)
 ```
+
+The demo Super Admin persona is hardcoded into `SuperAdminAuthorization` (not
+config-driven), so it works out of the box wherever `PublicDemo:SeedOnStartup`
+is enabled. Its admin powers are restricted to the demo's own workspace only —
+`PublicDemoIdentifiers.AllowsDestructiveBypass` blocks it from deleting or
+suspending/reactivating any other workspace, even via the Platform page's
+cross-tenant admin bypass, so a public visitor can see everything a super
+admin sees without being able to damage a real workspace.
 
 ## Environment Configuration
 

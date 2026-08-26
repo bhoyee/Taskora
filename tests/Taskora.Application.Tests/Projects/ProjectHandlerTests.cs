@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Common;
 using TodoApp.Application.Projects;
+using TodoApp.Application.PublicDemo;
 using TodoApp.Domain.Collaboration;
 using TodoApp.Domain.Projects;
 
@@ -289,6 +290,35 @@ public sealed class ProjectHandlerTests
         Assert.Equal(ErrorType.Forbidden, result.Error.Type);
         Assert.Null(projects.RemovedProject);
         Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    // Guards against a repeat of a real incident: the public demo's fixed
+    // Super Admin persona must never be able to delete a project belonging
+    // to any workspace other than the demo's own, even with the
+    // administrative bypass flag set.
+    [Fact]
+    public async Task Delete_WhenDemoSuperAdminTargetsProjectInOtherWorkspace_ReturnsForbidden()
+    {
+        var project = Project.Create(
+            ProjectId,
+            "Portfolio launch",
+            workspaceId: WorkspaceId);
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var projects = new InMemoryProjectRepository(project);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteProjectHandler(
+            projects,
+            new StubWorkspaceRepository(workspace),
+            unitOfWork,
+            new StubCurrentUser(PublicDemoIdentifiers.SuperAdminId));
+
+        var result = await handler.HandleAsync(
+            new DeleteProjectCommand(ProjectId, HasAdministrativeBypass: true),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorType.Forbidden, result.Error.Type);
+        Assert.Null(projects.RemovedProject);
     }
 
     // In-memory IProjectRepository fake that also records the last added

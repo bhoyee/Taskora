@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Common;
+using TodoApp.Application.PublicDemo;
 using TodoApp.Domain.Collaboration;
 
 namespace TodoApp.Application.Tests.Collaboration;
@@ -169,7 +170,10 @@ public sealed class WorkspaceManagementHandlerTests
         workspace.Suspend(Guid.NewGuid(), "Investigation", DateTimeOffset.UtcNow);
         var repository = new InMemoryWorkspaceRepository(workspace);
         var unitOfWork = new RecordingUnitOfWork();
-        var handler = new ReactivateWorkspaceHandler(repository, unitOfWork);
+        var handler = new ReactivateWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubCurrentUser(Guid.NewGuid()));
 
         var result = await handler.HandleAsync(
             new ReactivateWorkspaceCommand(WorkspaceId),
@@ -178,6 +182,92 @@ public sealed class WorkspaceManagementHandlerTests
         Assert.True(result.IsSuccess);
         Assert.False(workspace.IsSuspended);
         Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    // Guards against a repeat of a real incident: the public demo's fixed
+    // Super Admin persona must never be able to delete or suspend/reactivate
+    // a workspace other than the demo's own, even with the administrative
+    // bypass flag set, since that flag is what a real super admin uses on
+    // the Platform page to act across every tenant.
+    [Fact]
+    public async Task DeleteWorkspace_WhenDemoSuperAdminTargetsOtherWorkspace_ReturnsForbidden()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubCurrentUser(PublicDemoIdentifiers.SuperAdminId));
+
+        var result = await handler.HandleAsync(
+            new DeleteWorkspaceCommand(WorkspaceId, HasAdministrativeBypass: true),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(repository.RemovedWorkspace);
+    }
+
+    [Fact]
+    public async Task DeleteWorkspace_WhenDemoSuperAdminTargetsDemoWorkspace_RemovesWorkspace()
+    {
+        var workspace = Workspace.Create(
+            PublicDemoIdentifiers.WorkspaceId,
+            "Demo workspace",
+            PublicDemoIdentifiers.OwnerId);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new DeleteWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubCurrentUser(PublicDemoIdentifiers.SuperAdminId));
+
+        var result = await handler.HandleAsync(
+            new DeleteWorkspaceCommand(PublicDemoIdentifiers.WorkspaceId, HasAdministrativeBypass: true),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PublicDemoIdentifiers.WorkspaceId, repository.RemovedWorkspace?.Id);
+    }
+
+    [Fact]
+    public async Task SuspendWorkspace_WhenDemoSuperAdminTargetsOtherWorkspace_ReturnsForbidden()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new SuspendWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubClock(DateTimeOffset.UtcNow),
+            new StubCurrentUser(PublicDemoIdentifiers.SuperAdminId));
+
+        var result = await handler.HandleAsync(
+            new SuspendWorkspaceCommand(WorkspaceId, "Testing"),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(workspace.IsSuspended);
+    }
+
+    [Fact]
+    public async Task ReactivateWorkspace_WhenDemoSuperAdminTargetsOtherWorkspace_ReturnsForbidden()
+    {
+        var workspace = Workspace.Create(WorkspaceId, "Portfolio team", OwnerId);
+        workspace.Suspend(Guid.NewGuid(), "Investigation", DateTimeOffset.UtcNow);
+        var repository = new InMemoryWorkspaceRepository(workspace);
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new ReactivateWorkspaceHandler(
+            repository,
+            unitOfWork,
+            new StubCurrentUser(PublicDemoIdentifiers.SuperAdminId));
+
+        var result = await handler.HandleAsync(
+            new ReactivateWorkspaceCommand(WorkspaceId),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(workspace.IsSuspended);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using TodoApp.Application.Abstractions;
 using TodoApp.Application.Collaboration;
 using TodoApp.Application.Common;
+using TodoApp.Application.PublicDemo;
 using TodoApp.Application.Tasks.Metadata;
 using TodoApp.Domain.Common;
 using TodoApp.Domain.Projects;
@@ -268,6 +269,16 @@ public sealed class DeleteProjectHandler(
                     "project.not_found",
                     "The project was not found.",
                     ErrorType.NotFound));
+        }
+
+        if (command.HasAdministrativeBypass &&
+            !PublicDemoIdentifiers.AllowsDestructiveBypass(currentUser.UserId, project.WorkspaceId))
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "project.demo_restricted",
+                    "The public demo's Super Admin account can't delete other workspaces' projects.",
+                    ErrorType.Forbidden));
         }
 
         if (!command.HasAdministrativeBypass)
@@ -759,6 +770,16 @@ public sealed class DeleteSprintHandler(
                     "project.not_found",
                     "The project was not found.",
                     ErrorType.NotFound));
+        }
+
+        if (command.HasAdministrativeBypass &&
+            !PublicDemoIdentifiers.AllowsDestructiveBypass(currentUser.UserId, project.WorkspaceId))
+        {
+            return Result<bool>.Failure(
+                new ApplicationError(
+                    "sprint.demo_restricted",
+                    "The public demo's Super Admin account can't delete other workspaces' sprints.",
+                    ErrorType.Forbidden));
         }
 
         if (!command.HasAdministrativeBypass)

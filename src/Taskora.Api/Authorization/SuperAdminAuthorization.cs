@@ -1,4 +1,5 @@
 using TodoApp.Application.Abstractions;
+using TodoApp.Application.PublicDemo;
 
 namespace TodoApp.Api.Authorization;
 
@@ -11,12 +12,25 @@ namespace TodoApp.Api.Authorization;
 internal static class SuperAdminAuthorization
 {
     // Checks whether the given email matches any configured super-admin email,
-    // combining both the multi-value "SuperAdminEmails" list and the legacy
-    // single-value "SuperAdminEmail" setting, case-insensitively.
+    // combining the multi-value "SuperAdminEmails" list, the legacy
+    // single-value "SuperAdminEmail" setting, and the public demo's fixed
+    // Super Admin persona (always recognized, no config needed, so a fresh
+    // deployment doesn't need any manual step for the demo to work) —
+    // case-insensitively. The demo persona's actual admin *powers* are
+    // separately restricted by PublicDemoIdentifiers.AllowsDestructiveBypass
+    // wherever a super admin can delete/suspend a workspace, so recognizing
+    // it here only grants read-only visibility (Platform/Operations pages).
     public static bool IsSuperAdmin(
         string email,
         IConfiguration configuration)
     {
+        if (email.Equals(
+                PublicDemoIdentifiers.SuperAdminEmail,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         var emails = configuration
             .GetSection("Administration:SuperAdminEmails")
             .Get<string[]>() ?? [];
