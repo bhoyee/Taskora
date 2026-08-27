@@ -131,6 +131,12 @@ public static class DependencyInjection
                 LoggingNotificationEmailSender>();
         }
 
+        // Singleton: only needs IServiceScopeFactory (itself a singleton) to
+        // create its own scope per dispatch, so it doesn't need to be scoped
+        // to any one request.
+        services.AddSingleton<IBackgroundEmailDispatcher,
+            BackgroundEmailDispatcher>();
+
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IAccountRepository, AccountRepository>();

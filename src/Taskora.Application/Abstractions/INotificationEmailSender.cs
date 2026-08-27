@@ -23,6 +23,26 @@ public sealed record NotificationEmailMessage(
     string? HtmlBody = null);
 
 /// <summary>
+/// Dispatches a notification email outside the lifetime of the current
+/// request or operation, so a slow or hung SMTP round-trip can never delay
+/// the caller's response. Used anywhere an email is a side effect of a
+/// user-facing action (password reset, invite, task assignment, My Day
+/// carry-over on page load) rather than the main point of the operation -
+/// scheduled background jobs that already run outside any request (due-date
+/// reminders, carry-over notifications) should keep awaiting
+/// <see cref="INotificationEmailSender"/> directly instead, since there's no
+/// caller response to protect there.
+/// </summary>
+public interface IBackgroundEmailDispatcher
+{
+    /// <summary>
+    /// Queues the given message to be sent in the background. Returns
+    /// immediately; delivery failures are logged, not surfaced to the caller.
+    /// </summary>
+    void Dispatch(NotificationEmailMessage message);
+}
+
+/// <summary>
 /// Abstraction for building absolute application URLs for links embedded in emails.
 /// </summary>
 public interface IApplicationLinkBuilder

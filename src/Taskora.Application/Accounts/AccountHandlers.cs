@@ -323,7 +323,7 @@ public sealed class ChangePasswordHandler(
 public sealed class RequestPasswordResetHandler(
     IAccountRepository accounts,
     IUnitOfWork unitOfWork,
-    INotificationEmailSender emailSender,
+    IBackgroundEmailDispatcher emailDispatcher,
     IClock clock)
 {
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(15);
@@ -332,8 +332,11 @@ public sealed class RequestPasswordResetHandler(
     /// Always returns success (to avoid revealing whether an email is
     /// registered) regardless of whether the email is malformed or has no
     /// matching account. When a match is found, generates and stores a
-    /// hashed reset token with a 15-minute expiry and emails the plaintext
-    /// code to the account owner.
+    /// hashed reset token with a 15-minute expiry and dispatches the
+    /// plaintext code to the account owner in the background - the response
+    /// never waits on the email actually being delivered, both so a slow
+    /// SMTP round-trip can't hang the request and so response timing alone
+    /// can't be used to infer whether the email was registered.
     /// </summary>
     public async Task<Result<bool>> HandleAsync(
         RequestPasswordResetCommand command,
@@ -359,9 +362,7 @@ public sealed class RequestPasswordResetHandler(
             cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        await emailSender.SendAsync(
-            BuildResetEmail(account.User.Email, token),
-            cancellationToken);
+        emailDispatcher.Dispatch(BuildResetEmail(account.User.Email, token));
 
         return Result<bool>.Success(true);
     }

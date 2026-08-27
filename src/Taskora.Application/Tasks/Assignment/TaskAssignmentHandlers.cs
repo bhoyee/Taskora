@@ -25,7 +25,7 @@ public sealed class AssignTaskHandler(
     IProjectRepository projects,
     IWorkspaceRepository workspaces,
     IUserProfileRepository users,
-    INotificationEmailSender emailSender,
+    IBackgroundEmailDispatcher emailDispatcher,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser)
 {
@@ -72,7 +72,7 @@ public sealed class AssignTaskHandler(
         var user = assignee.SingleOrDefault();
         if (user is not null)
         {
-            await emailSender.SendAsync(
+            emailDispatcher.Dispatch(
                 TaskoraEmailTemplate.Build(
                     [user.Email],
                     $"New task assigned: {task.Title}",
@@ -85,8 +85,7 @@ public sealed class AssignTaskHandler(
                         new EmailDetail("Task", task.Title),
                         new EmailDetail("Due date", task.DueDate?.Value.ToString("yyyy-MM-dd") ?? "Not set")
                     ],
-                    "Please sign in to Taskora to review the details."),
-                cancellationToken);
+                    "Please sign in to Taskora to review the details."));
         }
 
         return Result<bool>.Success(true);

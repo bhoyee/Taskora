@@ -539,14 +539,15 @@ public sealed class InviteWorkspaceMemberHandler(
     IIdentifierGenerator identifiers,
     IClock clock,
     ICurrentUser currentUser,
-    INotificationEmailSender emailSender,
+    IBackgroundEmailDispatcher emailDispatcher,
     IApplicationLinkBuilder links)
 {
     /// <summary>
     /// Requires the current user to hold the Owner role in the workspace
     /// (via <see cref="RequireOwnerAsync"/>), then creates a pending
-    /// invitation valid for 7 days, persists it, and emails the invite link
-    /// to the invitee.
+    /// invitation valid for 7 days, persists it, and dispatches the invite
+    /// link to the invitee in the background so a slow SMTP round-trip can't
+    /// hang this request.
     /// </summary>
     public async Task<Result<WorkspaceInvitationDto>> HandleAsync(
         InviteWorkspaceMemberCommand command,
@@ -578,9 +579,8 @@ public sealed class InviteWorkspaceMemberHandler(
 
             await invitations.AddAsync(invitation, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            await emailSender.SendAsync(
-                BuildInvitationMessage(invitation, access.Value.Name),
-                cancellationToken);
+            emailDispatcher.Dispatch(
+                BuildInvitationMessage(invitation, access.Value.Name));
 
             return Result<WorkspaceInvitationDto>.Success(
                 ToInvitationDto(invitation, access.Value.Name, includeLink: true));

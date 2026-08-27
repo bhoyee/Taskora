@@ -13,7 +13,7 @@ public sealed class ListPersonalTodosHandler(
     IUnitOfWork unitOfWork,
     IClock clock,
     IBusinessDateProvider dates,
-    INotificationEmailSender emailSender,
+    IBackgroundEmailDispatcher emailDispatcher,
     GenerateDailyRoutineTodosHandler dailyRoutines,
     ICurrentUser currentUser)
 {
@@ -113,12 +113,11 @@ public sealed class ListPersonalTodosHandler(
             return;
         }
 
-        await emailSender.SendAsync(
+        emailDispatcher.Dispatch(
             PersonalTodoCarryOverEmailFactory.Build(
                 owner,
                 items,
-                today),
-            cancellationToken);
+                today));
     }
 }
 

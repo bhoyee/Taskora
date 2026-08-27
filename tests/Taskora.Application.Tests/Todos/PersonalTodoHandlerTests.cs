@@ -31,7 +31,7 @@ public sealed class PersonalTodoHandlerTests
             unitOfWork,
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
-            new RecordingEmailSender(),
+            new RecordingEmailDispatcher(),
             CreateRoutineGenerator(repository, unitOfWork),
             new StubCurrentUser(userId));
 
@@ -72,13 +72,13 @@ public sealed class PersonalTodoHandlerTests
                     "jadesola@example.com")
             ]);
         var unitOfWork = new RecordingUnitOfWork();
-        var emailSender = new RecordingEmailSender();
+        var emailDispatcher = new RecordingEmailDispatcher();
         var handler = new ListPersonalTodosHandler(
             repository,
             unitOfWork,
             new StubClock(Now),
             new StubBusinessDateProvider(new DateOnly(2026, 7, 18)),
-            emailSender,
+            emailDispatcher,
             CreateRoutineGenerator(repository, unitOfWork),
             new StubCurrentUser(userId));
 
@@ -94,10 +94,10 @@ public sealed class PersonalTodoHandlerTests
         Assert.Equal(new DateOnly(2026, 7, 18), oldTodo.TodoDate);
         Assert.Equal(new DateOnly(2026, 7, 17), oldTodo.CarriedOverFromDate);
         Assert.Equal(1, unitOfWork.SaveCount);
-        Assert.Single(emailSender.Messages);
+        Assert.Single(emailDispatcher.Messages);
         Assert.Contains(
             "Finish yesterday follow-up",
-            emailSender.Messages[0].Body,
+            emailDispatcher.Messages[0].Body,
             StringComparison.Ordinal);
     }
 
@@ -178,17 +178,16 @@ public sealed class PersonalTodoHandlerTests
         }
     }
 
-    // INotificationEmailSender fake that records every message sent.
-    private sealed class RecordingEmailSender : INotificationEmailSender
+    // IBackgroundEmailDispatcher fake that records every message dispatched,
+    // synchronously (unlike the real implementation's detached Task.Run) so
+    // assertions right after HandleAsync returns are deterministic.
+    private sealed class RecordingEmailDispatcher : IBackgroundEmailDispatcher
     {
         public List<NotificationEmailMessage> Messages { get; } = [];
 
-        public Task SendAsync(
-            NotificationEmailMessage message,
-            CancellationToken cancellationToken)
+        public void Dispatch(NotificationEmailMessage message)
         {
             Messages.Add(message);
-            return Task.CompletedTask;
         }
     }
 
