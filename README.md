@@ -2,9 +2,9 @@
 
 Taskora is a workspace-based task and project delivery platform built with
 .NET, C#, React, TypeScript, and Entity Framework Core. It started as a todo
-project, but now demonstrates a portfolio-ready modular monolith with
-workspaces, projects, tasks, assignment, reporting, reminders, operations
-monitoring, sprint planning, and CI/CD.
+project and has grown into a full modular monolith with workspaces, projects,
+tasks, assignment, sprint planning, reporting, reminders, and operations
+monitoring, deployed and running live.
 
 ## Live Demo
 
@@ -42,7 +42,7 @@ so it can only ever act on this demo workspace, never a real one.
 - [CI/CD](#cicd)
 - [Azure Deployment Notes](#azure-deployment-notes)
 - [Security Checklist](#security-checklist)
-- [Portfolio Highlights](#portfolio-highlights)
+- [Engineering Highlights](#engineering-highlights)
 
 ## Problem
 
@@ -85,9 +85,9 @@ dates layered on one month view.
   notifications only show data for the selected workspace.
 - Project CRUD with required delivery dates, archive rules, delivery countdowns,
   and project-level health indicators.
-- Dedicated sprint planning for projects, including sprint goals, date windows,
-  Planned/Active/Completed/Cancelled lifecycle, sprint filters, and task
-  assignment to a sprint.
+- **Sprint planning**: dedicated sprint planning for projects, including sprint
+  goals, date windows, Planned/Active/Completed/Cancelled lifecycle, sprint
+  filters, and task assignment to a sprint.
 - Tasks created under active projects only.
 - Task workflow: Backlog, Ready, In Progress, Blocked, and Completed.
 - Drag-and-drop board with guarded workflow rules and assignment awareness.
@@ -111,7 +111,7 @@ dates layered on one month view.
   status, log settings, and recent application logs.
 - JSON-lines application log files with correlation IDs for easier production
   troubleshooting.
-- Seed/demo data mode for portfolio walkthroughs.
+- Seed/demo data mode for walkthroughs and demos.
 - Azure DevOps pipeline for restore, build, tests, frontend build, migrations,
   packaging, and optional deployment.
 
@@ -161,9 +161,9 @@ real workspace application:
 
 ## Architecture
 
-Taskora uses a modular monolith with clean dependency direction. This gives the
-project a production-style structure without adding microservice complexity too
-early.
+Taskora uses a modular monolith with clean dependency direction: clear
+separation between domain, application, infrastructure, and API layers,
+without the operational overhead of splitting into microservices.
 
 ```mermaid
 flowchart LR
@@ -202,8 +202,8 @@ flowchart LR
   authorization, and composition.
 - The React app remains a separate client that consumes the API instead of
   reaching into server internals.
-- It is easy to run locally, easy to deploy, and still shows professional
-  separation of concerns.
+- It is easy to run locally and easy to deploy, with a clean separation of
+  concerns between layers.
 
 ## Solution Structure
 
@@ -251,8 +251,8 @@ complete active sprints; or cancel a sprint when the plan changes. Tasks can be
 created or edited into a sprint, and the task list/board can be filtered to one
 sprint at a time.
 
-This gives the portfolio project a more corporate delivery shape: work is not
-only tracked by status, but also by project outcome and active delivery window.
+This gives delivery a more corporate shape: work is not only tracked by
+status, but also by project outcome and active delivery window.
 
 ### Task Workflow
 
@@ -516,7 +516,7 @@ VITE_API_BASE_URL=https://your-taskora-api.onrender.com
 
 ## Vercel + Render + Neon Deployment
 
-The preferred low-cost portfolio deployment is:
+The preferred low-cost deployment is:
 
 ```text
 Vercel          React frontend
@@ -663,8 +663,8 @@ dotnet tool run dotnet-ef migrations script --idempotent `
 
 ## CI/CD
 
-`azure-pipelines.yml` is configured for Azure DevOps and portfolio deployment.
-The pipeline covers:
+`azure-pipelines.yml` is configured for Azure DevOps deployment. The pipeline
+covers:
 
 - .NET SDK setup
 - Node.js setup
@@ -691,7 +691,7 @@ Feature branches should be tested through pull requests before merging into
 
 ## Azure Deployment Notes
 
-For a low-cost portfolio deployment:
+For a low-cost deployment:
 
 - Start with Azure App Service F1 Free for the API when possible.
 - Keep deployments manual until the pipeline is proven.
@@ -714,24 +714,22 @@ See:
 - `.env` is ignored by Git.
 - Secrets are supplied through environment variables or Azure settings.
 - Passwords are stored as PBKDF2 hashes.
-- The portfolio deployment uses application account tokens; external JWT
-  authority settings can be added later for identity-provider integration.
+- This deployment uses application account tokens; external JWT authority
+  settings can be added later for identity-provider integration.
 - CORS is restricted outside local development.
 - Role checks are enforced in the backend, not only hidden in the UI.
 - Super-admin operations are gated by configured email address.
 - SMTP can be disabled locally and enabled in production.
 - Health endpoints support deployment checks.
 
-## Portfolio Highlights
-
-Taskora demonstrates more than a basic todo list:
+## Engineering Highlights
 
 - Domain-driven modelling with tested business rules.
 - TDD across domain and application behaviour.
 - Clean use-case boundaries with commands, queries, and ports.
 - Real collaboration model with workspaces, roles, invites, and assignment.
-- Professional delivery features: reports, health, risks, readiness, activity,
-  reminders, notifications, and operational monitoring.
+- Delivery features: reports, health, risks, readiness, activity, reminders,
+  notifications, and operational monitoring.
 - Full-stack React + .NET implementation with CI/CD and deployment guidance.
 
 Developed by [salisu.dev](https://salisu.dev). Copyright 2026.
