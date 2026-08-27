@@ -503,6 +503,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+// Best-effort "wake up" ping for the API's lightweight liveness check. On a
+// free hosting tier the backend can spin down after inactivity and take
+// 20-50s to cold-start on the next real request; firing this the moment a
+// visitor lands on the demo page lets that cold start happen in the
+// background while they're still reading, rather than only starting once
+// they click a role. Errors are swallowed - this is purely an optimization,
+// never something a caller should need to handle or react to.
+export function wakeApiServer() {
+  fetch(apiUrl('/health/live')).catch(() => {})
+}
+
 // Opens a server-sent-events connection for a workspace and invokes `onEvent` for each
 // realtime event received, until `signal` is aborted. Used to trigger near-instant UI
 // refreshes when other users/tabs change workspace data.

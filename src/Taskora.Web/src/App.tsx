@@ -7,11 +7,11 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleGauge,
-  Clock3, Columns3, Download, Eye, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, Download, Eye, FolderPlus, HelpCircle, Info, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Printer, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
-import { api, streamWorkspaceEvents } from './api'
+import { api, streamWorkspaceEvents, wakeApiServer } from './api'
 import type {
   AccountSession, DailyRoutine, Dashboard, DashboardBreakdownItem, OperationHealthCheck, OperationsSummary, PersonalTodo, ProjectCategory, ProjectDetails,
   DatabaseBackupFile, PlatformProjectSummary, PlatformWorkspaceDetail, PlatformWorkspaceSummary, Sprint, TaskItem, TaskStatus, TodoPriority, Workspace, WorkspaceActivity, WorkspaceInvitation, WorkspaceMember, WorkspaceReport, WorkspaceReportTask,
@@ -2024,6 +2024,13 @@ function DemoLoginPage({
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState('')
 
+  // Fires the moment this page mounts, so a free-tier cold start happens in the
+  // background while the visitor is still reading the role list, rather than
+  // only starting once they click a role.
+  useEffect(() => {
+    wakeApiServer()
+  }, [])
+
   const loginAs = async (role: typeof demoRoles[number]) => {
     setBusyKey(role.key)
     setError('')
@@ -2048,6 +2055,7 @@ function DemoLoginPage({
           nothing you do here touches a real account.
         </p>
       </div>
+      <p className="demo-hosting-notice"><Info size={15} /> This demo runs on a free hosting tier. If it's been idle, the first login can take 20-50 seconds to wake up — thanks for your patience.</p>
       {error && <p className="field-error">{error}</p>}
       <div className="demo-role-list">
         {demoRoles.map((role) => <button
