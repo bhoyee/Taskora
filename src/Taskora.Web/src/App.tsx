@@ -7,7 +7,7 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import {
   Activity, AlertTriangle, Bell, CalendarDays, ChartBar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleGauge,
-  Clock3, Columns3, Crown, Download, Eye, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
+  Clock3, Columns3, Download, Eye, FolderPlus, HelpCircle, KeyRound, LayoutList, ListChecks, LogOut,
   Menu, MessageSquare, Pencil, Pin, Plus, Printer, Save, Search, Settings2, ShieldCheck,
   Tags, Trash2, UserPlus, UserRound, X,
 } from 'lucide-react'
@@ -1965,34 +1965,45 @@ function AuthPage({
 // SuperAdminEmail/Password constants. This is a fully separate, isolated
 // demo workspace with its own "demo-" prefixed emails and id namespace —
 // it must never share an id or email with DevelopmentDataSeeder's data.
+// `detail` deliberately names real seeded projects/data rather than generic
+// role-permission language, so the picker reads as "here's who's on this
+// team" rather than a feature-comparison chart.
 const demoRoles = [
   {
-    key: 'superadmin',
-    label: 'Super Admin',
-    email: 'demo-superadmin@example.com',
-    description: 'Cross-workspace platform management, plus everything a Member sees.',
-    icon: ShieldCheck,
-  },
-  {
     key: 'owner',
-    label: 'Owner',
+    name: 'Demo Owner',
+    avatarLabel: 'OW',
+    role: 'Owner',
+    pillClass: 'owner',
     email: 'demo-owner@example.com',
-    description: 'Full control over the demo workspace: projects, sprints, team, and billing-level settings.',
-    icon: Crown,
+    detail: 'Owns the workspace and all three projects — Portfolio launch, Client onboarding sprint, and the archived Discovery phase.',
   },
   {
     key: 'manager',
-    label: 'Manager',
+    name: 'Demo Manager',
+    avatarLabel: 'MG',
+    role: 'Manager',
+    pillClass: 'manager',
     email: 'demo-manager@example.com',
-    description: 'Manages projects, sprints, and task assignments across the workspace.',
-    icon: Settings2,
+    detail: 'Running the Client onboarding sprint and the deployment checklist in Portfolio launch.',
   },
   {
     key: 'member',
-    label: 'Member',
+    name: 'Demo Member',
+    avatarLabel: 'MB',
+    role: 'Member',
+    pillClass: '',
     email: 'demo-member@example.com',
-    description: 'Standard contributor: works their own tasks, My Day list, and routines.',
-    icon: UserRound,
+    detail: 'Has tasks on the active sprint, a My Day list, and a daily standup routine.',
+  },
+  {
+    key: 'superadmin',
+    name: 'Demo Super Admin',
+    avatarLabel: 'SA',
+    role: 'Super Admin',
+    pillClass: 'superadmin',
+    email: 'demo-superadmin@example.com',
+    detail: 'Everything a Member sees, plus Platform, Operations, and Database Backups.',
   },
 ] as const
 const demoPassword = 'TaskoraDemo123!'
@@ -2031,29 +2042,33 @@ function DemoLoginPage({
       <div className="brand"><span className="brand-mark"><BrandMark /></span><strong>Taskora</strong></div>
       <div>
         <p className="eyebrow">View demo</p>
-        <h1>Log in as a role</h1>
+        <h1>Pick who you want to be</h1>
         <p className="demo-intro">
-          This is a shared, populated demo workspace with real projects, boards, reports,
-          and comments. Pick a role below to see the app the way that role would.
+          Everyone below works in the same shared demo workspace. Log in as any of them —
+          nothing you do here touches a real account.
         </p>
       </div>
       {error && <p className="field-error">{error}</p>}
-      <div className="demo-role-grid">
-        {demoRoles.map((role) => {
-          const Icon = role.icon
-          return <button
-            key={role.key}
-            type="button"
-            className="demo-role-card"
-            disabled={busyKey !== null}
-            onClick={() => void loginAs(role)}
-          >
-            <Icon size={22} />
-            <strong>{role.label}</strong>
-            <span>{role.description}</span>
-            <em>{busyKey === role.key ? 'Signing in...' : `Log in as ${role.label}`}</em>
-          </button>
-        })}
+      <div className="demo-role-list">
+        {demoRoles.map((role) => <button
+          key={role.key}
+          type="button"
+          className={`demo-role-row${busyKey === role.key ? ' demo-role-row-busy' : ''}`}
+          disabled={busyKey !== null}
+          onClick={() => void loginAs(role)}
+        >
+          <span className={`avatar demo-role-avatar ${role.pillClass || 'member'}`}>{role.avatarLabel}</span>
+          <span className="demo-role-text">
+            <span className="demo-role-name">
+              {role.name}
+              <span className={`role-pill ${role.pillClass}`}>{role.role}</span>
+            </span>
+            <small>{role.detail}</small>
+          </span>
+          {busyKey === role.key
+            ? <span className="demo-role-status">Signing in...</span>
+            : <ChevronRight size={18} className="demo-role-arrow" />}
+        </button>)}
       </div>
       <button className="secondary" onClick={onBack}>Back to overview</button>
     </section>
