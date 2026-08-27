@@ -49,6 +49,28 @@ function viewFromHash(hash: string): View {
   return views.includes(value as View) ? value as View : 'home'
 }
 
+// The public (unauthenticated) screens: landing plus every AuthPage/DemoLoginPage
+// mode. Kept hash-routed just like View above, so the URL, browser back/forward,
+// and page refresh all reflect which public screen (sign in, forgot password,
+// enter reset code, view demo, etc.) is currently showing.
+type PublicMode = 'landing' | 'login' | 'register' | 'demo' | 'forgot' | 'reset'
+const publicModeHashes: Record<Exclude<PublicMode, 'landing'>, string> = {
+  login: 'login',
+  register: 'register',
+  demo: 'demo',
+  forgot: 'forgot-password',
+  reset: 'reset-password',
+}
+
+// Parses the URL hash into a known PublicMode, defaulting to 'landing' for
+// empty/unrecognized values (the inverse of publicModeHashes above).
+function publicModeFromHash(hash: string): PublicMode {
+  const value = hash.replace('#', '').toLowerCase()
+  const match = (Object.entries(publicModeHashes) as [PublicMode, string][])
+    .find(([, hashValue]) => hashValue === value)
+  return match ? match[0] : 'landing'
+}
+
 interface UserProfile {
   displayName: string
   email: string
@@ -702,7 +724,9 @@ export default function App() {
     setTodoNotifications([])
     setLoggedOut(true)
     setNotice('You have been logged out of the browser session.')
-    window.location.hash = 'home'
+    // Clears the hash (rather than leaving a stale authenticated-view hash
+    // like #home) since the public landing page is about to show instead.
+    window.history.replaceState(null, '', '/')
     setNavOpen(false)
   }
   const resetSession = () => {
@@ -737,6 +761,9 @@ export default function App() {
       return next
     })
     setNotice(`Signed in as ${session.displayName}.`)
+    // Clears any leftover public-flow hash (#login, #forgot-password, etc.)
+    // now that the authenticated app shell is about to render instead.
+    window.history.replaceState(null, '', '#home')
     void load()
   }
   const openView = (next: View) => {
@@ -1725,10 +1752,30 @@ function OnboardingDialog({
 
 /**
  * Unauthenticated entry point: shows the marketing landing page by default, or hands off
- * to `AuthPage` in login/register mode once the user picks an action from the nav/hero.
+ * to `AuthPage`/`DemoLoginPage` once the user picks an action from the nav/hero. The current
+ * screen is hash-routed (#login, #register, #demo, #forgot-password, #reset-password) so the
+ * URL, browser back/forward, and page refresh all reflect which public screen is showing.
  */
 function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: AccountSession) => void }) {
-  const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'demo'>('landing')
+  const [mode, setModeState] = useState<PublicMode>(() => publicModeFromHash(window.location.hash))
+
+  // Updates the mode and pushes a matching hash entry (so browser back/forward works),
+  // clearing the hash entirely for 'landing' rather than using a #landing placeholder.
+  const setMode = (next: PublicMode) => {
+    setModeState(next)
+    window.history.pushState(null, '', next === 'landing' ? '/' : `#${publicModeHashes[next]}`)
+  }
+
+  // Keeps mode in sync with the URL hash for back/forward navigation and direct hash edits.
+  useEffect(() => {
+    const syncModeFromHash = () => setModeState(publicModeFromHash(window.location.hash))
+    window.addEventListener('hashchange', syncModeFromHash)
+    window.addEventListener('popstate', syncModeFromHash)
+    return () => {
+      window.removeEventListener('hashchange', syncModeFromHash)
+      window.removeEventListener('popstate', syncModeFromHash)
+    }
+  }, [])
 
   if (mode === 'demo') {
     return <DemoLoginPage
@@ -1739,7 +1786,8 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
 
   if (mode !== 'landing') {
     return <AuthPage
-      initialMode={mode}
+      mode={mode}
+      onModeChange={setMode}
       onBack={() => setMode('landing')}
       onAuthenticated={onAuthenticated}
     />
@@ -1810,29 +1858,25 @@ function PublicAccessPage({ onAuthenticated }: { onAuthenticated: (session: Acco
 
 /**
  * Combined login/register/forgot-password/reset-password form. `mode` drives which fields
- * render and which API call `submit` makes; `initialMode` lets the parent deep-link into
- * login or register (re-synced via effect if the parent changes it after mount).
+ * render and which API call `submit` makes; it's a controlled prop (owned by `PublicAccessPage`
+ * and kept in sync with the URL hash there) rather than local state, so switching between
+ * login/register/forgot/reset updates the address bar and works with browser back/forward.
  */
 function AuthPage({
-  initialMode = 'login',
+  mode,
+  onModeChange,
   onBack,
   onAuthenticated,
 }: {
-  initialMode?: 'login' | 'register'
+  mode: 'login' | 'register' | 'forgot' | 'reset'
+  onModeChange: (mode: 'login' | 'register' | 'forgot' | 'reset') => void
   onBack?: () => void
   onAuthenticated: (session: AccountSession) => void
 }) {
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [resetEmail, setResetEmail] = useState('')
-
-  // Keeps internal mode in sync if the parent switches initialMode (e.g. landing page
-  // nav buttons re-rendering AuthPage with a different initial tab).
-  useEffect(() => {
-    setMode(initialMode)
-  }, [initialMode])
 
   // Handles all four auth form submissions (login, register, forgot, reset) based on `mode`.
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1847,7 +1891,7 @@ function AuthPage({
         await api.requestPasswordReset(email)
         setResetEmail(email)
         setNotice('If that email exists, a 6-digit reset code has been sent.')
-        setMode('reset')
+        onModeChange('reset')
         return
       }
 
@@ -1860,7 +1904,7 @@ function AuthPage({
         )
         setResetEmail(email)
         setNotice('Password reset. Sign in with your new password.')
-        setMode('login')
+        onModeChange('login')
         return
       }
 
@@ -1894,8 +1938,8 @@ function AuthPage({
               : 'Enter reset code'}</h1>
       </div>
       {(mode === 'login' || mode === 'register') && <div className="segmented" aria-label="Account mode">
-        <button className={mode === 'login' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('login') }}><KeyRound size={16} /> Login</button>
-        <button className={mode === 'register' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); setMode('register') }}><UserRound size={16} /> Register</button>
+        <button className={mode === 'login' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); onModeChange('login') }}><KeyRound size={16} /> Login</button>
+        <button className={mode === 'register' ? 'selected' : ''} onClick={() => { setError(''); setNotice(''); onModeChange('register') }}><UserRound size={16} /> Register</button>
       </div>}
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
         {mode === 'register' && <>
@@ -1909,8 +1953,8 @@ function AuthPage({
         {notice && <p className="field-success">{notice}</p>}
         <button className="primary" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : mode === 'forgot' ? 'Send reset code' : 'Reset password'}</button>
       </form>
-      {mode === 'login' && <button className="link-button" type="button" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
-      {(mode === 'forgot' || mode === 'reset') && <button className="secondary" type="button" onClick={() => { setError(''); setMode('login') }}>Back to sign in</button>}
+      {mode === 'login' && <button className="link-button" type="button" onClick={() => { setError(''); setNotice(''); onModeChange('forgot') }}>Forgot password?</button>}
+      {(mode === 'forgot' || mode === 'reset') && <button className="secondary" type="button" onClick={() => { setError(''); onModeChange('login') }}>Back to sign in</button>}
       {onBack && <button className="secondary" onClick={onBack}>Back to overview</button>}
     </section>
   </main>
