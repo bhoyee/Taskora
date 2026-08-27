@@ -270,6 +270,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: 0; } h2 { letter-spacing: 0; }
 .deadline-warning.info { border-left-color: #2b6f9f; }
 .deadline-warning.warning { border-left-color: #c78911; }
 .deadline-warning.critical { border-left-color: #c0322b; }
+.deadline-warnings-view-all { justify-self: center; margin-top: 2px; font-size: 13px; }
 .todo-page { display: grid; gap: 18px; }
 .todo-hero { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; align-items: end; border: 1px solid #d7dce2; border-radius: 8px; background: white; padding: 18px; box-shadow: 0 10px 24px #18202b0d; }
 .todo-hero h2 { margin: 0; font-size: 20px; }

@@ -366,6 +366,9 @@ export default function App() {
     localStorage.getItem('todoapp_current_user_id') ?? '')
   const [operations, setOperations] = useState<OperationsSummary | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  // Caps the Home page's deadline-warnings list so an active team with lots of
+  // due/assigned/carry-over items doesn't get a wall of cards; "View all" reveals the rest.
+  const [showAllDeadlineWarnings, setShowAllDeadlineWarnings] = useState(false)
   const [notifications, setNotifications] = useState<Dashboard['warnings']>([])
   const [todoNotifications, setTodoNotifications] = useState<Dashboard['warnings']>([])
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() =>
@@ -1289,13 +1292,20 @@ export default function App() {
           <ProjectGovernance dashboard={dashboard} project={project} tasks={tasks} />
 
           {!!dashboard.warnings.length && <section className="deadline-warnings" aria-label="Deadline warnings">
-            {dashboard.warnings.map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
+            {(showAllDeadlineWarnings ? dashboard.warnings : dashboard.warnings.slice(0, 5)).map((warning) => <article className={`deadline-warning ${warning.severity}`} key={`${warning.type}-${warning.taskId ?? warning.projectId ?? warning.title}-${warning.dueDate}`}>
               <AlertTriangle size={18} />
               <div>
                 <strong>{warning.title}</strong>
                 <span>{warning.message}{warning.dueDate ? ` Deadline: ${new Date(`${warning.dueDate}T00:00:00`).toLocaleDateString()}.` : ''}</span>
               </div>
             </article>)}
+            {!showAllDeadlineWarnings && dashboard.warnings.length > 5 && <button
+              type="button"
+              className="link-button deadline-warnings-view-all"
+              onClick={() => setShowAllDeadlineWarnings(true)}
+            >
+              View all ({dashboard.warnings.length - 5} more)
+            </button>}
           </section>}
         </>}
 
